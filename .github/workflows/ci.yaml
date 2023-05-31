@@ -1,7 +1,11 @@
 name: CI
 on: [push]
-jobs:
 
+env:
+  modules:
+    - slog
+
+jobs:
   test:
     name: Build and Test
 
