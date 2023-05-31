@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   lint:
-    name: Test
+    name: Lint
 
     runs-on: ubuntu-22.04
 
