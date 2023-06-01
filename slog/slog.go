@@ -160,7 +160,7 @@ func With(args ...any) *Logger {
 	return slog.With(args...)
 }
 
-// FromCtx gets the [Logger] associated with the given context. An empty [Logger] is
+// FromCtx gets the [Logger] associated with the given context. A default [Logger] is
 // returned if the context has no [Logger] associated with it.
 func FromCtx(ctx context.Context) *slog.Logger {
 	val := ctx.Value(loggerKey)
@@ -171,9 +171,9 @@ func FromCtx(ctx context.Context) *slog.Logger {
 	return log
 }
 
-// CtxWithLogger creates a new [context.Context] with the given [Logger] associated with it.
+// WithContext creates a new [context.Context] with the given [Logger] associated with it.
 // Call [FromCtx] to retrieve the [Logger].
-func CtxWithLogger(ctx context.Context, log *slog.Logger) context.Context {
+func WithContext(ctx context.Context, log *slog.Logger) context.Context {
 	return context.WithValue(ctx, loggerKey, log)
 }
 
