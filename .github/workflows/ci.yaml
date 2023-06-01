@@ -52,3 +52,11 @@ jobs:
 
     - name: test
       run: go test -C ./${{matrix.module}} ./... -race
+
+  all:
+    # We need an umbrella target in order to require checks to pass on GH when we have matrix builds
+    needs: [lint, test]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Required Checks
+        run: echo "All required checks worked"
