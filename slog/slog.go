@@ -25,15 +25,6 @@ type Logger = slog.Logger
 // Format determines the output format of the log records
 type Format string
 
-// Key represents a logging key/field
-type Key int
-
-// Tracing related keys
-const (
-	TraceID Key = iota
-	OrgID
-)
-
 // All available log levels
 const (
 	LevelInfo    Level = slog.LevelInfo
@@ -118,9 +109,8 @@ func Configure(cfg Config) error {
 		return fmt.Errorf("unknown log format: %v", cfg.Format)
 	}
 
-	logger := slog.New(&tracedHandler{
-		handler: handler,
-	})
+	logger := slog.New(handler)
+
 	slog.SetDefault(logger)
 	return nil
 }
@@ -170,43 +160,29 @@ func With(args ...any) *Logger {
 	return slog.With(args...)
 }
 
-type tracedHandler struct {
-	handler slog.Handler
-}
-
-func (t *tracedHandler) Enabled(ctx context.Context, l slog.Level) bool {
-	return t.handler.Enabled(ctx, l)
-}
-
-func (t *tracedHandler) Handle(ctx context.Context, record slog.Record) error {
-	if traceID, ok := getValue(ctx, TraceID); ok {
-		record.Add("trace_id", traceID)
-	}
-	if orgID, ok := getValue(ctx, OrgID); ok {
-		record.Add("organization_id", orgID)
-	}
-	return t.handler.Handle(ctx, record)
-}
-
-func getValue(ctx context.Context, key any) (string, bool) {
-	val := ctx.Value(key)
-	if val == nil {
-		return "", false
-	}
-	str, ok := val.(string)
+// FromCtx gets the [Logger] associated with the given context. A default [Logger] is
+// returned if the context has no [Logger] associated with it.
+func FromCtx(ctx context.Context) *slog.Logger {
+	val := ctx.Value(loggerKey)
+	log, ok := val.(*slog.Logger)
 	if !ok {
-		return "", false
+		return slog.Default()
 	}
-	return str, true
+	return log
 }
 
-func (t *tracedHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return t.handler.WithAttrs(attrs)
+// NewContext creates a new [context.Context] with the given [Logger] associated with it.
+// Call [FromCtx] to retrieve the [Logger].
+func NewContext(ctx context.Context, log *slog.Logger) context.Context {
+	return context.WithValue(ctx, loggerKey, log)
 }
 
-func (t *tracedHandler) WithGroup(name string) slog.Handler {
-	return t.handler.WithGroup(name)
-}
+// key is the type used to store data on contexts.
+type key int
+
+const (
+	loggerKey key = iota
+)
 
 func validateLogLevel(level string) (Level, error) {
 	level = strings.ToLower(level)
