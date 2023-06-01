@@ -1,6 +1,7 @@
 package slog_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/birdie-ai/golibs/slog"
@@ -55,6 +56,23 @@ func TestLoadConfigErr(t *testing.T) {
 	config, err = slog.LoadConfig(service)
 	if err == nil {
 		t.Fatalf("expected error, got config: %v", config)
+	}
+}
+
+func TestContextIntegration(t *testing.T) {
+	want := &slog.Logger{}
+	ctx := slog.WithLogger(context.Background(), want)
+	got := slog.FromCtx(ctx)
+
+	if want != got {
+		t.Fatalf("got %+v != want %+v", got, want)
+	}
+}
+
+func TestDefaultLoggerFromContext(t *testing.T) {
+	got := slog.FromCtx(context.Background())
+	if got == nil {
+		t.Fatal("want valid logger, got nil")
 	}
 }
 

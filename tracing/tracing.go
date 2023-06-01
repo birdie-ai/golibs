@@ -9,9 +9,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// Instrument will instrument the given handler by adding tracing context on the
-// request context.
-func Instrument(h http.Handler) http.Handler {
+// InstrumentHTTP will instrument the given [http.handler] by adding a slog.Logger on the request context.
+// The logger will have `trace_id` added to it.
+// Use slog.FromCtx(ctx) to retrieve the logger.
+func InstrumentHTTP(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		// We don't parse/generate trace IDs exactly as in the spec, for now
 		// just using the specified header name.

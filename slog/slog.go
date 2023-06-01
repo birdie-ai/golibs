@@ -170,6 +170,30 @@ func With(args ...any) *Logger {
 	return slog.With(args...)
 }
 
+// FromCtx gets the [Logger] associated with the given context. An empty [Logger] is
+// returned if the context has no [Logger] associated with it.
+func FromCtx(ctx context.Context) *slog.Logger {
+	val := ctx.Value(loggerKey)
+	log, ok := val.(*slog.Logger)
+	if !ok {
+		return slog.Default()
+	}
+	return log
+}
+
+// WithLogger creates a new [context.Context] with the given [Logger] associated with it.
+// Call [FromCtx] to retrieve the [Logger].
+func WithLogger(ctx context.Context, log *slog.Logger) context.Context {
+	return context.WithValue(ctx, loggerKey, log)
+}
+
+// key is the type used to store data on contexts.
+type key int
+
+const (
+	loggerKey key = iota
+)
+
 type tracedHandler struct {
 	handler slog.Handler
 }
