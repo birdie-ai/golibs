@@ -181,9 +181,9 @@ func FromCtx(ctx context.Context) *slog.Logger {
 	return log
 }
 
-// WithLogger creates a new [context.Context] with the given [Logger] associated with it.
+// CtxWithLogger creates a new [context.Context] with the given [Logger] associated with it.
 // Call [FromCtx] to retrieve the [Logger].
-func WithLogger(ctx context.Context, log *slog.Logger) context.Context {
+func CtxWithLogger(ctx context.Context, log *slog.Logger) context.Context {
 	return context.WithValue(ctx, loggerKey, log)
 }
 

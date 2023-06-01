@@ -2,7 +2,6 @@
 package tracing
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/birdie-ai/golibs/slog"
@@ -25,7 +24,10 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 			slog.Debug("header absent, generated UUID", "trace_id", traceid)
 		}
 
-		req = req.WithContext(context.WithValue(req.Context(), slog.TraceID, traceid))
+		log := slog.With("trace_id", traceid)
+		ctx := slog.CtxWithLogger(req.Context(), log)
+
+		req = req.WithContext(ctx)
 		h.ServeHTTP(res, req)
 	})
 }

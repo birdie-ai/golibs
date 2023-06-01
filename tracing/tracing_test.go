@@ -18,4 +18,8 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
+
+	if got == nil {
+		t.Fatal("got nil logger")
+	}
 }

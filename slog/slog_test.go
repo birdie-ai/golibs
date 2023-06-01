@@ -61,7 +61,7 @@ func TestLoadConfigErr(t *testing.T) {
 
 func TestContextIntegration(t *testing.T) {
 	want := &slog.Logger{}
-	ctx := slog.WithLogger(context.Background(), want)
+	ctx := slog.CtxWithLogger(context.Background(), want)
 	got := slog.FromCtx(ctx)
 
 	if want != got {
