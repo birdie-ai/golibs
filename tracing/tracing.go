@@ -24,10 +24,11 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 			slog.Debug("header absent, generated UUID", "trace_id", traceid)
 		}
 
-		log := slog.With("trace_id", traceid)
-		ctx := slog.WithContext(req.Context(), log)
+		ctx := req.Context()
+		log := slog.FromCtx(ctx)
+		log = log.With("trace_id", traceid)
+		ctx = slog.WithContext(ctx, log)
 
-		req = req.WithContext(ctx)
-		h.ServeHTTP(res, req)
+		h.ServeHTTP(res, req.WithContext(ctx))
 	})
 }
