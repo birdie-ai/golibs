@@ -27,7 +27,7 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		ctx := req.Context()
 		log := slog.FromCtx(ctx)
 		log = log.With("trace_id", traceid)
-		ctx = slog.WithContext(ctx, log)
+		ctx = slog.NewContext(ctx, log)
 
 		h.ServeHTTP(res, req.WithContext(ctx))
 	})
