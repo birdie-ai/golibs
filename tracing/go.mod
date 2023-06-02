@@ -3,7 +3,7 @@ module github.com/birdie-ai/golibs/tracing
 go 1.20
 
 require (
-	github.com/birdie-ai/golibs/slog v0.0.1
+	github.com/birdie-ai/golibs/slog v0.0.2
 	github.com/google/uuid v1.3.0
 )
 
