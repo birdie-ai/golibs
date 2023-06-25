@@ -11,17 +11,28 @@ import (
 )
 
 func TestIntrumentedHTTPHandler(t *testing.T) {
-	var got *slog.Logger
+	const wantTraceID = "test-trace-id"
+	var (
+		gotLogger  *slog.Logger
+		gotTraceID string
+	)
 	handler := tracing.InstrumentHTTP(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		got = slog.FromCtx(req.Context())
+		gotLogger = slog.FromCtx(req.Context())
+		gotTraceID, _ = tracing.CtxGetTraceID(req.Context())
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("traceparent", wantTraceID)
 	res := httptest.NewRecorder()
+
 	handler.ServeHTTP(res, req)
 
-	if got == nil {
+	if gotLogger == nil {
 		t.Fatal("got nil logger")
+	}
+
+	if gotTraceID != wantTraceID {
+		t.Fatalf("got %q != want %q", gotTraceID, wantTraceID)
 	}
 }
 
