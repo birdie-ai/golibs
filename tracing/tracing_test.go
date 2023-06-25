@@ -1,6 +1,7 @@
 package tracing_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,5 +22,25 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 
 	if got == nil {
 		t.Fatal("got nil logger")
+	}
+}
+
+func TestCtxWithTraceID(t *testing.T) {
+	const want = "trace-id-value"
+	ctx := context.Background()
+
+	got, ok := tracing.CtxGetTraceID(ctx)
+	if ok {
+		t.Fatalf("unexpected trace id: %q", got)
+	}
+
+	ctx = tracing.CtxWithTraceID(ctx, want)
+
+	got, ok = tracing.CtxGetTraceID(ctx)
+	if !ok {
+		t.Fatal("want trace ID")
+	}
+	if got != want {
+		t.Fatalf("got %q != want %q", got, want)
 	}
 }
