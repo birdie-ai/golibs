@@ -56,6 +56,26 @@ func CtxGetTraceID(ctx context.Context) (string, bool) {
 	return traceID, true
 }
 
+// CtxWithOrgID creates a new [context.Context] with the given organization ID associated with it.
+// Call [CtxGetOrgID] to retrieve the organization ID.
+func CtxWithOrgID(ctx context.Context, orgID string) context.Context {
+	return context.WithValue(ctx, orgIDKey, orgID)
+}
+
+// CtxGetOrgID gets the trace ID associated with this context.
+// Return the trace ID and true if there is a trace ID, empty and false otherwise.
+func CtxGetOrgID(ctx context.Context) (string, bool) {
+	val := ctx.Value(orgIDKey)
+	if val == nil {
+		return "", false
+	}
+	orgID, ok := val.(string)
+	if !ok {
+		return "", false
+	}
+	return orgID, true
+}
+
 // key is the type used to store data on contexts.
 type key int
 
