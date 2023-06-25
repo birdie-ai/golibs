@@ -45,15 +45,7 @@ func CtxWithTraceID(ctx context.Context, traceID string) context.Context {
 // CtxGetTraceID gets the trace ID associated with this context.
 // Return the trace ID and true if there is a trace ID, empty and false otherwise.
 func CtxGetTraceID(ctx context.Context) (string, bool) {
-	val := ctx.Value(traceIDKey)
-	if val == nil {
-		return "", false
-	}
-	traceID, ok := val.(string)
-	if !ok {
-		return "", false
-	}
-	return traceID, true
+	return ctxget(ctx, traceIDKey)
 }
 
 // CtxWithOrgID creates a new [context.Context] with the given organization ID associated with it.
@@ -65,15 +57,7 @@ func CtxWithOrgID(ctx context.Context, orgID string) context.Context {
 // CtxGetOrgID gets the trace ID associated with this context.
 // Return the trace ID and true if there is a trace ID, empty and false otherwise.
 func CtxGetOrgID(ctx context.Context) (string, bool) {
-	val := ctx.Value(orgIDKey)
-	if val == nil {
-		return "", false
-	}
-	orgID, ok := val.(string)
-	if !ok {
-		return "", false
-	}
-	return orgID, true
+	return ctxget(ctx, orgIDKey)
 }
 
 // key is the type used to store data on contexts.
@@ -83,3 +67,15 @@ const (
 	traceIDKey key = iota
 	orgIDKey
 )
+
+func ctxget(ctx context.Context, k key) (string, bool) {
+	val := ctx.Value(k)
+	if val == nil {
+		return "", false
+	}
+	str, ok := val.(string)
+	if !ok {
+		return "", false
+	}
+	return str, true
+}
