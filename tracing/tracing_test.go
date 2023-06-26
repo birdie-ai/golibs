@@ -18,7 +18,7 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 	)
 	handler := tracing.InstrumentHTTP(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		gotLogger = slog.FromCtx(req.Context())
-		gotTraceID, _ = tracing.CtxGetTraceID(req.Context())
+		gotTraceID = tracing.CtxGetTraceID(req.Context())
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -43,30 +43,24 @@ func TestCtxWithTraceAndOrgID(t *testing.T) {
 	)
 	ctx := context.Background()
 
-	got, ok := tracing.CtxGetTraceID(ctx)
-	if ok {
+	got := tracing.CtxGetTraceID(ctx)
+	if got != "" {
 		t.Fatalf("unexpected trace id: %q", got)
 	}
-	got, ok = tracing.CtxGetOrgID(ctx)
-	if ok {
+	got = tracing.CtxGetOrgID(ctx)
+	if got != "" {
 		t.Fatalf("unexpected trace id: %q", got)
 	}
 
 	ctx = tracing.CtxWithTraceID(ctx, wantTraceID)
 	ctx = tracing.CtxWithOrgID(ctx, wantOrgID)
 
-	got, ok = tracing.CtxGetTraceID(ctx)
-	if !ok {
-		t.Fatal("want trace ID")
-	}
+	got = tracing.CtxGetTraceID(ctx)
 	if got != wantTraceID {
 		t.Fatalf("got %q != want %q", got, wantTraceID)
 	}
 
-	got, ok = tracing.CtxGetOrgID(ctx)
-	if !ok {
-		t.Fatal("want org ID")
-	}
+	got = tracing.CtxGetOrgID(ctx)
 	if got != wantOrgID {
 		t.Fatalf("got %q != want %q", got, wantTraceID)
 	}

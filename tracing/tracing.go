@@ -44,7 +44,7 @@ func CtxWithTraceID(ctx context.Context, traceID string) context.Context {
 
 // CtxGetTraceID gets the trace ID associated with this context.
 // Return the trace ID and true if there is a trace ID, empty and false otherwise.
-func CtxGetTraceID(ctx context.Context) (string, bool) {
+func CtxGetTraceID(ctx context.Context) string {
 	return ctxget(ctx, traceIDKey)
 }
 
@@ -55,8 +55,7 @@ func CtxWithOrgID(ctx context.Context, orgID string) context.Context {
 }
 
 // CtxGetOrgID gets the trace ID associated with this context.
-// Return the trace ID and true if there is a trace ID, empty and false otherwise.
-func CtxGetOrgID(ctx context.Context) (string, bool) {
+func CtxGetOrgID(ctx context.Context) string {
 	return ctxget(ctx, orgIDKey)
 }
 
@@ -68,14 +67,14 @@ const (
 	orgIDKey
 )
 
-func ctxget(ctx context.Context, k key) (string, bool) {
+func ctxget(ctx context.Context, k key) string {
 	val := ctx.Value(k)
 	if val == nil {
-		return "", false
+		return ""
 	}
 	str, ok := val.(string)
 	if !ok {
-		return "", false
+		return ""
 	}
-	return str, true
+	return str
 }
