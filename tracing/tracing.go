@@ -2,6 +2,7 @@
 package tracing
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/birdie-ai/golibs/slog"
@@ -25,10 +26,55 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		}
 
 		ctx := req.Context()
+		ctx = CtxWithTraceID(ctx, traceid)
+
 		log := slog.FromCtx(ctx)
 		log = log.With("trace_id", traceid)
 		ctx = slog.NewContext(ctx, log)
 
 		h.ServeHTTP(res, req.WithContext(ctx))
 	})
+}
+
+// CtxWithTraceID creates a new [context.Context] with the given trace ID associated with it.
+// Call [CtxGetTraceID] to retrieve the trace ID.
+func CtxWithTraceID(ctx context.Context, traceID string) context.Context {
+	return context.WithValue(ctx, traceIDKey, traceID)
+}
+
+// CtxGetTraceID gets the trace ID associated with this context.
+// Return the trace ID and true if there is a trace ID, empty and false otherwise.
+func CtxGetTraceID(ctx context.Context) string {
+	return ctxget(ctx, traceIDKey)
+}
+
+// CtxWithOrgID creates a new [context.Context] with the given organization ID associated with it.
+// Call [CtxGetOrgID] to retrieve the organization ID.
+func CtxWithOrgID(ctx context.Context, orgID string) context.Context {
+	return context.WithValue(ctx, orgIDKey, orgID)
+}
+
+// CtxGetOrgID gets the trace ID associated with this context.
+func CtxGetOrgID(ctx context.Context) string {
+	return ctxget(ctx, orgIDKey)
+}
+
+// key is the type used to store data on contexts.
+type key int
+
+const (
+	traceIDKey key = iota
+	orgIDKey
+)
+
+func ctxget(ctx context.Context, k key) string {
+	val := ctx.Value(k)
+	if val == nil {
+		return ""
+	}
+	str, ok := val.(string)
+	if !ok {
+		return ""
+	}
+	return str
 }
