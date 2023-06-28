@@ -12,6 +12,7 @@ jobs:
         module:
           - slog
           - tracing
+          - event
 
     steps:
 
@@ -41,6 +42,7 @@ jobs:
         module:
           - slog
           - tracing
+          - event
 
     steps:
 
