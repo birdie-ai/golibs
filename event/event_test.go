@@ -46,7 +46,7 @@ func TestPublishEvent(t *testing.T) {
 	}
 
 	go func() {
-		// tracing info stored no the context is propagated to the events.
+		// tracing info stored on the context is propagated to the events.
 		ctx := tracing.CtxWithTraceID(ctx, traceID)
 		ctx = tracing.CtxWithOrgID(ctx, orgID)
 
