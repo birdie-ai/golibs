@@ -7,6 +7,7 @@ import (
 
 	// load in memory driver
 	"github.com/birdie-ai/golibs/event"
+	"github.com/birdie-ai/golibs/tracing"
 	"gocloud.dev/pubsub"
 	_ "gocloud.dev/pubsub/mempubsub"
 )
@@ -35,6 +36,8 @@ func TestPublishEvent(t *testing.T) {
 	const (
 		eventName = "test"
 		fieldData = "some data"
+		traceID   = "trace-id"
+		orgID     = "org-id"
 	)
 
 	publisher := event.NewPublisher[Event](eventName, topic)
@@ -43,6 +46,10 @@ func TestPublishEvent(t *testing.T) {
 	}
 
 	go func() {
+		// tracing info stored no the context is propagated to the events.
+		ctx := tracing.CtxWithTraceID(ctx, traceID)
+		ctx = tracing.CtxWithOrgID(ctx, orgID)
+
 		err := publisher.Publish(ctx, wantEvt)
 		t.Logf("publish error: %v", err)
 	}()
@@ -54,8 +61,10 @@ func TestPublishEvent(t *testing.T) {
 	gotMsg.Ack()
 
 	want := event.Body[Event]{
-		Name:  eventName,
-		Event: wantEvt,
+		TraceID: traceID,
+		OrgID:   orgID,
+		Name:    eventName,
+		Event:   wantEvt,
 	}
 	got := event.Body[Event]{}
 	if err := json.Unmarshal(gotMsg.Body, &got); err != nil {
