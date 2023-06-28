@@ -75,3 +75,51 @@ func TestPublishEvent(t *testing.T) {
 		t.Fatalf("got %+v != want %+v", got, want)
 	}
 }
+
+func TestPublishEventWithoutTracingInfo(t *testing.T) {
+	const url = "mem://test-no-tracing-info"
+
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = topic.Shutdown(ctx) }()
+
+	type Event struct{}
+
+	subscription, err := pubsub.OpenSubscription(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = subscription.Shutdown(ctx) }()
+
+	const (
+		eventName = "test"
+	)
+
+	publisher := event.NewPublisher[Event](eventName, topic)
+	go func() {
+		err := publisher.Publish(ctx, Event{})
+		t.Logf("publish error: %v", err)
+	}()
+
+	gotMsg, err := subscription.Receive(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotMsg.Ack()
+
+	want := event.Body[Event]{
+		Name: eventName,
+	}
+	got := event.Body[Event]{}
+	if err := json.Unmarshal(gotMsg.Body, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if want != got {
+		t.Fatalf("got %+v != want %+v", got, want)
+	}
+}
