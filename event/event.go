@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/birdie-ai/golibs/tracing"
 	"gocloud.dev/pubsub"
 )
 
@@ -33,17 +34,19 @@ func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 
 // Publish will publish the given event.
 func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
-	e := Body[T]{
-		Name:  p.name,
-		Event: event,
+	body := Body[T]{
+		TraceID: tracing.CtxGetTraceID(ctx),
+		OrgID:   tracing.CtxGetOrgID(ctx),
+		Name:    p.name,
+		Event:   event,
 	}
 
-	messageBody, err := json.Marshal(e)
+	encBody, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
 
 	return p.topic.Send(ctx, &pubsub.Message{
-		Body: messageBody,
+		Body: encBody,
 	})
 }
