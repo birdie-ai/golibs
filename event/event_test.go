@@ -3,17 +3,21 @@ package event_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sort"
 	"testing"
+	"time"
 
 	// load in memory driver
 	"github.com/birdie-ai/golibs/event"
 	"github.com/birdie-ai/golibs/tracing"
+	"github.com/google/go-cmp/cmp"
 	"gocloud.dev/pubsub"
 	_ "gocloud.dev/pubsub/mempubsub"
 )
 
 func TestPublishEvent(t *testing.T) {
-	const url = "mem://test"
+	url := newTopicURL(t)
 
 	ctx := context.Background()
 
@@ -77,8 +81,7 @@ func TestPublishEvent(t *testing.T) {
 }
 
 func TestPublishEventWithoutTracingInfo(t *testing.T) {
-	const url = "mem://test-no-tracing-info"
-
+	url := newTopicURL(t)
 	ctx := context.Background()
 
 	topic, err := pubsub.OpenTopic(ctx, url)
@@ -121,5 +124,111 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 
 	if want != got {
 		t.Fatalf("got %+v != want %+v", got, want)
+	}
+}
+
+func TestSubscriptionServing(t *testing.T) {
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	const maxConcurrency = 10
+
+	subscription, err := event.NewRawSubscription(url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotMsgs := make(chan []byte)
+	handlersDone := make(chan struct{})
+	servingDone := make(chan struct{})
+
+	go func() {
+		err := subscription.Serve(func(ctx context.Context, msg []byte) {
+			gotMsgs <- msg
+			// we block the handlers to ensure concurrency is being respected
+			<-handlersDone
+		})
+		t.Logf("subscription.Service error: %v", err)
+		close(servingDone)
+	}()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = topic.Shutdown(ctx) }()
+
+	want := []string{}
+	got := []string{}
+
+	sendMsg := func(msg []byte) {
+		t.Helper()
+		if err := topic.Send(ctx, &pubsub.Message{Body: []byte(msg)}); err != nil {
+			t.Fatalf("publishing message: %v", err)
+		}
+	}
+
+	// Lets check that all goroutines were created and handled each message
+	for i := 0; i < maxConcurrency; i++ {
+		msg := fmt.Sprintf("message %d", i)
+		want = append(want, msg)
+
+		t.Log("publishing message")
+
+		sendMsg([]byte(msg))
+
+		t.Log("waiting for message received from subscription")
+		got = append(got, string(<-gotMsgs))
+		t.Log("message received from subscription")
+	}
+
+	sort.Strings(got)
+	assertEqual(t, got, want)
+
+	// Now lets ensure we didn't create any extra goroutines
+	// Ensure is a strong word, this is time sensitive, but we dont have false positives
+	// here, only false negatives, so good enough ? (no random/wrong failures, only false successes maybe).
+	const finalMsg = "final message"
+
+	sendMsg([]byte(finalMsg))
+
+	timeout, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	select {
+	case msg := <-gotMsgs:
+		t.Fatalf("got unexpected msg %q, an extra goroutine was created on the subscription", msg)
+	case <-timeout.Done():
+		break
+	}
+
+	// now lets free all blocked handlers
+	close(handlersDone)
+
+	gotFinalMsg := string(<-gotMsgs)
+	assertEqual(t, gotFinalMsg, finalMsg)
+
+	if err := subscription.Shutdown(); err != nil {
+		t.Fatalf("shutting down subscription: %v", err)
+	}
+
+	// wait for subscription to shutdown
+	<-servingDone
+}
+
+func newTopicURL(t *testing.T) string {
+	return "mem://" + t.Name()
+}
+
+func assertEqual[T any](t *testing.T, got T, want T) {
+	t.Helper()
+	// parametric helps to ensure we don't compare things of different types (which doesn't make sense)
+	// so we want 2 of any that are of the same type.
+	// maybe this could be generalized in an small assert lib :-).
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Logf("got: %v", got)
+		t.Logf("want: %v", want)
+		t.Fatalf("diff: %v", diff)
 	}
 }
