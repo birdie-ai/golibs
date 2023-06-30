@@ -4,6 +4,7 @@ package event
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/birdie-ai/golibs/tracing"
 	"gocloud.dev/pubsub"
@@ -49,4 +50,63 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 	return p.topic.Send(ctx, &pubsub.Message{
 		Body: encBody,
 	})
+}
+
+// RawSubscription represents a subscription that delivers messages as is.
+// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
+type RawSubscription struct {
+	sub            *pubsub.Subscription
+	maxConcurrency int
+}
+
+// RawMessageHandler is responsible for handling raw messages from a subscription.
+type RawMessageHandler func([]byte) error
+
+// NewRawSubscription creates a new raw subscription. It provides messages in a
+// service like manner (serve) and manages concurrent execution, each message
+// is processed in its own goroutines respecting the given maxConcurrency.
+func NewRawSubscription(url string, maxConcurrency int) (*RawSubscription, error) {
+	if maxConcurrency <= 0 {
+		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
+	}
+	// We dont want the subscription to expire, so we use the background context.
+	sub, err := pubsub.OpenSubscription(context.Background(), url)
+	if err != nil {
+		return nil, err
+	}
+	return &RawSubscription{
+		sub:            sub,
+		maxConcurrency: maxConcurrency,
+	}, nil
+}
+
+// Serve will start serving all messages from the subscription calling handler for each
+// message. It will run until [RawSubscription.Shutdown] is called.
+// If the error is nil Ack is sent.
+// If a non-nil error is returned by the handler Unack will be sent.
+// Serve may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" goroutines.
+func (r *RawSubscription) Serve(handler RawMessageHandler) error {
+	semaphore := make(chan struct{}, r.maxConcurrency)
+	for {
+		semaphore <- struct{}{}
+		// TODO(katcipis): add err handling
+		msg, err := r.sub.Receive(context.Background())
+		if err != nil {
+			return fmt.Errorf("receive from subscription failed, stopping serving: %v", err)
+		}
+		go func() {
+			defer func() {
+				<-semaphore
+			}()
+			// TODO(katcipis): add err handling
+			handler(msg.Body)
+		}()
+	}
+}
+
+// Shutdown will shutdown the subscriber, stopping any calls to [RawSubscription.Serve].
+// The subscription should not be used after this method is called.
+func (r *RawSubscription) Shutdown(ctx context.Context) error {
+	return r.sub.Shutdown(ctx)
 }

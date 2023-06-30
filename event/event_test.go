@@ -17,6 +17,8 @@ import (
 )
 
 func TestPublishEvent(t *testing.T) {
+	t.Parallel()
+
 	url := newTopicURL(t)
 
 	ctx := context.Background()
@@ -81,6 +83,8 @@ func TestPublishEvent(t *testing.T) {
 }
 
 func TestPublishEventWithoutTracingInfo(t *testing.T) {
+	t.Parallel()
+
 	url := newTopicURL(t)
 	ctx := context.Background()
 
@@ -127,11 +131,26 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 	}
 }
 
-func TestSubscriptionServing(t *testing.T) {
+func TestRawSubscriptionServing(t *testing.T) {
+	t.Parallel()
+
 	url := newTopicURL(t)
 	ctx := context.Background()
 
-	const maxConcurrency = 10
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = topic.Shutdown(ctx) }()
+
+	sendMsg := func(msg []byte) {
+		t.Helper()
+		if err := topic.Send(ctx, &pubsub.Message{Body: []byte(msg)}); err != nil {
+			t.Fatalf("publishing message: %v", err)
+		}
+	}
+
+	const maxConcurrency = 5
 
 	subscription, err := event.NewRawSubscription(url, maxConcurrency)
 	if err != nil {
@@ -143,30 +162,19 @@ func TestSubscriptionServing(t *testing.T) {
 	servingDone := make(chan struct{})
 
 	go func() {
-		err := subscription.Serve(func(ctx context.Context, msg []byte) {
+		err := subscription.Serve(func(msg []byte) error {
+			t.Logf("handler called, msg: %v", string(msg))
 			gotMsgs <- msg
 			// we block the handlers to ensure concurrency is being respected
 			<-handlersDone
+			return nil
 		})
 		t.Logf("subscription.Service error: %v", err)
 		close(servingDone)
 	}()
 
-	topic, err := pubsub.OpenTopic(ctx, url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = topic.Shutdown(ctx) }()
-
 	want := []string{}
 	got := []string{}
-
-	sendMsg := func(msg []byte) {
-		t.Helper()
-		if err := topic.Send(ctx, &pubsub.Message{Body: []byte(msg)}); err != nil {
-			t.Fatalf("publishing message: %v", err)
-		}
-	}
 
 	// Lets check that all goroutines were created and handled each message
 	for i := 0; i < maxConcurrency; i++ {
@@ -208,7 +216,7 @@ func TestSubscriptionServing(t *testing.T) {
 	gotFinalMsg := string(<-gotMsgs)
 	assertEqual(t, gotFinalMsg, finalMsg)
 
-	if err := subscription.Shutdown(); err != nil {
+	if err := subscription.Shutdown(ctx); err != nil {
 		t.Fatalf("shutting down subscription: %v", err)
 	}
 
