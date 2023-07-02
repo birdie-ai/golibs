@@ -164,6 +164,7 @@ func (r *RawSubscription) Serve(handler RawMessageHandler) error {
 			}()
 			err := handler(msg.Body)
 			if err != nil {
+				slog.Error("message handler failed", "message", string(msg.Body), "error", err)
 				if msg.Nackable() {
 					msg.Nack()
 				}
