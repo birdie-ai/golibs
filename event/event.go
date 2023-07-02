@@ -27,6 +27,7 @@ type Envelope[T any] struct {
 }
 
 type Subscription[T any] struct {
+	name   string
 	rawsub *RawSubscription
 }
 
@@ -74,12 +75,13 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 }
 
 // NewSubscription creates a subscription that will accept on events of the given type and name.
-func NewSubscription[T any](url string, maxConcurrency int) (*Subscription[T], error) {
+func NewSubscription[T any](name, url string, maxConcurrency int) (*Subscription[T], error) {
 	rawsub, err := NewRawSubscription(url, maxConcurrency)
 	if err != nil {
 		return nil, err
 	}
 	return &Subscription[T]{
+		name:   name,
 		rawsub: rawsub,
 	}, nil
 }
@@ -113,11 +115,15 @@ func NewRawSubscription(url string, maxConcurrency int) (*RawSubscription, error
 func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
 	return s.rawsub.Serve(func(msg []byte) error {
 		var event Envelope[T]
+
 		if err := json.Unmarshal(msg, &event); err != nil {
-			slog.Error("event is not valid JSON", "event", string(msg), "error", err)
-			return err
+			return fmt.Errorf("parsing event as JSON, event: %v, error: %v", string(msg), err)
 		}
-		// TODO(katcipis): validate the name
+
+		if event.Name != s.name {
+			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, string(msg))
+		}
+
 		ctx := tracing.CtxWithTraceID(context.Background(), event.TraceID)
 		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
 

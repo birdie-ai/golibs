@@ -173,7 +173,7 @@ func TestSubscriptionServing(t *testing.T) {
 
 	const maxConcurrency = 5
 
-	subscription, err := event.NewSubscription[Event](url, maxConcurrency)
+	subscription, err := event.NewSubscription[Event](eventName, url, maxConcurrency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,6 +268,65 @@ func TestSubscriptionServing(t *testing.T) {
 	gotFinalEvent := <-gotEvents
 	if gotFinalEvent.ID != finalEvent.ID {
 		t.Fatalf("final event got %v != want %v", gotFinalEvent, finalEvent)
+	}
+
+	if err := subscription.Shutdown(ctx); err != nil {
+		t.Fatalf("shutting down subscription: %v", err)
+	}
+
+	// wait for subscription to shutdown
+	<-servingDone
+}
+
+func TestSubscriptionDiscardsEventsWithWrongName(t *testing.T) {
+	t.Parallel()
+
+	type Event struct {
+		ID int `json:"id"`
+	}
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown(t, topic)
+
+	publisher := event.NewPublisher[Event]("publish_name", topic)
+
+	const maxConcurrency = 1
+
+	subscription, err := event.NewSubscription[Event]("wrong_name", url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotEvents := make(chan Event)
+	servingDone := make(chan struct{})
+
+	go func() {
+		err := subscription.Serve(func(ctx context.Context, event Event) error {
+			gotEvents <- event
+			return nil
+		})
+		t.Logf("subscription.Service error: %v", err)
+		close(servingDone)
+	}()
+
+	if err := publisher.Publish(ctx, Event{ID: 666}); err != nil {
+		t.Fatal(err)
+	}
+
+	timeout, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	select {
+	case event := <-gotEvents:
+		t.Fatalf("got unexpected event %+v, should not receive event with wrong name", event)
+	case <-timeout.Done():
+		break
 	}
 
 	if err := subscription.Shutdown(ctx); err != nil {
