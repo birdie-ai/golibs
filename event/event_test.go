@@ -37,7 +37,7 @@ func TestPublishEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = subscription.Shutdown(ctx) }()
+	defer shutdown(t, subscription)
 
 	const (
 		eventName = "test"
@@ -92,7 +92,7 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = topic.Shutdown(ctx) }()
+	defer shutdown(t, topic)
 
 	type Event struct{}
 
@@ -100,7 +100,7 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = subscription.Shutdown(ctx) }()
+	defer shutdown(t, subscription)
 
 	const (
 		eventName = "test"
