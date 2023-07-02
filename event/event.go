@@ -90,17 +90,22 @@ func (r *RawSubscription) Serve(handler RawMessageHandler) error {
 	semaphore := make(chan struct{}, r.maxConcurrency)
 	for {
 		semaphore <- struct{}{}
-		// TODO(katcipis): add err handling
 		msg, err := r.sub.Receive(context.Background())
 		if err != nil {
+			// From: https://pkg.go.dev/gocloud.dev@v0.30.0/pubsub#example-Subscription.Receive-Concurrent
+			// Errors from Receive indicate that Receive will no longer succeed.
 			return fmt.Errorf("receive from subscription failed, stopping serving: %v", err)
 		}
 		go func() {
 			defer func() {
 				<-semaphore
 			}()
-			// TODO(katcipis): add err handling
-			handler(msg.Body)
+			err := handler(msg.Body)
+			if err == nil {
+				msg.Ack()
+			} else {
+				msg.Nack()
+			}
 		}()
 	}
 }
