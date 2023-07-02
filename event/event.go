@@ -120,6 +120,12 @@ func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
 		// TODO(katcipis): validate the name
 		ctx := tracing.CtxWithTraceID(context.Background(), event.TraceID)
 		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
+
+		log := slog.FromCtx(ctx)
+		log = log.With("trace_id", event.TraceID)
+		log = log.With("organization_id", event.OrgID)
+		ctx = slog.NewContext(ctx, log)
+
 		return handler(ctx, event.Event)
 	})
 }
