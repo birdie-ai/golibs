@@ -25,6 +25,26 @@ type Body[T any] struct {
 	Event   T      `json:"event"`
 }
 
+type Subscription[T any] struct {
+	rawsub *RawSubscription
+}
+
+// EventHandler is responsible for handling events from a subscription.
+// The context passed to the handler will have all metadata relevant to that
+// event like org and trace IDs. It will also contain a logger that can be retrieved
+// by using [slog.FromCtx].
+type EventHandler[T any] func(context.Context, T) error
+
+// RawSubscription represents a subscription that delivers messages as is.
+// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
+type RawSubscription struct {
+	sub            *pubsub.Subscription
+	maxConcurrency int
+}
+
+// RawMessageHandler is responsible for handling raw messages from a subscription.
+type RawMessageHandler func([]byte) error
+
 // NewPublisher creates a new event publisher for the given event name and topic.
 func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 	return &Publisher[T]{
@@ -52,15 +72,16 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 	})
 }
 
-// RawSubscription represents a subscription that delivers messages as is.
-// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
-type RawSubscription struct {
-	sub            *pubsub.Subscription
-	maxConcurrency int
+// NewSubscription creates a subscription that will accept on events of the given type and name.
+func NewSubscription[T any](url string, maxConcurrency int) (*Subscription[T], error) {
+	rawsub, err := NewRawSubscription(url, maxConcurrency)
+	if err != nil {
+		return nil, err
+	}
+	return &Subscription[T]{
+		rawsub: rawsub,
+	}, nil
 }
-
-// RawMessageHandler is responsible for handling raw messages from a subscription.
-type RawMessageHandler func([]byte) error
 
 // NewRawSubscription creates a new raw subscription. It provides messages in a
 // service like manner (serve) and manages concurrent execution, each message
@@ -78,6 +99,24 @@ func NewRawSubscription(url string, maxConcurrency int) (*RawSubscription, error
 		sub:            sub,
 		maxConcurrency: maxConcurrency,
 	}, nil
+}
+
+// Serve will start serving all events from the subscription calling handler for each
+// event. It will run until [Subscription.Shutdown] is called.
+// If the error is nil Ack is sent.
+// If a non-nil error is returned by the handler Unack will be sent.
+// If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
+// If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
+// Serve may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" goroutines.
+func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
+	return nil
+}
+
+// Shutdown will shutdown the subscriber, stopping any calls to [RawSubscription.Serve].
+// The subscription should not be used after this method is called.
+func (s *Subscription[T]) Shutdown(ctx context.Context) error {
+	return s.rawsub.Shutdown(ctx)
 }
 
 // Serve will start serving all messages from the subscription calling handler for each
