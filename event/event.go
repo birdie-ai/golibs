@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/birdie-ai/golibs/slog"
 	"github.com/birdie-ai/golibs/tracing"
 	"gocloud.dev/pubsub"
-	"golang.org/x/exp/slog"
 )
 
 // Publisher represents a publisher of events of type T.
@@ -118,7 +118,8 @@ func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
 			return err
 		}
 		// TODO(katcipis): validate the name
-		ctx := context.Background()
+		ctx := tracing.CtxWithTraceID(context.Background(), event.TraceID)
+		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
 		return handler(ctx, event.Event)
 	})
 }

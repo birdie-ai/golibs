@@ -224,11 +224,24 @@ func TestSubscriptionServing(t *testing.T) {
 		t.Fatal("got != want")
 	}
 
+	assertCtxData := func(e Event) {
+		t.Helper()
+
+		wantTraceID := getTraceID(e)
+		wantOrgID := getOrgID(e)
+		gotTraceID := tracing.CtxGetTraceID(e.ctx)
+		gotOrgID := tracing.CtxGetOrgID(e.ctx)
+
+		assertEqual(t, gotTraceID, wantTraceID)
+		assertEqual(t, gotOrgID, wantOrgID)
+	}
+
 	for i, g := range got {
 		w := want[i]
 		if g.ID != w.ID {
 			t.Errorf("got[%d] != want[%d]", g, w)
 		}
+		assertCtxData(g)
 	}
 
 	// Now lets ensure we didn't create any extra goroutines
