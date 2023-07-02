@@ -101,11 +101,13 @@ func (r *RawSubscription) Serve(handler RawMessageHandler) error {
 				<-semaphore
 			}()
 			err := handler(msg.Body)
-			if err == nil {
-				msg.Ack()
-			} else {
-				msg.Nack()
+			if err != nil {
+				if msg.Nackable() {
+					msg.Nack()
+				}
+				return
 			}
+			msg.Ack()
 		}()
 	}
 }
