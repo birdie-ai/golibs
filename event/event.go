@@ -8,6 +8,7 @@ import (
 
 	"github.com/birdie-ai/golibs/tracing"
 	"gocloud.dev/pubsub"
+	"golang.org/x/exp/slog"
 )
 
 // Publisher represents a publisher of events of type T.
@@ -17,8 +18,8 @@ type Publisher[T any] struct {
 	topic *pubsub.Topic
 }
 
-// Body represents the general structure of the body of events.
-type Body[T any] struct {
+// Envelope represents the structure of all data that wraps all events.
+type Envelope[T any] struct {
 	TraceID string `json:"trace_id"`
 	OrgID   string `json:"organization_id"`
 	Name    string `json:"name"`
@@ -55,7 +56,7 @@ func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 
 // Publish will publish the given event.
 func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
-	body := Body[T]{
+	body := Envelope[T]{
 		TraceID: tracing.CtxGetTraceID(ctx),
 		OrgID:   tracing.CtxGetOrgID(ctx),
 		Name:    p.name,
@@ -110,7 +111,16 @@ func NewRawSubscription(url string, maxConcurrency int) (*RawSubscription, error
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
 func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
-	return nil
+	return s.rawsub.Serve(func(msg []byte) error {
+		var event Envelope[T]
+		if err := json.Unmarshal(msg, &event); err != nil {
+			slog.Error("event is not valid JSON", "event", string(msg), "error", err)
+			return err
+		}
+		// TODO(katcipis): validate the name
+		ctx := context.Background()
+		return handler(ctx, event.Event)
+	})
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [RawSubscription.Serve].

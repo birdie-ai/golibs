@@ -66,13 +66,13 @@ func TestPublishEvent(t *testing.T) {
 	}
 	gotMsg.Ack()
 
-	want := event.Body[Event]{
+	want := event.Envelope[Event]{
 		TraceID: traceID,
 		OrgID:   orgID,
 		Name:    eventName,
 		Event:   wantEvt,
 	}
-	got := event.Body[Event]{}
+	got := event.Envelope[Event]{}
 	if err := json.Unmarshal(gotMsg.Body, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -118,10 +118,10 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 	}
 	gotMsg.Ack()
 
-	want := event.Body[Event]{
+	want := event.Envelope[Event]{
 		Name: eventName,
 	}
-	got := event.Body[Event]{}
+	got := event.Envelope[Event]{}
 	if err := json.Unmarshal(gotMsg.Body, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestSubscriptionServing(t *testing.T) {
 	t.Parallel()
 
 	type Event struct {
-		ID  int `json:"field"`
+		ID  int `json:"id"`
 		ctx context.Context
 	}
 
@@ -218,13 +218,22 @@ func TestSubscriptionServing(t *testing.T) {
 		return got[i].ID < got[j].ID
 	})
 
-	assertEqual(t, got, want)
+	if len(got) != len(want) {
+		t.Logf("got: %v", got)
+		t.Logf("want: %v", want)
+		t.Fatal("got != want")
+	}
+
+	for i, g := range got {
+		w := want[i]
+		if g.ID != w.ID {
+			t.Errorf("got[%d] != want[%d]", g, w)
+		}
+	}
 
 	// Now lets ensure we didn't create any extra goroutines
 	// Ensure is a strong word, this is time sensitive, but we dont have false positives
 	// here, only false negatives, so good enough ? (no random/wrong failures, only false successes maybe).
-	const finalMsg = "final message"
-
 	finalEvent := Event{
 		ID: 666,
 	}
@@ -244,7 +253,9 @@ func TestSubscriptionServing(t *testing.T) {
 	close(handlersDone)
 
 	gotFinalEvent := <-gotEvents
-	assertEqual(t, gotFinalEvent, finalEvent)
+	if gotFinalEvent.ID != finalEvent.ID {
+		t.Fatalf("final event got %v != want %v", gotFinalEvent, finalEvent)
+	}
 
 	if err := subscription.Shutdown(ctx); err != nil {
 		t.Fatalf("shutting down subscription: %v", err)
