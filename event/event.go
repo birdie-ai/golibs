@@ -25,6 +25,21 @@ type Body[T any] struct {
 	Event   T      `json:"event"`
 }
 
+// Message represents a raw message received on a subscription.
+type Message struct {
+	body []byte
+}
+
+// RawSubscription represents a subscription that delivers messages as is.
+// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
+type RawSubscription struct {
+	sub            *pubsub.Subscription
+	maxConcurrency int
+}
+
+// RawMessageHandler is responsible for handling raw messages from a subscription.
+type RawMessageHandler func(Message) error
+
 // NewPublisher creates a new event publisher for the given event name and topic.
 func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 	return &Publisher[T]{
@@ -51,16 +66,6 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 		Body: encBody,
 	})
 }
-
-// RawSubscription represents a subscription that delivers messages as is.
-// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
-type RawSubscription struct {
-	sub            *pubsub.Subscription
-	maxConcurrency int
-}
-
-// RawMessageHandler is responsible for handling raw messages from a subscription.
-type RawMessageHandler func([]byte) error
 
 // NewRawSubscription creates a new raw subscription. It provides messages in a
 // service like manner (serve) and manages concurrent execution, each message
@@ -100,7 +105,7 @@ func (r *RawSubscription) Serve(handler RawMessageHandler) error {
 			defer func() {
 				<-semaphore
 			}()
-			err := handler(msg.Body)
+			err := handler(Message{body: msg.Body})
 			if err != nil {
 				if msg.Nackable() {
 					msg.Nack()
@@ -116,4 +121,9 @@ func (r *RawSubscription) Serve(handler RawMessageHandler) error {
 // The subscription should not be used after this method is called.
 func (r *RawSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
+}
+
+// Body of the message.
+func (m Message) Body() []byte {
+	return m.body
 }
