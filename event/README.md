@@ -14,4 +14,41 @@ Here we document the metrics generated.
 
 ### Publisher
 
+#### event_published_duration_seconds : histogram
+
+Measure publish duration time for each event.
+Useful when debugging connectivy issues between a service and the message broker.
+
+Labels:
+
+* status : "ack" or "nack".
+* name : name of the event.
+
+#### event_published_total : counter
+
+Total of published messages.
+
+Labels:
+
+* status : "ack" or "nack".
+* name : name of the event.
+
 ### Subscription
+
+#### event_handled_duration_seconds : histogram
+
+Measure how long it took to handle each event.
+
+Labels:
+
+* status : "ack" or "nack".
+* name : name of the event.
+
+#### event_handled_total : counter
+
+Total of messages handled by a subscription.
+
+Labels:
+
+* status : "ack" or "nack".
+* name : name of the event.
