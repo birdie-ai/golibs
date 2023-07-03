@@ -37,6 +37,11 @@ type Subscription[T any] struct {
 // by using [slog.FromCtx].
 type EventHandler[T any] func(context.Context, T) error
 
+// Message represents a raw message received on a subscription.
+type Message struct {
+	body []byte
+}
+
 // RawSubscription represents a subscription that delivers messages as is.
 // No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
 type RawSubscription struct {
@@ -45,7 +50,7 @@ type RawSubscription struct {
 }
 
 // RawMessageHandler is responsible for handling raw messages from a subscription.
-type RawMessageHandler func([]byte) error
+type RawMessageHandler func(Message) error
 
 // NewPublisher creates a new event publisher for the given event name and topic.
 func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
@@ -113,15 +118,15 @@ func NewRawSubscription(url string, maxConcurrency int) (*RawSubscription, error
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
 func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
-	return s.rawsub.Serve(func(msg []byte) error {
+	return s.rawsub.Serve(func(msg Message) error {
 		var event Envelope[T]
 
-		if err := json.Unmarshal(msg, &event); err != nil {
-			return fmt.Errorf("parsing event as JSON, event: %v, error: %v", string(msg), err)
+		if err := json.Unmarshal(msg.Body(), &event); err != nil {
+			return fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
 		}
 
 		if event.Name != s.name {
-			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, string(msg))
+			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
 		}
 
 		ctx := tracing.CtxWithTraceID(context.Background(), event.TraceID)
@@ -162,9 +167,8 @@ func (r *RawSubscription) Serve(handler RawMessageHandler) error {
 			defer func() {
 				<-semaphore
 			}()
-			err := handler(msg.Body)
+			err := handler(Message{body: msg.Body})
 			if err != nil {
-				slog.Error("message handler failed", "message", string(msg.Body), "error", err)
 				if msg.Nackable() {
 					msg.Nack()
 				}
@@ -179,4 +183,14 @@ func (r *RawSubscription) Serve(handler RawMessageHandler) error {
 // The subscription should not be used after this method is called.
 func (r *RawSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
+}
+
+// Body of the message.
+func (m Message) Body() []byte {
+	return m.body
+}
+
+// String representation of the message.
+func (m Message) String() string {
+	return string(m.body)
 }
