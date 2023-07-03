@@ -11,46 +11,48 @@ import (
 	"gocloud.dev/pubsub"
 )
 
-// Publisher represents a publisher of events of type T.
-// The publisher guarantees that the events conform to our basic schema for events.
-type Publisher[T any] struct {
-	name  string
-	topic *pubsub.Topic
-}
+type (
+	// Publisher represents a publisher of events of type T.
+	// The publisher guarantees that the events conform to our basic schema for events.
+	Publisher[T any] struct {
+		name  string
+		topic *pubsub.Topic
+	}
 
-// Envelope represents the structure of all data that wraps all events.
-type Envelope[T any] struct {
-	TraceID string `json:"trace_id"`
-	OrgID   string `json:"organization_id"`
-	Name    string `json:"name"`
-	Event   T      `json:"event"`
-}
+	// Envelope represents the structure of all data that wraps all events.
+	Envelope[T any] struct {
+		TraceID string `json:"trace_id"`
+		OrgID   string `json:"organization_id"`
+		Name    string `json:"name"`
+		Event   T      `json:"event"`
+	}
 
-type Subscription[T any] struct {
-	name   string
-	rawsub *RawSubscription
-}
+	Subscription[T any] struct {
+		name   string
+		rawsub *RawSubscription
+	}
 
-// EventHandler is responsible for handling events from a subscription.
-// The context passed to the handler will have all metadata relevant to that
-// event like org and trace IDs. It will also contain a logger that can be retrieved
-// by using [slog.FromCtx].
-type EventHandler[T any] func(context.Context, T) error
+	// EventHandler is responsible for handling events from a subscription.
+	// The context passed to the handler will have all metadata relevant to that
+	// event like org and trace IDs. It will also contain a logger that can be retrieved
+	// by using [slog.FromCtx].
+	EventHandler[T any] func(context.Context, T) error
 
-// Message represents a raw message received on a subscription.
-type Message struct {
-	body []byte
-}
+	// Message represents a raw message received on a subscription.
+	Message struct {
+		body []byte
+	}
 
-// RawSubscription represents a subscription that delivers messages as is.
-// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
-type RawSubscription struct {
-	sub            *pubsub.Subscription
-	maxConcurrency int
-}
+	// RawSubscription represents a subscription that delivers messages as is.
+	// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
+	RawSubscription struct {
+		sub            *pubsub.Subscription
+		maxConcurrency int
+	}
 
-// RawMessageHandler is responsible for handling raw messages from a subscription.
-type RawMessageHandler func(Message) error
+	// RawMessageHandler is responsible for handling raw messages from a subscription.
+	RawMessageHandler func(Message) error
+)
 
 // NewPublisher creates a new event publisher for the given event name and topic.
 func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
