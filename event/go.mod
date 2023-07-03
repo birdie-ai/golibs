@@ -3,14 +3,18 @@ module github.com/birdie-ai/golibs/event
 go 1.20
 
 require (
+	github.com/birdie-ai/golibs/tracing v0.0.0-20230626100919-b731b736142e
+	github.com/google/go-cmp v0.5.9
+	gocloud.dev v0.30.0
+)
+
+require (
 	github.com/birdie-ai/golibs/slog v0.0.2 // indirect
-	github.com/birdie-ai/golibs/tracing v0.0.0-20230626100919-b731b736142e // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.11.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	gocloud.dev v0.30.0 // indirect
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
 	golang.org/x/net v0.11.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
