@@ -21,7 +21,7 @@ Useful when debugging connectivy issues between a service and the message broker
 
 Labels:
 
-* status : "ack" or "nack".
+* status : "ok" or "error".
 * name : name of the event.
 
 #### event_publish_total : counter
@@ -30,7 +30,7 @@ Total of published messages.
 
 Labels:
 
-* status : "ack" or "nack".
+* status : "ok" or "error".
 * name : name of the event.
 
 ### Subscription
@@ -41,7 +41,7 @@ Measure how long it took to process each event.
 
 Labels:
 
-* status : "ack" or "nack".
+* status : "ok" or "error".
 * name : name of the event.
 
 #### event_process_total : counter
@@ -50,5 +50,5 @@ Total of messages processed by a subscription.
 
 Labels:
 
-* status : "ack" or "nack".
+* status : "ok" or "error".
 * name : name of the event.
