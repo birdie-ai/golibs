@@ -4,6 +4,7 @@ package event
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/birdie-ai/golibs/tracing"
 	"gocloud.dev/pubsub"
@@ -23,6 +24,21 @@ type Body[T any] struct {
 	Name    string `json:"name"`
 	Event   T      `json:"event"`
 }
+
+// Message represents a raw message received on a subscription.
+type Message struct {
+	body []byte
+}
+
+// RawSubscription represents a subscription that delivers messages as is.
+// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
+type RawSubscription struct {
+	sub            *pubsub.Subscription
+	maxConcurrency int
+}
+
+// RawMessageHandler is responsible for handling raw messages from a subscription.
+type RawMessageHandler func(Message) error
 
 // NewPublisher creates a new event publisher for the given event name and topic.
 func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
@@ -49,4 +65,65 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 	return p.topic.Send(ctx, &pubsub.Message{
 		Body: encBody,
 	})
+}
+
+// NewRawSubscription creates a new raw subscription. It provides messages in a
+// service like manner (serve) and manages concurrent execution, each message
+// is processed in its own goroutines respecting the given maxConcurrency.
+func NewRawSubscription(url string, maxConcurrency int) (*RawSubscription, error) {
+	if maxConcurrency <= 0 {
+		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
+	}
+	// We dont want the subscription to expire, so we use the background context.
+	sub, err := pubsub.OpenSubscription(context.Background(), url)
+	if err != nil {
+		return nil, err
+	}
+	return &RawSubscription{
+		sub:            sub,
+		maxConcurrency: maxConcurrency,
+	}, nil
+}
+
+// Serve will start serving all messages from the subscription calling handler for each
+// message. It will run until [RawSubscription.Shutdown] is called.
+// If the error is nil Ack is sent.
+// If a non-nil error is returned by the handler Unack will be sent.
+// Serve may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" goroutines.
+func (r *RawSubscription) Serve(handler RawMessageHandler) error {
+	semaphore := make(chan struct{}, r.maxConcurrency)
+	for {
+		semaphore <- struct{}{}
+		msg, err := r.sub.Receive(context.Background())
+		if err != nil {
+			// From: https://pkg.go.dev/gocloud.dev@v0.30.0/pubsub#example-Subscription.Receive-Concurrent
+			// Errors from Receive indicate that Receive will no longer succeed.
+			return fmt.Errorf("receive from subscription failed, stopping serving: %v", err)
+		}
+		go func() {
+			defer func() {
+				<-semaphore
+			}()
+			err := handler(Message{body: msg.Body})
+			if err != nil {
+				if msg.Nackable() {
+					msg.Nack()
+				}
+				return
+			}
+			msg.Ack()
+		}()
+	}
+}
+
+// Shutdown will shutdown the subscriber, stopping any calls to [RawSubscription.Serve].
+// The subscription should not be used after this method is called.
+func (r *RawSubscription) Shutdown(ctx context.Context) error {
+	return r.sub.Shutdown(ctx)
+}
+
+// Body of the message.
+func (m Message) Body() []byte {
+	return m.body
 }
