@@ -37,7 +37,7 @@ func TestPublishEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = subscription.Shutdown(ctx) }()
+	defer shutdown(t, subscription)
 
 	const (
 		eventName = "test"
@@ -66,13 +66,13 @@ func TestPublishEvent(t *testing.T) {
 	}
 	gotMsg.Ack()
 
-	want := event.Body[Event]{
+	want := event.Envelope[Event]{
 		TraceID: traceID,
 		OrgID:   orgID,
 		Name:    eventName,
 		Event:   wantEvt,
 	}
-	got := event.Body[Event]{}
+	got := event.Envelope[Event]{}
 	if err := json.Unmarshal(gotMsg.Body, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = topic.Shutdown(ctx) }()
+	defer shutdown(t, topic)
 
 	type Event struct{}
 
@@ -100,7 +100,7 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = subscription.Shutdown(ctx) }()
+	defer shutdown(t, subscription)
 
 	const (
 		eventName = "test"
@@ -118,10 +118,10 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 	}
 	gotMsg.Ack()
 
-	want := event.Body[Event]{
+	want := event.Envelope[Event]{
 		Name: eventName,
 	}
-	got := event.Body[Event]{}
+	got := event.Envelope[Event]{}
 	if err := json.Unmarshal(gotMsg.Body, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -129,6 +129,212 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 	if want != got {
 		t.Fatalf("got %+v != want %+v", got, want)
 	}
+}
+
+func TestSubscriptionServing(t *testing.T) {
+	t.Parallel()
+
+	type Event struct {
+		ID  int `json:"id"`
+		ctx context.Context
+	}
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	const (
+		eventName = "test-subscription"
+	)
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown(t, topic)
+
+	publisher := event.NewPublisher[Event](eventName, topic)
+	getOrgID := func(e Event) string {
+		return fmt.Sprintf("org-id-%d", e.ID)
+	}
+	getTraceID := func(e Event) string {
+		return fmt.Sprintf("trace-id-%d", e.ID)
+	}
+
+	publish := func(event Event) {
+		t.Helper()
+		// We test that trace and org IDs are transported correctly on the envelope.
+		ctx := tracing.CtxWithOrgID(ctx, getOrgID(event))
+		ctx = tracing.CtxWithTraceID(ctx, getTraceID(event))
+
+		if err := publisher.Publish(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const maxConcurrency = 5
+
+	subscription, err := event.NewSubscription[Event](eventName, url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotEvents := make(chan Event)
+	handlersDone := make(chan struct{})
+	servingDone := make(chan struct{})
+
+	go func() {
+		err := subscription.Serve(func(ctx context.Context, event Event) error {
+			t.Logf("handler called, event: %v", event)
+			event.ctx = ctx
+			gotEvents <- event
+			// we block the handlers to ensure concurrency is being respected
+			<-handlersDone
+			return nil
+		})
+		t.Logf("subscription.Service error: %v", err)
+		close(servingDone)
+	}()
+
+	want := []Event{}
+	got := []Event{}
+
+	// Lets check that all goroutines were created and handled each message
+	for i := 0; i < maxConcurrency; i++ {
+		event := Event{
+			ID: i,
+		}
+		want = append(want, event)
+
+		t.Log("publishing message")
+
+		publish(event)
+
+		t.Log("waiting for message received from subscription")
+		got = append(got, <-gotEvents)
+		t.Log("message received from subscription")
+	}
+
+	sort.SliceStable(got, func(i, j int) bool {
+		return got[i].ID < got[j].ID
+	})
+
+	if len(got) != len(want) {
+		t.Logf("got: %v", got)
+		t.Logf("want: %v", want)
+		t.Fatal("got != want")
+	}
+
+	assertCtxData := func(e Event) {
+		t.Helper()
+
+		wantTraceID := getTraceID(e)
+		wantOrgID := getOrgID(e)
+		gotTraceID := tracing.CtxGetTraceID(e.ctx)
+		gotOrgID := tracing.CtxGetOrgID(e.ctx)
+
+		assertEqual(t, gotTraceID, wantTraceID)
+		assertEqual(t, gotOrgID, wantOrgID)
+	}
+
+	for i, g := range got {
+		w := want[i]
+		if g.ID != w.ID {
+			t.Errorf("got[%d] != want[%d]", g, w)
+		}
+		assertCtxData(g)
+	}
+
+	// Now lets ensure we didn't create any extra goroutines
+	// Ensure is a strong word, this is time sensitive, but we dont have false positives
+	// here, only false negatives, so good enough ? (no random/wrong failures, only false successes maybe).
+	finalEvent := Event{
+		ID: 666,
+	}
+	publish(finalEvent)
+
+	timeout, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	select {
+	case event := <-gotEvents:
+		t.Fatalf("got unexpected event %q, an extra goroutine was created on the subscription", event)
+	case <-timeout.Done():
+		break
+	}
+
+	// now lets free all blocked handlers
+	close(handlersDone)
+
+	gotFinalEvent := <-gotEvents
+	if gotFinalEvent.ID != finalEvent.ID {
+		t.Fatalf("final event got %v != want %v", gotFinalEvent, finalEvent)
+	}
+
+	if err := subscription.Shutdown(ctx); err != nil {
+		t.Fatalf("shutting down subscription: %v", err)
+	}
+
+	// wait for subscription to shutdown
+	<-servingDone
+}
+
+func TestSubscriptionDiscardsEventsWithWrongName(t *testing.T) {
+	t.Parallel()
+
+	type Event struct {
+		ID int `json:"id"`
+	}
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown(t, topic)
+
+	publisher := event.NewPublisher[Event]("publish_name", topic)
+
+	const maxConcurrency = 1
+
+	subscription, err := event.NewSubscription[Event]("wrong_name", url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotEvents := make(chan Event)
+	servingDone := make(chan struct{})
+
+	go func() {
+		err := subscription.Serve(func(ctx context.Context, event Event) error {
+			gotEvents <- event
+			return nil
+		})
+		t.Logf("subscription.Service error: %v", err)
+		close(servingDone)
+	}()
+
+	if err := publisher.Publish(ctx, Event{ID: 666}); err != nil {
+		t.Fatal(err)
+	}
+
+	timeout, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	select {
+	case event := <-gotEvents:
+		t.Fatalf("got unexpected event %+v, should not receive event with wrong name", event)
+	case <-timeout.Done():
+		break
+	}
+
+	if err := subscription.Shutdown(ctx); err != nil {
+		t.Fatalf("shutting down subscription: %v", err)
+	}
+
+	// wait for subscription to shutdown
+	<-servingDone
 }
 
 func TestRawSubscriptionServing(t *testing.T) {
@@ -222,6 +428,18 @@ func TestRawSubscriptionServing(t *testing.T) {
 
 	// wait for subscription to shutdown
 	<-servingDone
+}
+
+type shutdowner interface {
+	Shutdown(context.Context) error
+}
+
+func shutdown(t *testing.T, s shutdowner) {
+	t.Helper()
+
+	if err := s.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func newTopicURL(t *testing.T) string {
