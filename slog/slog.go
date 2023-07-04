@@ -83,7 +83,7 @@ func LoadConfig(service string) (Config, error) {
 // Configure will change the default logger configuration.
 // It should be called as soon as possible, usually on the main of your program.
 func Configure(cfg Config) error {
-	th := slog.HandlerOptions{
+	th := &slog.HandlerOptions{
 		Level: cfg.Level,
 	}
 
@@ -91,7 +91,7 @@ func Configure(cfg Config) error {
 
 	switch cfg.Format {
 	case FormatText:
-		handler = th.NewTextHandler(os.Stderr)
+		handler = slog.NewTextHandler(os.Stderr, th)
 	case FormatGcloud:
 		th.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 			// Customize the name of some fields to match Google Cloud expectations
@@ -104,7 +104,7 @@ func Configure(cfg Config) error {
 			}
 			return a
 		}
-		handler = th.NewJSONHandler(os.Stderr)
+		handler = slog.NewJSONHandler(os.Stderr, th)
 	default:
 		return fmt.Errorf("unknown log format: %v", cfg.Format)
 	}
