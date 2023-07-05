@@ -64,12 +64,12 @@ func LoadConfig(service string) (Config, error) {
 	level := os.Getenv(service + "_LOG_LEVEL")
 	format := os.Getenv(service + "_LOG_FMT")
 
-	logFormat, err := validateFormat(format)
+	logFormat, err := ParseFormat(format)
 	if err != nil {
 		return Config{}, err
 	}
 
-	logLevel, err := validateLogLevel(level)
+	logLevel, err := ParseLevel(level)
 	if err != nil {
 		return Config{}, err
 	}
@@ -184,7 +184,7 @@ const (
 	loggerKey key = iota
 )
 
-func validateLogLevel(level string) (Level, error) {
+func ParseLevel(level string) (Level, error) {
 	level = strings.ToLower(level)
 	switch level {
 	case "info", "":
@@ -202,7 +202,7 @@ func validateLogLevel(level string) (Level, error) {
 	}
 }
 
-func validateFormat(format string) (Format, error) {
+func ParseFormat(format string) (Format, error) {
 	switch format {
 	case "gcloud", "text":
 		return Format(format), nil
