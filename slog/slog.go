@@ -184,6 +184,7 @@ const (
 	loggerKey key = iota
 )
 
+// ParseLevel parses the string and returns the corresponding [Level].
 func ParseLevel(level string) (Level, error) {
 	level = strings.ToLower(level)
 	switch level {
@@ -202,6 +203,7 @@ func ParseLevel(level string) (Level, error) {
 	}
 }
 
+// ParseFormat parses the string and returns the corresponding [Format].
 func ParseFormat(format string) (Format, error) {
 	switch format {
 	case "gcloud", "text":
