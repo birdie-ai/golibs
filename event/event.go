@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/birdie-ai/golibs/slog"
 	"github.com/birdie-ai/golibs/tracing"
@@ -64,6 +65,8 @@ func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 
 // Publish will publish the given event.
 func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
+	start := time.Now()
+
 	body := Envelope[T]{
 		TraceID: tracing.CtxGetTraceID(ctx),
 		OrgID:   tracing.CtxGetOrgID(ctx),
@@ -76,9 +79,15 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 		return err
 	}
 
-	return p.topic.Send(ctx, &pubsub.Message{
+	err = p.topic.Send(ctx, &pubsub.Message{
 		Body: encBody,
 	})
+
+	elapsed := time.Since(start)
+
+	samplePublish(p.name, elapsed, err)
+
+	return err
 }
 
 // NewSubscription creates a subscription that will accept on events of the given type and name.
@@ -120,7 +129,7 @@ func NewRawSubscription(url string, maxConcurrency int) (*MsgSubscription, error
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
 func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
-	return s.rawsub.Serve(func(msg Message) error {
+	return s.rawsub.Serve(SampledMessageHandler(func(msg Message) error {
 		var event Envelope[T]
 
 		if err := json.Unmarshal(msg.Body(), &event); err != nil {
@@ -140,7 +149,7 @@ func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
 		ctx = slog.NewContext(ctx, log)
 
 		return handler(ctx, event.Event)
-	})
+	}, s.name))
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [RawSubscription.Serve].
@@ -169,6 +178,7 @@ func (r *MsgSubscription) Serve(handler MessageHandler) error {
 			defer func() {
 				<-semaphore
 			}()
+
 			err := handler(Message{body: msg.Body})
 			if err != nil {
 				if msg.Nackable() {
