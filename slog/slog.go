@@ -64,12 +64,12 @@ func LoadConfig(service string) (Config, error) {
 	level := os.Getenv(service + "_LOG_LEVEL")
 	format := os.Getenv(service + "_LOG_FMT")
 
-	logFormat, err := validateFormat(format)
+	logFormat, err := ParseFormat(format)
 	if err != nil {
 		return Config{}, err
 	}
 
-	logLevel, err := validateLogLevel(level)
+	logLevel, err := ParseLevel(level)
 	if err != nil {
 		return Config{}, err
 	}
@@ -83,7 +83,7 @@ func LoadConfig(service string) (Config, error) {
 // Configure will change the default logger configuration.
 // It should be called as soon as possible, usually on the main of your program.
 func Configure(cfg Config) error {
-	th := slog.HandlerOptions{
+	th := &slog.HandlerOptions{
 		Level: cfg.Level,
 	}
 
@@ -91,7 +91,7 @@ func Configure(cfg Config) error {
 
 	switch cfg.Format {
 	case FormatText:
-		handler = th.NewTextHandler(os.Stderr)
+		handler = slog.NewTextHandler(os.Stderr, th)
 	case FormatGcloud:
 		th.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 			// Customize the name of some fields to match Google Cloud expectations
@@ -104,7 +104,7 @@ func Configure(cfg Config) error {
 			}
 			return a
 		}
-		handler = th.NewJSONHandler(os.Stderr)
+		handler = slog.NewJSONHandler(os.Stderr, th)
 	default:
 		return fmt.Errorf("unknown log format: %v", cfg.Format)
 	}
@@ -184,7 +184,8 @@ const (
 	loggerKey key = iota
 )
 
-func validateLogLevel(level string) (Level, error) {
+// ParseLevel parses the string and returns the corresponding [Level].
+func ParseLevel(level string) (Level, error) {
 	level = strings.ToLower(level)
 	switch level {
 	case "info", "":
@@ -202,7 +203,8 @@ func validateLogLevel(level string) (Level, error) {
 	}
 }
 
-func validateFormat(format string) (Format, error) {
+// ParseFormat parses the string and returns the corresponding [Format].
+func ParseFormat(format string) (Format, error) {
 	switch format {
 	case "gcloud", "text":
 		return Format(format), nil

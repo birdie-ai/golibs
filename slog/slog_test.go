@@ -76,6 +76,67 @@ func TestDefaultLoggerFromContext(t *testing.T) {
 	}
 }
 
+func TestParseLevel(t *testing.T) {
+	testcases := []struct {
+		Input  string
+		Output slog.Level
+	}{
+		{Input: "", Output: slog.LevelInfo},
+		{Input: "info", Output: slog.LevelInfo},
+		{Input: "debug", Output: slog.LevelDebug},
+		{Input: "warn", Output: slog.LevelWarn},
+		{Input: "error", Output: slog.LevelError},
+		{Input: "disable", Output: slog.LevelDisable},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Input, func(t *testing.T) {
+			level, err := slog.ParseLevel(tc.Input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if level != tc.Output {
+				t.Errorf("got %v, want %v", level, tc.Output)
+			}
+		})
+	}
+}
+
+func TestParseLevel_Invalid(t *testing.T) {
+	_, err := slog.ParseLevel("invalid")
+	if err == nil {
+		t.Fatal("want error, got nil")
+	}
+}
+
+func TestParseFormat(t *testing.T) {
+	testcases := []struct {
+		Input  string
+		Output slog.Format
+	}{
+		{Input: "", Output: slog.FormatGcloud},
+		{Input: "gcloud", Output: slog.FormatGcloud},
+		{Input: "text", Output: slog.FormatText},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Input, func(t *testing.T) {
+			level, err := slog.ParseFormat(tc.Input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if level != tc.Output {
+				t.Errorf("got %v, want %v", level, tc.Output)
+			}
+		})
+	}
+}
+
+func TestParseFormat_Invalid(t *testing.T) {
+	_, err := slog.ParseFormat("invalid")
+	if err == nil {
+		t.Fatal("want error, got nil")
+	}
+}
+
 func ExampleLoadConfig() {
 	_ = slog.Configure(slog.Config{
 		Level:  slog.LevelDebug,
