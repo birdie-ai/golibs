@@ -3,10 +3,10 @@ package service
 
 import (
 	"context"
-	"sync"
+	"errors"
 	"time"
 
-	"github.com/birdie-ai/golibs/slog"
+	"github.com/sourcegraph/conc/pool"
 )
 
 // Shutdowner represents a service that can shutdown.
@@ -37,30 +37,20 @@ func (s *ShutdownHandler) Add(service Shutdowner) {
 // concurrently and wait for all of them to finish before returning.
 // It will wait for each service to shutdown for the wait period provided on
 // NewShutdownHandler.
-func (s *ShutdownHandler) Wait(ctx context.Context) {
+func (s *ShutdownHandler) Wait(ctx context.Context) error {
 	<-ctx.Done()
 
-	log := slog.FromCtx(ctx)
-	log.Debug("received shutdown signal, shutting down all services")
-
-	wg := &sync.WaitGroup{}
-	wg.Add(len(s.services))
+	p := pool.NewWithResults[error]()
 
 	for _, v := range s.services {
 		service := v
 
-		go func() {
-			defer wg.Done()
+		p.Go(func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), s.waitPeriod)
 			defer cancel()
-
-			if err := service.Shutdown(ctx); err != nil {
-				log.Error("failed to shutdown service", "error", err)
-			}
-		}()
+			return service.Shutdown(ctx)
+		})
 	}
 
-	wg.Wait()
-
-	log.Debug("finished shutting down all services")
+	return errors.Join(p.Wait()...)
 }
