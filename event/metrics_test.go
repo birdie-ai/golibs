@@ -7,7 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func TestRegisterMetrics(t *testing.T) {
+func TestRegisterMetrics(*testing.T) {
 	// For now we only test that the metrics definitions are valid.
 	registry := prometheus.NewRegistry()
 	event.MustRegisterMetrics(registry)
