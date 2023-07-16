@@ -35,7 +35,7 @@ type (
 		rawsub *MsgSubscription
 	}
 
-	// SubscriptionHandler is responsible for handling events from a subscription.
+	// SubscriptionHandler is responsible for handling events from a [Subscription].
 	// The context passed to the handler will have all metadata relevant to that
 	// event like org and trace IDs. It will also contain a logger that can be retrieved
 	// by using [slog.FromCtx].
@@ -53,8 +53,8 @@ type (
 		maxConcurrency int
 	}
 
-	// MessageHandler is responsible for handling raw messages from a subscription.
-	MessageHandler func(Message) error
+	// MsgSubscriptionHandler is responsible for handling messages from a [MsgSubscription].
+	MsgSubscriptionHandler func(Message) error
 )
 
 // NewPublisher creates a new event publisher for the given event name and topic.
@@ -166,7 +166,7 @@ func (s *Subscription[T]) Shutdown(ctx context.Context) error {
 // If a non-nil error is returned by the handler Unack will be sent.
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
-func (r *MsgSubscription) Serve(handler MessageHandler) error {
+func (r *MsgSubscription) Serve(handler MsgSubscriptionHandler) error {
 	semaphore := make(chan struct{}, r.maxConcurrency)
 	for {
 		semaphore <- struct{}{}
