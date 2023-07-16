@@ -28,16 +28,18 @@ type (
 		Event   T      `json:"event"`
 	}
 
+	// Subscription is a subscription that received only specific types of events
+	// defined by T.
 	Subscription[T any] struct {
 		name   string
 		rawsub *MsgSubscription
 	}
 
-	// EventHandler is responsible for handling events from a subscription.
+	// SubscriptionHandler is responsible for handling events from a subscription.
 	// The context passed to the handler will have all metadata relevant to that
 	// event like org and trace IDs. It will also contain a logger that can be retrieved
 	// by using [slog.FromCtx].
-	EventHandler[T any] func(context.Context, T) error
+	SubscriptionHandler[T any] func(context.Context, T) error
 
 	// Message represents a raw message received on a subscription.
 	Message struct {
@@ -128,7 +130,7 @@ func NewRawSubscription(url string, maxConcurrency int) (*MsgSubscription, error
 // If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
-func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
+func (s *Subscription[T]) Serve(handler SubscriptionHandler[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(func(msg Message) error {
 		var event Envelope[T]
 
