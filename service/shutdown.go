@@ -15,7 +15,7 @@ type Shutdowner interface {
 }
 
 // ShutdownHandler handles the shutdown of multiple services.
-// It waits for a context to be cancelled to then call all added services Shutdown methods.
+// It waits for a context to be cancelled to then call each service's Shutdown method.
 type ShutdownHandler struct {
 	waitPeriod time.Duration
 	services   []Shutdowner
