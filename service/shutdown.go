@@ -33,9 +33,9 @@ func (s *ShutdownHandler) Add(service Shutdowner) {
 }
 
 // Wait will wait for the given [ctx] to be cancelled.
-// When [ctx] is cancelled it will shutdown all services
+// When [ctx] is cancelled it will shut down all services
 // concurrently and wait for all of them to finish before returning.
-// It will wait for each service to shutdown for the wait period provided on
+// It will wait for each service to shut down for the wait period provided on
 // NewShutdownHandler.
 func (s *ShutdownHandler) Wait(ctx context.Context) error {
 	<-ctx.Done()
