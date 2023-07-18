@@ -28,30 +28,32 @@ type (
 		Event   T      `json:"event"`
 	}
 
+	// Subscription is a subscription that received only specific types of events
+	// defined by T.
 	Subscription[T any] struct {
 		name   string
-		rawsub *MsgSubscription
+		rawsub *MessageSubscription
 	}
 
-	// EventHandler is responsible for handling events from a subscription.
+	// Handler is responsible for handling events from a [Subscription].
 	// The context passed to the handler will have all metadata relevant to that
 	// event like org and trace IDs. It will also contain a logger that can be retrieved
 	// by using [slog.FromCtx].
-	EventHandler[T any] func(context.Context, T) error
+	Handler[T any] func(context.Context, T) error
 
 	// Message represents a raw message received on a subscription.
 	Message struct {
 		body []byte
 	}
 
-	// MsgSubscription represents a subscription that delivers messages as is.
+	// MessageSubscription represents a subscription that delivers messages as is.
 	// No assumptions are made about the message contents. This should rarely be used in favor of [Subscription].
-	MsgSubscription struct {
+	MessageSubscription struct {
 		sub            *pubsub.Subscription
 		maxConcurrency int
 	}
 
-	// MessageHandler is responsible for handling raw messages from a subscription.
+	// MessageHandler is responsible for handling messages from a [MsgSubscription].
 	MessageHandler func(Message) error
 )
 
@@ -105,7 +107,7 @@ func NewSubscription[T any](name, url string, maxConcurrency int) (*Subscription
 // NewRawSubscription creates a new raw subscription. It provides messages in a
 // service like manner (serve) and manages concurrent execution, each message
 // is processed in its own goroutines respecting the given maxConcurrency.
-func NewRawSubscription(url string, maxConcurrency int) (*MsgSubscription, error) {
+func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, error) {
 	if maxConcurrency <= 0 {
 		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
 	}
@@ -114,7 +116,7 @@ func NewRawSubscription(url string, maxConcurrency int) (*MsgSubscription, error
 	if err != nil {
 		return nil, err
 	}
-	return &MsgSubscription{
+	return &MessageSubscription{
 		sub:            sub,
 		maxConcurrency: maxConcurrency,
 	}, nil
@@ -128,7 +130,7 @@ func NewRawSubscription(url string, maxConcurrency int) (*MsgSubscription, error
 // If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
-func (s *Subscription[T]) Serve(handler EventHandler[T]) error {
+func (s *Subscription[T]) Serve(handler Handler[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(func(msg Message) error {
 		var event Envelope[T]
 
@@ -164,7 +166,7 @@ func (s *Subscription[T]) Shutdown(ctx context.Context) error {
 // If a non-nil error is returned by the handler Unack will be sent.
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
-func (r *MsgSubscription) Serve(handler MessageHandler) error {
+func (r *MessageSubscription) Serve(handler MessageHandler) error {
 	semaphore := make(chan struct{}, r.maxConcurrency)
 	for {
 		semaphore <- struct{}{}
@@ -193,7 +195,7 @@ func (r *MsgSubscription) Serve(handler MessageHandler) error {
 
 // Shutdown will shutdown the subscriber, stopping any calls to [RawSubscription.Serve].
 // The subscription should not be used after this method is called.
-func (r *MsgSubscription) Shutdown(ctx context.Context) error {
+func (r *MessageSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
 }
 
