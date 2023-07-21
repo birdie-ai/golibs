@@ -135,6 +135,12 @@ func Error(msg string, args ...any) {
 	slog.Error(msg, args...)
 }
 
+// Fatal is equivalent to Error() followed by a call to os.Exit(1).
+func Fatal(msg string, args ...any) {
+	Error(msg, args...)
+	os.Exit(1)
+}
+
 // InfoCtx calls Logger.InfoCtx on the default logger.
 func InfoCtx(ctx context.Context, msg string, args ...any) {
 	slog.InfoCtx(ctx, msg, args...)
@@ -153,6 +159,12 @@ func WarnCtx(ctx context.Context, msg string, args ...any) {
 // ErrorCtx calls Logger.ErrorCtx on the default logger.
 func ErrorCtx(ctx context.Context, msg string, args ...any) {
 	slog.ErrorCtx(ctx, msg, args...)
+}
+
+// FataCtx is equivalent to ErrorCtx() followed by a call to os.Exit(1).
+func FataCtx(ctx context.Context, msg string, args ...any) {
+	ErrorCtx(ctx, msg, args...)
+	os.Exit(1)
 }
 
 // With calls Logger.With on the default logger returning a new Logger instance.
