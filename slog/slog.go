@@ -161,8 +161,8 @@ func ErrorCtx(ctx context.Context, msg string, args ...any) {
 	slog.ErrorCtx(ctx, msg, args...)
 }
 
-// FataCtx is equivalent to ErrorCtx() followed by a call to os.Exit(1).
-func FataCtx(ctx context.Context, msg string, args ...any) {
+// FatalCtx is equivalent to ErrorCtx() followed by a call to os.Exit(1).
+func FatalCtx(ctx context.Context, msg string, args ...any) {
 	ErrorCtx(ctx, msg, args...)
 	os.Exit(1)
 }
