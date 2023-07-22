@@ -15,7 +15,7 @@ func MustRegisterMetrics(registry *prometheus.Registry) {
 // SampledMessageHandler will instrument the given MessageHandler returning a new one
 // that samples metrics. These will be `event_process_*` metrics using as `name` the
 // given eventName.
-func SampledMessageHandler(handler MsgSubscriptionHandler, eventName string) MsgSubscriptionHandler {
+func SampledMessageHandler(handler MessageHandler, eventName string) MessageHandler {
 	return func(msg Message) error {
 		start := time.Now()
 		err := handler(msg)
