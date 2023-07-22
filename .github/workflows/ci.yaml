@@ -13,6 +13,7 @@ jobs:
           - slog
           - tracing
           - event
+          - service
 
     steps:
 
@@ -44,6 +45,7 @@ jobs:
           - slog
           - tracing
           - event
+          - service
 
     steps:
 
