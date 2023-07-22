@@ -11,7 +11,10 @@ import (
 )
 
 func TestIntrumentedHTTPHandler(t *testing.T) {
-	const wantTraceID = "test-trace-id"
+	const (
+		wantTraceID = "test-trace-id"
+		wantStatus  = 201 // should be a non-default status, to actually test things.
+	)
 	var (
 		gotLogger  *slog.Logger
 		gotTraceID string
@@ -19,6 +22,7 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 	handler := tracing.InstrumentHTTP(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		gotLogger = slog.FromCtx(req.Context())
 		gotTraceID = tracing.CtxGetTraceID(req.Context())
+		w.WriteHeader(wantStatus)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -33,6 +37,11 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 
 	if gotTraceID != wantTraceID {
 		t.Fatalf("got %q != want %q", gotTraceID, wantTraceID)
+	}
+
+	gotStatus := res.Result().StatusCode
+	if gotStatus != wantStatus {
+		t.Fatalf("got %v; want %v", gotStatus, wantStatus)
 	}
 }
 

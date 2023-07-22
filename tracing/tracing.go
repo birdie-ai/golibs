@@ -4,6 +4,7 @@ package tracing
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/birdie-ai/golibs/slog"
 	"github.com/google/uuid"
@@ -32,7 +33,17 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		log = log.With("trace_id", traceid)
 		ctx = slog.NewContext(ctx, log)
 
-		h.ServeHTTP(res, req.WithContext(ctx))
+		log.Debug("handling request", "url", req.URL, "method", req.Method)
+		resWriter := &responseWriter{
+			ResponseWriter: res,
+		}
+		start := time.Now()
+		defer func() {
+			elapsed := time.Since(start)
+			log.Info("handled request", "url", req.URL, "method", req.Method, "status", resWriter.status, "elapsed", elapsed)
+		}()
+
+		h.ServeHTTP(resWriter, req.WithContext(ctx))
 	})
 }
 
@@ -59,13 +70,25 @@ func CtxGetOrgID(ctx context.Context) string {
 	return ctxget(ctx, orgIDKey)
 }
 
-// key is the type used to store data on contexts.
-type key int
+type (
+	responseWriter struct {
+		http.ResponseWriter
+		status int
+	}
+
+	// key is the type used to store data on contexts.
+	key int
+)
 
 const (
 	traceIDKey key = iota
 	orgIDKey
 )
+
+func (r *responseWriter) WriteHeader(statusCode int) {
+	r.status = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
 
 func ctxget(ctx context.Context, k key) string {
 	val := ctx.Value(k)
