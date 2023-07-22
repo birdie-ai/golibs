@@ -35,7 +35,6 @@ type (
 		rawsub *MessageSubscription
 	}
 
-
 	// Handler is responsible for handling events from a [Subscription].
 	// The context passed to the handler will have all metadata relevant to that
 	// event like org and trace IDs. It will also contain a logger that can be retrieved
