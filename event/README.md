@@ -11,10 +11,6 @@ The library also provides metrics both for publishers and subscribers. We use Pr
 The metrics are always sampled but are not registered by default anywhere, so if you want the metrics
 you need to opt-in on them by calling [event.MustRegisterMetrics](TODO_LINK).
 
-It's possible to find some examples of how to configure it in your Golang service based on these repositories, [feedback-extractor](https://github.com/birdie-ai/feedback-extraction-service/blob/main/cmd/feedback-extraction-service/main.go) & [aggregator](https://github.com/birdie-ai/aggregator/blob/main/cmd/aggregator/main.go)
-
-Don't forget to expose the metrics port, more details about it, [Metrics](https://github.com/birdie-ai/feedback-extraction-service/blob/main/cmd/feedback-extraction-service/main.go)
-
 ### Publisher
 
 #### event_publish_duration_seconds : histogram
