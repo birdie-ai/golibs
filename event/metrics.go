@@ -56,6 +56,7 @@ var (
 		prometheus.HistogramOpts{
 			Name: "event_publish_duration_seconds",
 			Help: "Duration of event publish",
+			// publish times are much smaller since they measure only communication with broker.
 			Buckets: []float64{
 				.1, .2, .3, .4, .5, .6, .7, .8, .9, 1,
 				2, 3, 4, 5, 10, 15, 20, 30,
@@ -74,9 +75,11 @@ var (
 		prometheus.HistogramOpts{
 			Name: "event_process_duration_seconds",
 			Help: "Duration of event processing",
+			// processing takes longer and GCP max processing time is 10 minutes
 			Buckets: []float64{
 				.1, .2, .3, .4, .5, .6, .7, .8, .9, 1,
-				2, 3, 4, 5, 10, 15, 20, 30,
+				2, 3, 4, 5, 10, 15, 20, 30, 60, 90, 120,
+				180, 240, 300, 360, 420, 480, 540, 600,
 			},
 		},
 		[]string{"status", "name"},
