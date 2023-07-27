@@ -115,6 +115,11 @@ func Configure(cfg Config) error {
 	return nil
 }
 
+// Infof is equivalent to Info(fmt.Sprintf(format, args...)).
+func Infof(format string, args ...any) {
+	slog.Info(fmt.Sprintf(format, args...))
+}
+
 // Info calls Logger.Info on the default logger.
 func Info(msg string, args ...any) {
 	slog.Info(msg, args...)
