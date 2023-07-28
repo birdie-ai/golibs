@@ -31,6 +31,7 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 
 		log := slog.FromCtx(ctx)
 		log = log.With("trace_id", traceid)
+		log = log.With("request_id", uuid.NewString())
 		ctx = slog.NewContext(ctx, log)
 
 		log.Debug("handling request", "url", req.URL, "method", req.Method)
