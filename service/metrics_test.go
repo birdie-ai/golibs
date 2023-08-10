@@ -10,6 +10,6 @@ import (
 func TestBuildInfoSample(*testing.T) {
 	// Just guarantee that it is not broken/panicking (like wrong labels/etc).
 	metricsRegistry := prometheus.NewRegistry()
-	service.MustRegister(metricsRegistry)
+	service.MustRegisterMetrics(metricsRegistry)
 	service.SampleBuildInfo()
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// MustRegister will register all metrics on the given registry.
-func MustRegister(registry *prometheus.Registry) {
+// MustRegisterMetrics will register all metrics on the given registry.
+func MustRegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(buildInfo)
 }
 
