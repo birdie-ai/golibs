@@ -4,23 +4,13 @@ on: [push]
 jobs:
   lint:
     name: Lint
-
     runs-on: ubuntu-22.04
-
-    strategy:
-      matrix:
-        module:
-          - slog
-          - tracing
-          - event
-          - service
-
     steps:
 
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: "1.20"
+        go-version: "1.21"
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v1
@@ -28,7 +18,7 @@ jobs:
     - name: lint
       uses: golangci/golangci-lint-action@v3
       with:
-        version: "v1.52.2"
+        version: "v1.54.0"
         working-directory: ${{matrix.module}}
         args: --config=../.golangci.yml
 
@@ -41,11 +31,7 @@ jobs:
       matrix:
         go:
           - "1.20"
-        module:
-          - slog
-          - tracing
-          - event
-          - service
+          - "1.21"
 
     steps:
 
@@ -58,7 +44,7 @@ jobs:
       uses: actions/checkout@v1
 
     - name: test
-      run: go test -C ./${{matrix.module}} ./... -race
+      run: go test -race -shuffle ./...
 
   all:
     # We need an umbrella target in order to require checks to pass on GH when we have matrix builds
