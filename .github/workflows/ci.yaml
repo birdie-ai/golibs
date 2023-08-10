@@ -43,7 +43,7 @@ jobs:
       uses: actions/checkout@v1
 
     - name: test
-      run: go test -race -shuffle ./...
+      run: go test -race -shuffle=on ./...
 
   all:
     # We need an umbrella target in order to require checks to pass on GH when we have matrix builds
