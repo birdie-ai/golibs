@@ -17,21 +17,24 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		// We don't parse/generate trace IDs exactly as in the spec, for now
 		// just using the specified header name.
-		traceid := req.Header.Get("traceparent")
-
-		slog.Debug("traceparent header", "trace_id", traceid)
-
-		if traceid == "" {
-			traceid = uuid.NewString()
-			slog.Debug("header absent, generated UUID", "trace_id", traceid)
+		traceID := req.Header.Get("traceparent")
+		if traceID == "" {
+			traceID = uuid.NewString()
 		}
+		orgID := req.Header.Get("Birdie-Organization-ID")
 
 		ctx := req.Context()
-		ctx = CtxWithTraceID(ctx, traceid)
+		ctx = CtxWithTraceID(ctx, traceID)
+		if orgID != "" {
+			ctx = CtxWithOrgID(ctx, orgID)
+		}
 
 		log := slog.FromCtx(ctx)
-		log = log.With("trace_id", traceid)
+		log = log.With("trace_id", traceID)
 		log = log.With("request_id", uuid.NewString())
+		if orgID != "" {
+			log = log.With("organization_id", orgID)
+		}
 		ctx = slog.NewContext(ctx, log)
 
 		log.Debug("handling request", "url", req.URL, "method", req.Method)
