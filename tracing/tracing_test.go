@@ -13,20 +13,24 @@ import (
 func TestIntrumentedHTTPHandler(t *testing.T) {
 	const (
 		wantTraceID = "test-trace-id"
+		wantOrgID   = "test-org-id"
 		wantStatus  = 201 // should be a non-default status, to actually test things.
 	)
 	var (
 		gotLogger  *slog.Logger
 		gotTraceID string
+		gotOrgID   string
 	)
 	handler := tracing.InstrumentHTTP(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		gotLogger = slog.FromCtx(req.Context())
 		gotTraceID = tracing.CtxGetTraceID(req.Context())
+		gotOrgID = tracing.CtxGetOrgID(req.Context())
 		w.WriteHeader(wantStatus)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("traceparent", wantTraceID)
+	req.Header.Set("Birdie-Organization-ID", wantOrgID)
 	res := httptest.NewRecorder()
 
 	handler.ServeHTTP(res, req)
@@ -37,6 +41,10 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 
 	if gotTraceID != wantTraceID {
 		t.Fatalf("got %q != want %q", gotTraceID, wantTraceID)
+	}
+
+	if gotOrgID != wantOrgID {
+		t.Fatalf("got %q != want %q", gotOrgID, wantOrgID)
 	}
 
 	gotStatus := res.Result().StatusCode
