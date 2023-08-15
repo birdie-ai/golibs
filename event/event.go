@@ -143,7 +143,7 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 		}
 
 		if event.Name != s.name {
-			log.Error("event name doesn't match handler", "event_expected", s.name, "event_received", event.Name)
+			log.Error("event name doesn't match handler", "expected", s.name, "received", event.Name)
 			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
 		}
 
