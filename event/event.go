@@ -134,18 +134,22 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(func(msg Message) error {
 		var event Envelope[T]
 
+		ctx := context.Background()
+		log := slog.FromCtx(ctx)
+
 		if err := json.Unmarshal(msg.Body(), &event); err != nil {
+			log.Error("unable to parse event as JSON", "error", err, "event", msg)
 			return fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
 		}
 
 		if event.Name != s.name {
+			log.Error("event name doesn't match handler", "event_expected", s.name, "event_received", event.Name)
 			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
 		}
 
-		ctx := tracing.CtxWithTraceID(context.Background(), event.TraceID)
+		ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
 		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
 
-		log := slog.FromCtx(ctx)
 		log = log.With("trace_id", event.TraceID)
 		log = log.With("organization_id", event.OrgID)
 		ctx = slog.NewContext(ctx, log)
