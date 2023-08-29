@@ -52,6 +52,35 @@ type Config struct {
 	Format Format
 }
 
+// MustParseAndConfigure calls [ParseAndConfigure] and [Fatal] in case of an error.
+func MustParseAndConfigure(level, format string) {
+	err := ParseAndConfigure(level, format)
+	if err != nil {
+		Fatal("Unable to configure slog", "error", err)
+	}
+}
+
+// ParseAndConfigure parses the log level and format and changes the default logger configuration
+// accordingly. If level or format can't be parsed, it logs a warning and uses a default value.
+func ParseAndConfigure(level, format string) error {
+	logLevel, err := ParseLevel(level)
+	if err != nil {
+		Warn("Unable to parse log level", "error", err)
+		logLevel = LevelInfo
+	}
+	logFormat, err := ParseFormat(format)
+	if err != nil {
+		Warn("Unable to parse log format", "error", err)
+		logFormat = FormatGcloud
+	}
+	err = Configure(Config{Level: logLevel, Format: logFormat})
+	if err != nil {
+		return err
+	}
+	Info("Log configured", "log_level", logLevel, "log_format", logFormat)
+	return nil
+}
+
 // LoadConfig will load the log Config of the service from environment variables.
 // The service name is used as a prefix for the environment variables.
 // So a service "TEST" will load the log level from "TEST_LOG_LEVEL".
