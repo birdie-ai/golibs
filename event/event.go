@@ -9,6 +9,7 @@ import (
 
 	"github.com/birdie-ai/golibs/slog"
 	"github.com/birdie-ai/golibs/tracing"
+	"github.com/google/uuid"
 	"gocloud.dev/pubsub"
 )
 
@@ -150,6 +151,7 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 		ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
 		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
 
+		log = log.With("request_id", uuid.NewString())
 		log = log.With("trace_id", event.TraceID)
 		log = log.With("organization_id", event.OrgID)
 		ctx = slog.NewContext(ctx, log)
