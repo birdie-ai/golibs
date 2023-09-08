@@ -1,6 +1,6 @@
 module github.com/birdie-ai/golibs
 
-go 1.20
+go 1.21
 
 require (
 	github.com/google/go-cmp v0.5.9
@@ -8,7 +8,6 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/sourcegraph/conc v0.3.0
 	gocloud.dev v0.33.0
-	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
 )
 
 require (
