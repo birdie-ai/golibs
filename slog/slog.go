@@ -6,11 +6,10 @@ package slog
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"strings"
-
-	"golang.org/x/exp/slog"
 )
 
 // It is a good idea to extract this package as an library that multiple
@@ -138,32 +137,6 @@ func Error(msg string, args ...any) {
 // Fatal is equivalent to Error() followed by a call to os.Exit(1).
 func Fatal(msg string, args ...any) {
 	Error(msg, args...)
-	os.Exit(1)
-}
-
-// InfoCtx calls Logger.InfoCtx on the default logger.
-func InfoCtx(ctx context.Context, msg string, args ...any) {
-	slog.InfoCtx(ctx, msg, args...)
-}
-
-// DebugCtx calls Logger.DebugCtx on the default logger.
-func DebugCtx(ctx context.Context, msg string, args ...any) {
-	slog.DebugCtx(ctx, msg, args...)
-}
-
-// WarnCtx calls Logger.WarnCtx on the default logger.
-func WarnCtx(ctx context.Context, msg string, args ...any) {
-	slog.WarnCtx(ctx, msg, args...)
-}
-
-// ErrorCtx calls Logger.ErrorCtx on the default logger.
-func ErrorCtx(ctx context.Context, msg string, args ...any) {
-	slog.ErrorCtx(ctx, msg, args...)
-}
-
-// FatalCtx is equivalent to ErrorCtx() followed by a call to os.Exit(1).
-func FatalCtx(ctx context.Context, msg string, args ...any) {
-	ErrorCtx(ctx, msg, args...)
 	os.Exit(1)
 }
 
