@@ -143,6 +143,8 @@ func convertHTTPRequest(origKey string, origValue slog.Value) (string, slog.Valu
 			attrs = append(attrs, slog.Any("userAgent", value))
 		case "elapsed":
 			attrs = append(attrs, slog.Any("latency", value))
+		default:
+			attrs = append(attrs, slog.Any(key, value))
 		}
 	}
 	return "httpRequest", slog.GroupValue(attrs...)
