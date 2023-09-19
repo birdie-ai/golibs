@@ -89,7 +89,7 @@ type (
 	responseWriter struct {
 		http.ResponseWriter
 		status        int
-		contentLength int64
+		contentLength int
 	}
 
 	// key is the type used to store data on contexts.
@@ -107,8 +107,9 @@ func (r *responseWriter) WriteHeader(statusCode int) {
 }
 
 func (r *responseWriter) Write(b []byte) (int, error) {
-	r.contentLength += int64(len(b))
-	return r.ResponseWriter.Write(b)
+	n, err := r.ResponseWriter.Write(b)
+	r.contentLength += n
+	return n, err
 }
 
 func ctxget(ctx context.Context, k key) string {
