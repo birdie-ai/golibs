@@ -37,14 +37,25 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		}
 		ctx = slog.NewContext(ctx, log)
 
-		log.Debug("handling request", "url", req.URL, "method", req.Method)
+		httpReq := map[string]any{
+			"method":       req.Method,
+			"url":          req.URL.String(),
+			"request_size": req.ContentLength,
+			"user_agent":   req.UserAgent(),
+			"protocol":     req.Proto,
+		}
+
+		log.Debug("handling request", "http_request", httpReq)
 		resWriter := &responseWriter{
 			ResponseWriter: res,
 		}
 		start := time.Now()
 		defer func() {
 			elapsed := time.Since(start)
-			log.Info("handled request", "url", req.URL, "method", req.Method, "status", resWriter.status, "elapsed", elapsed)
+			httpReq["status_code"] = resWriter.status
+			httpReq["response_size"] = resWriter.contentLength
+			httpReq["elapsed"] = elapsed.String()
+			log.Info("handled request", "http_request", httpReq)
 		}()
 
 		h.ServeHTTP(resWriter, req.WithContext(ctx))
@@ -77,7 +88,8 @@ func CtxGetOrgID(ctx context.Context) string {
 type (
 	responseWriter struct {
 		http.ResponseWriter
-		status int
+		status        int
+		contentLength int
 	}
 
 	// key is the type used to store data on contexts.
@@ -92,6 +104,12 @@ const (
 func (r *responseWriter) WriteHeader(statusCode int) {
 	r.status = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (r *responseWriter) Write(b []byte) (int, error) {
+	n, err := r.ResponseWriter.Write(b)
+	r.contentLength += n
+	return n, err
 }
 
 func ctxget(ctx context.Context, k key) string {

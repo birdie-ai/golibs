@@ -95,11 +95,16 @@ func Configure(cfg Config) error {
 		th.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 			// Customize the name of some fields to match Google Cloud expectations
 			// More: https://cloud.google.com/logging/docs/agent/logging/configuration#process-payload
-			if a.Key == slog.LevelKey {
-				a.Key = "severity"
+			if len(groups) > 0 {
+				return a
 			}
-			if a.Key == slog.MessageKey {
+			switch a.Key {
+			case slog.LevelKey:
+				a.Key = "severity"
+			case slog.MessageKey:
 				a.Key = "message"
+			case "http_request":
+				a.Key, a.Value = convertHTTPRequest(a.Key, a.Value)
 			}
 			return a
 		}
@@ -112,6 +117,37 @@ func Configure(cfg Config) error {
 
 	slog.SetDefault(logger)
 	return nil
+}
+
+// Customize the http request fields
+// More: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#HttpRequest
+func convertHTTPRequest(origKey string, origValue slog.Value) (string, slog.Value) {
+	var attrs []slog.Attr
+	value, ok := origValue.Any().(map[string]any)
+	if !ok {
+		return origKey, origValue
+	}
+	for key, value := range value {
+		switch key {
+		case "method":
+			attrs = append(attrs, slog.Any("requestMethod", value))
+		case "url":
+			attrs = append(attrs, slog.Any("requestUrl", value))
+		case "request_size":
+			attrs = append(attrs, slog.Any("requestSize", value))
+		case "status_code":
+			attrs = append(attrs, slog.Any("status", value))
+		case "response_size":
+			attrs = append(attrs, slog.Any("responseSize", value))
+		case "user_agent":
+			attrs = append(attrs, slog.Any("userAgent", value))
+		case "elapsed":
+			attrs = append(attrs, slog.Any("latency", value))
+		default:
+			attrs = append(attrs, slog.Any(key, value))
+		}
+	}
+	return "httpRequest", slog.GroupValue(attrs...)
 }
 
 // Info calls Logger.Info on the default logger.
