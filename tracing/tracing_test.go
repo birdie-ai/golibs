@@ -2,6 +2,7 @@ package tracing_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,6 +16,7 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		wantTraceID = "test-trace-id"
 		wantOrgID   = "test-org-id"
 		wantStatus  = 201 // should be a non-default status, to actually test things.
+		wantBody    = "Worked!"
 	)
 	var (
 		gotLogger  *slog.Logger
@@ -26,14 +28,15 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		gotTraceID = tracing.CtxGetTraceID(req.Context())
 		gotOrgID = tracing.CtxGetOrgID(req.Context())
 		w.WriteHeader(wantStatus)
+		fmt.Fprint(w, wantBody)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("traceparent", wantTraceID)
 	req.Header.Set("Birdie-Organization-ID", wantOrgID)
-	res := httptest.NewRecorder()
+	w := httptest.NewRecorder()
 
-	handler.ServeHTTP(res, req)
+	handler.ServeHTTP(w, req)
 
 	if gotLogger == nil {
 		t.Fatal("got nil logger")
@@ -47,9 +50,12 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		t.Fatalf("got %q != want %q", gotOrgID, wantOrgID)
 	}
 
-	gotStatus := res.Result().StatusCode
-	if gotStatus != wantStatus {
-		t.Fatalf("got %v; want %v", gotStatus, wantStatus)
+	res := w.Result()
+	if got := res.StatusCode; got != wantStatus {
+		t.Fatalf("got status %v; want %v", got, wantStatus)
+	}
+	if got := w.Body.String(); got != wantBody {
+		t.Fatalf("got body %v; want %v", got, wantBody)
 	}
 }
 
