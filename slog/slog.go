@@ -21,9 +21,6 @@ type Level = slog.Level
 // Logger represents a logger instance with its own context.
 type Logger = slog.Logger
 
-// Attr represents a key-value pair.
-type Attr = slog.Attr
-
 // Format determines the output format of the log records
 type Format string
 
@@ -98,32 +95,16 @@ func Configure(cfg Config) error {
 		th.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 			// Customize the name of some fields to match Google Cloud expectations
 			// More: https://cloud.google.com/logging/docs/agent/logging/configuration#process-payload
-			if len(groups) == 0 {
-				if a.Key == slog.LevelKey {
-					a.Key = "severity"
-				}
-				if a.Key == slog.MessageKey {
-					a.Key = "message"
-				}
+			if len(groups) > 0 {
+				return a
 			}
-
-			// Customize the http request fields
-			// More: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#HttpRequest
-			if len(groups) > 0 && groups[0] == "httpRequest" {
-				switch a.Key {
-				case "method":
-					a.Key = "requestMethod"
-				case "url":
-					a.Key = "requestUrl"
-				case "request_size":
-					a.Key = "requestSize"
-				case "response_size":
-					a.Key = "responseSize"
-				case "user_agent":
-					a.Key = "userAgent"
-				case "elapsed":
-					a.Key = "latency"
-				}
+			switch a.Key {
+			case slog.LevelKey:
+				a.Key = "severity"
+			case slog.MessageKey:
+				a.Key = "message"
+			case "http_request":
+				a.Key, a.Value = convertHTTPRequest(a.Value)
 			}
 			return a
 		}
@@ -136,6 +117,33 @@ func Configure(cfg Config) error {
 
 	slog.SetDefault(logger)
 	return nil
+}
+
+// Customize the http request fields
+// More: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#HttpRequest
+func convertHTTPRequest(orig slog.Value) (string, slog.Value) {
+	var attrs []slog.Attr
+	origMap, _ := orig.Any().(map[string]any)
+	for key, value := range origMap {
+		switch key {
+		case "method":
+			attrs = append(attrs, slog.Any("requestMethod", value))
+		case "url":
+			attrs = append(attrs, slog.Any("requestUrl", value))
+		case "request_size":
+			attrs = append(attrs, slog.Any("requestSize", value))
+		case "status_code":
+			attrs = append(attrs, slog.Any("status", value))
+		case "response_size":
+			attrs = append(attrs, slog.Any("responseSize", value))
+		case "user_agent":
+			attrs = append(attrs, slog.Any("userAgent", value))
+		case "elapsed":
+			attrs = append(attrs, slog.Any("latency", value))
+		}
+	}
+	const key = "httpRequest"
+	return key, slog.GroupValue(attrs...)
 }
 
 // Info calls Logger.Info on the default logger.
@@ -167,17 +175,6 @@ func Fatal(msg string, args ...any) {
 // With calls Logger.With on the default logger returning a new Logger instance.
 func With(args ...any) *Logger {
 	return slog.With(args...)
-}
-
-// Group returns an Attr for a Group Value.
-// The first argument is the key; the remaining arguments
-// are converted to Attrs as in [Logger.Log].
-//
-// Use Group to collect several key-value pairs under a single
-// key on a log line, or as the result of LogValue
-// in order to log a single value as multiple Attrs.
-func Group(key string, args ...any) Attr {
-	return slog.Group(key, args...)
 }
 
 // FromCtx gets the [Logger] associated with the given context. A default [Logger] is

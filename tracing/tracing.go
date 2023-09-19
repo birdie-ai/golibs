@@ -37,27 +37,25 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		}
 		ctx = slog.NewContext(ctx, log)
 
-		httpRequest := []any{
-			"method", req.Method,
-			"url", req.URL.String(),
-			"request_size", req.ContentLength,
-			"user_agent", req.UserAgent(),
-			"protocol", req.Proto,
+		httpReq := map[string]any{
+			"method":       req.Method,
+			"url":          req.URL.String(),
+			"request_size": req.ContentLength,
+			"user_agent":   req.UserAgent(),
+			"protocol":     req.Proto,
 		}
 
-		log.Debug("handling request", slog.Group("httpRequest", httpRequest...))
+		log.Debug("handling request", "http_request", httpReq)
 		resWriter := &responseWriter{
 			ResponseWriter: res,
 		}
 		start := time.Now()
 		defer func() {
 			elapsed := time.Since(start)
-			httpRequest = append(httpRequest,
-				"status", resWriter.status,
-				"response_size", resWriter.contentLength,
-				"elapsed", elapsed.String(),
-			)
-			log.Info("handled request", slog.Group("httpRequest", httpRequest...))
+			httpReq["status_code"] = resWriter.status
+			httpReq["response_size"] = resWriter.contentLength
+			httpReq["elapsed"] = elapsed.String()
+			log.Info("handled request", "http_request", httpReq)
 		}()
 
 		h.ServeHTTP(resWriter, req.WithContext(ctx))
