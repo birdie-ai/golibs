@@ -160,14 +160,14 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 	}, s.name))
 }
 
-// Shutdown will shutdown the subscriber, stopping any calls to [RawSubscription.Serve].
+// Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
 // The subscription should not be used after this method is called.
 func (s *Subscription[T]) Shutdown(ctx context.Context) error {
 	return s.rawsub.Shutdown(ctx)
 }
 
 // Serve will start serving all messages from the subscription calling handler for each
-// message. It will run until [RawSubscription.Shutdown] is called.
+// message. It will run until [MessageSubscription.Shutdown] is called.
 // If the error is nil Ack is sent.
 // If a non-nil error is returned by the handler Unack will be sent.
 // Serve may be called multiple times, each time will start a new serving service that will
@@ -199,7 +199,7 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 	}
 }
 
-// Shutdown will shutdown the subscriber, stopping any calls to [RawSubscription.Serve].
+// Shutdown will shutdown the subscriber, stopping any calls to [MessageSubscription.Serve].
 // The subscription should not be used after this method is called.
 func (r *MessageSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
