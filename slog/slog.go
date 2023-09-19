@@ -142,8 +142,7 @@ func convertHTTPRequest(orig slog.Value) (string, slog.Value) {
 			attrs = append(attrs, slog.Any("latency", value))
 		}
 	}
-	const key = "httpRequest"
-	return key, slog.GroupValue(attrs...)
+	return "httpRequest", slog.GroupValue(attrs...)
 }
 
 // Info calls Logger.Info on the default logger.
