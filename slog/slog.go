@@ -104,7 +104,7 @@ func Configure(cfg Config) error {
 			case slog.MessageKey:
 				a.Key = "message"
 			case "http_request":
-				a.Key, a.Value = convertHTTPRequest(a.Value)
+				a.Key, a.Value = convertHTTPRequest(a.Key, a.Value)
 			}
 			return a
 		}
@@ -121,10 +121,13 @@ func Configure(cfg Config) error {
 
 // Customize the http request fields
 // More: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#HttpRequest
-func convertHTTPRequest(orig slog.Value) (string, slog.Value) {
+func convertHTTPRequest(origKey string, origValue slog.Value) (string, slog.Value) {
 	var attrs []slog.Attr
-	origMap, _ := orig.Any().(map[string]any)
-	for key, value := range origMap {
+	value, ok := origValue.Any().(map[string]any)
+	if !ok {
+		return origKey, origValue
+	}
+	for key, value := range value {
 		switch key {
 		case "method":
 			attrs = append(attrs, slog.Any("requestMethod", value))
