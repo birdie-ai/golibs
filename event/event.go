@@ -187,7 +187,7 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 				<-semaphore
 			}()
 
-			err := handler(Message{body: msg.Body})
+			err := handler(NewMessage(msg.Body))
 			if err != nil {
 				if msg.Nackable() {
 					msg.Nack()
@@ -203,6 +203,11 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 // The subscription should not be used after this method is called.
 func (r *MessageSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
+}
+
+// NewMessage creates a new [Message] with the given body
+func NewMessage(body []byte) Message {
+	return Message{body: body}
 }
 
 // Body of the message.
