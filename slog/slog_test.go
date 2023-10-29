@@ -154,7 +154,7 @@ func ExampleLoadConfig() {
 }
 
 func ExampleLogger() {
-	log := slog.FromCtx(context.Background())
+	log := slog.Default()
 	log = log.With("a", "val")
 	log.Debug("debug", "b", 666)
 	log.Info("info", "b", 666)

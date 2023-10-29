@@ -195,13 +195,18 @@ func With(args ...any) *Logger {
 	return &Logger{slog.With(args...)}
 }
 
+// Default creates a new [Logger] with default configurations.
+func Default() *Logger {
+	return &Logger{slog.Default()}
+}
+
 // FromCtx gets the [Logger] associated with the given context. A default [Logger] is
 // returned if the context has no [Logger] associated with it.
 func FromCtx(ctx context.Context) *Logger {
 	val := ctx.Value(loggerKey)
 	log, ok := val.(*Logger)
 	if !ok {
-		return &Logger{slog.Default()}
+		return Default()
 	}
 	return log
 }
