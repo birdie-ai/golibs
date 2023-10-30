@@ -19,7 +19,10 @@ import (
 type Level = slog.Level
 
 // Logger represents a logger instance with its own context.
-type Logger = slog.Logger
+// It extends Go's slog.Logger by adding new methods, like [Logger.Fatal].
+type Logger struct {
+	*slog.Logger
+}
 
 // Format determines the output format of the log records
 type Format string
@@ -49,6 +52,17 @@ const (
 type Config struct {
 	Level  Level
 	Format Format
+}
+
+// Fatal is equivalent to [Logger.Error] followed by a call to os.Exit(1).
+func (l *Logger) Fatal(msg string, args ...any) {
+	l.Error(msg, args...)
+	os.Exit(1)
+}
+
+// With calls Logger.With on the default logger returning a new Logger instance.
+func (l *Logger) With(args ...any) *Logger {
+	return &Logger{l.Logger.With(args...)}
 }
 
 // LoadConfig will load the log Config of the service from environment variables.
@@ -178,23 +192,28 @@ func Fatal(msg string, args ...any) {
 
 // With calls Logger.With on the default logger returning a new Logger instance.
 func With(args ...any) *Logger {
-	return slog.With(args...)
+	return &Logger{slog.With(args...)}
+}
+
+// Default creates a new [Logger] with default configurations.
+func Default() *Logger {
+	return &Logger{slog.Default()}
 }
 
 // FromCtx gets the [Logger] associated with the given context. A default [Logger] is
 // returned if the context has no [Logger] associated with it.
-func FromCtx(ctx context.Context) *slog.Logger {
+func FromCtx(ctx context.Context) *Logger {
 	val := ctx.Value(loggerKey)
-	log, ok := val.(*slog.Logger)
+	log, ok := val.(*Logger)
 	if !ok {
-		return slog.Default()
+		return Default()
 	}
 	return log
 }
 
 // NewContext creates a new [context.Context] with the given [Logger] associated with it.
 // Call [FromCtx] to retrieve the [Logger].
-func NewContext(ctx context.Context, log *slog.Logger) context.Context {
+func NewContext(ctx context.Context, log *Logger) context.Context {
 	return context.WithValue(ctx, loggerKey, log)
 }
 

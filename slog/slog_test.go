@@ -153,6 +153,15 @@ func ExampleLoadConfig() {
 	slog.Debug("debug msg", "key", "val", "key2", 666)
 }
 
+func ExampleLogger() {
+	log := slog.Default()
+	log = log.With("a", "val")
+	log.Debug("debug", "b", 666)
+	log.Info("info", "b", 666)
+	log.Warn("warn", "b", 666)
+	log.Error("error", "b", 666)
+}
+
 const (
 	service     = "TEST"
 	logLevelEnv = service + "_LOG_LEVEL"
