@@ -23,13 +23,14 @@ type (
 
 	// Envelope represents the structure of all data that wraps all events.
 	Envelope[T any] struct {
-		// Metadata is publisher specific metadata. Including metadata that may be added by specific
+		TraceID string `json:"trace_id"`
+		OrgID   string `json:"organization_id"`
+		Name    string `json:"name"`
+		Event   T      `json:"event"`
+
+		// metadata is publisher specific metadata. Including metadata that may be added by specific
 		// pubsub brokers like Google Cloud PubSub.
-		Metadata map[string]string
-		TraceID  string `json:"trace_id"`
-		OrgID    string `json:"organization_id"`
-		Name     string `json:"name"`
-		Event    T      `json:"event"`
+		metadata map[string]string
 	}
 
 	// Subscription is a subscription that received only specific types of events
@@ -152,7 +153,7 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
 		}
 
-		event.Metadata = msg.Metadata()
+		event.metadata = msg.Metadata()
 
 		ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
 		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
@@ -229,4 +230,9 @@ func (m Message) Metadata() map[string]string {
 // String representation of the message.
 func (m Message) String() string {
 	return string(m.body)
+}
+
+// Metadata returns all metadata associated with this event envelope.
+func (e Envelope[T]) Metadata() map[string]string {
+	return e.metadata
 }

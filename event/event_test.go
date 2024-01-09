@@ -12,6 +12,7 @@ import (
 	"github.com/birdie-ai/golibs/event"
 	"github.com/birdie-ai/golibs/tracing"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"gocloud.dev/pubsub"
 	_ "gocloud.dev/pubsub/mempubsub"
 )
@@ -77,7 +78,7 @@ func TestPublishEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assertEqual(t, got, want)
+	assertEqual(t, got, want, cmpopts.IgnoreUnexported(got))
 }
 
 func TestPublishEventWithoutTracingInfo(t *testing.T) {
@@ -124,7 +125,7 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assertEqual(t, got, want)
+	assertEqual(t, got, want, cmpopts.IgnoreUnexported(got))
 }
 
 func TestSubscriptionServing(t *testing.T) {
@@ -442,13 +443,13 @@ func newTopicURL(t *testing.T) string {
 	return "mem://" + t.Name()
 }
 
-func assertEqual[T any](t *testing.T, got T, want T) {
+func assertEqual[T any](t *testing.T, got T, want T, opts ...cmp.Option) {
 	t.Helper()
 	// parametric helps to ensure we don't compare things of different types (which doesn't make sense)
 	// so we want 2 of any that are of the same type.
 	// maybe this could be generalized in an small assert lib :-).
 
-	if diff := cmp.Diff(got, want); diff != "" {
+	if diff := cmp.Diff(got, want, opts...); diff != "" {
 		t.Logf("got: %v", got)
 		t.Logf("want: %v", want)
 		t.Fatalf("diff: %v", diff)
