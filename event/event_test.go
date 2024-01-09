@@ -77,9 +77,7 @@ func TestPublishEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want != got {
-		t.Fatalf("got %+v != want %+v", got, want)
-	}
+	assertEqual(t, got, want)
 }
 
 func TestPublishEventWithoutTracingInfo(t *testing.T) {
@@ -126,9 +124,7 @@ func TestPublishEventWithoutTracingInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want != got {
-		t.Fatalf("got %+v != want %+v", got, want)
-	}
+	assertEqual(t, got, want)
 }
 
 func TestSubscriptionServing(t *testing.T) {

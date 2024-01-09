@@ -23,10 +23,13 @@ type (
 
 	// Envelope represents the structure of all data that wraps all events.
 	Envelope[T any] struct {
-		TraceID string `json:"trace_id"`
-		OrgID   string `json:"organization_id"`
-		Name    string `json:"name"`
-		Event   T      `json:"event"`
+		// Metadata is publisher specific metadata. Including metadata that may be added by specific
+		// pubsub brokers like Google Cloud PubSub.
+		Metadata map[string]string
+		TraceID  string `json:"trace_id"`
+		OrgID    string `json:"organization_id"`
+		Name     string `json:"name"`
+		Event    T      `json:"event"`
 	}
 
 	// Subscription is a subscription that received only specific types of events
@@ -44,7 +47,8 @@ type (
 
 	// Message represents a raw message received on a subscription.
 	Message struct {
-		body []byte
+		body     []byte
+		metadata map[string]string
 	}
 
 	// MessageSubscription represents a subscription that delivers messages as is.
@@ -148,6 +152,8 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
 		}
 
+		event.Metadata = msg.Metadata()
+
 		ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
 		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
 
@@ -187,7 +193,7 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 				<-semaphore
 			}()
 
-			err := handler(NewMessage(msg.Body))
+			err := handler(NewMessage(msg.Body, msg.Metadata))
 			if err != nil {
 				if msg.Nackable() {
 					msg.Nack()
@@ -206,13 +212,18 @@ func (r *MessageSubscription) Shutdown(ctx context.Context) error {
 }
 
 // NewMessage creates a new [Message] with the given body
-func NewMessage(body []byte) Message {
-	return Message{body: body}
+func NewMessage(body []byte, metadata map[string]string) Message {
+	return Message{body, metadata}
 }
 
 // Body of the message.
 func (m Message) Body() []byte {
 	return m.body
+}
+
+// Metadata of the message.
+func (m Message) Metadata() map[string]string {
+	return m.metadata
 }
 
 // String representation of the message.
