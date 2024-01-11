@@ -42,9 +42,24 @@ type (
 	// by using [slog.FromCtx].
 	Handler[T any] func(context.Context, T) error
 
+	// HandlerWithMetadata is responsible for handling events from a [Subscription] with the associated event metadata.
+	// The context passed to the handler will have all common metadata also passed to calls to [Handler] and extra metadata
+	// that is more specific as defined on [Metadata].
+	HandlerWithMetadata[T any] func(context.Context, T, Metadata) error
+
 	// Message represents a raw message received on a subscription.
 	Message struct {
-		body []byte
+		body        []byte
+		originalMsg *pubsub.Message
+	}
+
+	// Metadata has information that is defined by the event broker.
+	// Fields may be empty depending on the event broker being used.
+	Metadata struct {
+		// ID is the event/message ID as defined by the event broker.
+		ID string
+		// PublishedTime represents when an event was published as defined by the event broker.
+		PublishedTime time.Time
 	}
 
 	// MessageSubscription represents a subscription that delivers messages as is.
@@ -132,7 +147,7 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
 func (s *Subscription[T]) Serve(handler Handler[T]) error {
-	return s.rawsub.Serve(SampledMessageHandler(func(msg Message) error {
+	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
 		var event Envelope[T]
 
 		ctx := context.Background()
@@ -157,7 +172,23 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 		ctx = slog.NewContext(ctx, log)
 
 		return handler(ctx, event.Event)
-	}, s.name))
+	}))
+}
+
+// ServeWithMetadata will start serving all events from the subscription calling handler for each
+// event, providing both the event and any metadata associated with it.
+// It will run until [Subscription.Shutdown] is called.
+// If the error is nil Ack is sent.
+// If a non-nil error is returned by the handler Unack will be sent.
+// If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
+// If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
+// ServeWithMetadata may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" goroutines.
+func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) error {
+	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
+		// TODO(katcipis): implement it using the original message stored on Message.
+		return nil
+	}))
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
@@ -187,7 +218,7 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 				<-semaphore
 			}()
 
-			err := handler(NewMessage(msg.Body))
+			err := handler(Message{msg.Body, msg})
 			if err != nil {
 				if msg.Nackable() {
 					msg.Nack()
