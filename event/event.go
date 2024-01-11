@@ -237,7 +237,6 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 				<-semaphore
 			}()
 
-			// TODO(katcipis): add metadata.
 			id, publishedTime := getMetadata(msg)
 			err := handler(Message{
 				Body: msg.Body,
