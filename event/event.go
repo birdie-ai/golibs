@@ -86,8 +86,12 @@ func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 
 // Publish will publish the given event.
 func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
-	start := time.Now()
+	return p.PublishWithAttrs(ctx, event, nil)
+}
 
+// PublishWithAttrs will publish the given event with the provided attributes.
+// The attributes will be available when receiving the events as [Metadata.Attributes].
+func (p *Publisher[T]) PublishWithAttrs(ctx context.Context, event T, attributes map[string]string) error {
 	body := Envelope[T]{
 		TraceID: tracing.CtxGetTraceID(ctx),
 		OrgID:   tracing.CtxGetOrgID(ctx),
@@ -100,10 +104,11 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 		return err
 	}
 
+	start := time.Now()
 	err = p.topic.Send(ctx, &pubsub.Message{
-		Body: encBody,
+		Body:     encBody,
+		Metadata: attributes,
 	})
-
 	elapsed := time.Since(start)
 
 	samplePublish(p.name, elapsed, err)
@@ -189,8 +194,9 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 // run up to "maxConcurrency" goroutines.
 func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		// TODO(katcipis): implement it using the original message stored on Message.
-		return nil
+		// TODO(katcipis)
+		var zero T
+		return handler(context.Background(), zero, Metadata{})
 	}))
 }
 

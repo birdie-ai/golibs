@@ -430,6 +430,55 @@ func TestRawSubscriptionServing(t *testing.T) {
 	<-servingDone
 }
 
+func TestSubscriptionServingWithMetadata(t *testing.T) {
+	t.Parallel()
+	t.Skip("TODO:katcipis")
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = topic.Shutdown(ctx) }()
+
+	const maxConcurrency = 1
+	eventName := t.Name()
+
+	subscription, err := event.NewSubscription[struct{}](eventName, url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	receivedMetadata := make(chan event.Metadata)
+	go func() {
+		err := subscription.ServeWithMetadata(func(ctx context.Context, event struct{}, metadata event.Metadata) error {
+			receivedMetadata <- metadata
+			return nil
+		})
+		if err != nil {
+			t.Errorf("subscription serve failed: %v", err)
+		}
+		close(receivedMetadata)
+	}()
+
+	wantAttributes := map[string]string{"key": t.Name()}
+	publisher := event.NewPublisher[struct{}](eventName, topic)
+
+	if err = publisher.PublishWithAttrs(ctx, struct{}{}, wantAttributes); err != nil {
+		t.Fatalf("PublishWithAttrs failed: %v", err)
+	}
+
+	gotMetadata := <-receivedMetadata
+
+	assertEqual(t, gotMetadata.Attributes, wantAttributes)
+	// No easy way to test actual metadata, would need google cloud pubsub emulation or messing around with the gcppubsub driver
+	var zeroTime time.Time
+	assertEqual(t, gotMetadata.PublishedTime, zeroTime)
+	assertEqual(t, gotMetadata.ID, "")
+}
+
 func TestRawSubscriptionServingWithMetadata(t *testing.T) {
 	t.Parallel()
 
