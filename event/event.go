@@ -55,13 +55,12 @@ type (
 
 	// Metadata has information that is defined by the event broker
 	// and attributes that may be defined by the publisher.
-	// Fields may be empty depending on the event broker being used.
 	Metadata struct {
-		// ID is the event/message ID as defined by the event broker.
+		// ID is the event/message ID as defined by the event broker (if any).
 		ID string
-		// PublishedTime represents when an event was published as defined by the event broker.
+		// PublishedTime represents when an event was published as defined by the event broker (if any).
 		PublishedTime time.Time
-		// Attributes are defined by the publisher, like Google Cloud Pub Sub attributes (or similar concepts on other brokers).
+		// Attributes are defined by the publisher, like Google Cloud Pub Sub attributes (or similar concepts in other brokers).
 		Attributes map[string]string
 	}
 
@@ -156,29 +155,10 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 // run up to "maxConcurrency" goroutines.
 func (s *Subscription[T]) Serve(handler Handler[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		var event Envelope[T]
-
-		ctx := context.Background()
-		log := slog.FromCtx(ctx)
-
-		if err := json.Unmarshal(msg.Body, &event); err != nil {
-			log.Error("unable to parse event as JSON", "error", err, "event", msg)
-			return fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
+		ctx, event, err := s.createEvent(msg)
+		if err != nil {
+			return err
 		}
-
-		if event.Name != s.name {
-			log.Error("event name doesn't match handler", "expected", s.name, "received", event.Name)
-			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
-		}
-
-		ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
-		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
-
-		log = log.With("request_id", uuid.NewString())
-		log = log.With("trace_id", event.TraceID)
-		log = log.With("organization_id", event.OrgID)
-		ctx = slog.NewContext(ctx, log)
-
 		return handler(ctx, event.Event)
 	}))
 }
@@ -194,10 +174,39 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 // run up to "maxConcurrency" goroutines.
 func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		// TODO(katcipis)
-		var zero T
-		return handler(context.Background(), zero, Metadata{})
+		ctx, event, err := s.createEvent(msg)
+		if err != nil {
+			return err
+		}
+		return handler(ctx, event.Event, msg.Metadata)
 	}))
+}
+
+func (s *Subscription[T]) createEvent(msg Message) (context.Context, Envelope[T], error) {
+	var event Envelope[T]
+
+	ctx := context.Background()
+	log := slog.FromCtx(ctx)
+
+	if err := json.Unmarshal(msg.Body, &event); err != nil {
+		log.Error("unable to parse event as JSON", "error", err, "event", msg)
+		return nil, event, fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
+	}
+
+	if event.Name != s.name {
+		log.Error("event name doesn't match handler", "expected", s.name, "received", event.Name)
+		return nil, event, fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
+	}
+
+	ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
+	ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
+
+	log = log.With("request_id", uuid.NewString())
+	log = log.With("trace_id", event.TraceID)
+	log = log.With("organization_id", event.OrgID)
+	ctx = slog.NewContext(ctx, log)
+
+	return ctx, event, nil
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].

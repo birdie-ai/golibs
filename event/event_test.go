@@ -432,7 +432,6 @@ func TestRawSubscriptionServing(t *testing.T) {
 
 func TestSubscriptionServingWithMetadata(t *testing.T) {
 	t.Parallel()
-	t.Skip("TODO:katcipis")
 
 	url := newTopicURL(t)
 	ctx := context.Background()
