@@ -49,8 +49,8 @@ type (
 
 	// Message represents a raw message received on a subscription.
 	Message struct {
-		body        []byte
-		originalMsg *pubsub.Message
+		Body     []byte
+		Metadata Metadata
 	}
 
 	// Metadata has information that is defined by the event broker
@@ -156,7 +156,7 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 		ctx := context.Background()
 		log := slog.FromCtx(ctx)
 
-		if err := json.Unmarshal(msg.Body(), &event); err != nil {
+		if err := json.Unmarshal(msg.Body, &event); err != nil {
 			log.Error("unable to parse event as JSON", "error", err, "event", msg)
 			return fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
 		}
@@ -221,7 +221,8 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 				<-semaphore
 			}()
 
-			err := handler(Message{msg.Body, msg})
+			// TODO(katcipis): add metadata.
+			err := handler(Message{Body: msg.Body})
 			if err != nil {
 				if msg.Nackable() {
 					msg.Nack()
@@ -237,19 +238,4 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 // The subscription should not be used after this method is called.
 func (r *MessageSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
-}
-
-// NewMessage creates a new [Message] with the given body
-func NewMessage(body []byte) Message {
-	return Message{body: body}
-}
-
-// Body of the message.
-func (m Message) Body() []byte {
-	return m.body
-}
-
-// String representation of the message.
-func (m Message) String() string {
-	return string(m.body)
 }

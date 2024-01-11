@@ -369,8 +369,8 @@ func TestRawSubscriptionServing(t *testing.T) {
 
 	go func() {
 		err := subscription.Serve(func(msg event.Message) error {
-			t.Logf("handler called, msg: %v", string(msg.Body()))
-			gotMsgs <- msg.Body()
+			t.Logf("handler called, msg: %v", string(msg.Body))
+			gotMsgs <- msg.Body
 			// we block the handlers to ensure concurrency is being respected
 			<-handlersDone
 			return nil
