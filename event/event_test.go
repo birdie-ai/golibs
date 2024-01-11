@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	// load in memory driver
 	"github.com/birdie-ai/golibs/event"
 	"github.com/birdie-ai/golibs/tracing"
 	"github.com/google/go-cmp/cmp"
 	"gocloud.dev/pubsub"
+
 	_ "gocloud.dev/pubsub/mempubsub"
 )
 
