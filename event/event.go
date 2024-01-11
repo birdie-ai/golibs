@@ -53,13 +53,16 @@ type (
 		originalMsg *pubsub.Message
 	}
 
-	// Metadata has information that is defined by the event broker.
+	// Metadata has information that is defined by the event broker
+	// and attributes that may be defined by the publisher.
 	// Fields may be empty depending on the event broker being used.
 	Metadata struct {
 		// ID is the event/message ID as defined by the event broker.
 		ID string
 		// PublishedTime represents when an event was published as defined by the event broker.
 		PublishedTime time.Time
+		// Attributes are defined by the publisher, like Google Cloud Pub Sub attributes (or similar concepts on other brokers).
+		Attributes map[string]string
 	}
 
 	// MessageSubscription represents a subscription that delivers messages as is.
