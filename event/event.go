@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"cloud.google.com/go/pubsub/apiv1/pubsubpb"
 	"github.com/birdie-ai/golibs/slog"
 	"github.com/birdie-ai/golibs/tracing"
 	"github.com/google/uuid"
@@ -237,10 +238,13 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 			}()
 
 			// TODO(katcipis): add metadata.
+			id, publishedTime := getMetadata(msg)
 			err := handler(Message{
 				Body: msg.Body,
 				Metadata: Metadata{
-					Attributes: msg.Metadata,
+					ID:            id,
+					PublishedTime: publishedTime,
+					Attributes:    msg.Metadata,
 				},
 			})
 			if err != nil {
@@ -252,6 +256,16 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 			msg.Ack()
 		}()
 	}
+}
+
+func getMetadata(msg *pubsub.Message) (string, time.Time) {
+	// This is the only way to get broker specific metadata
+	// For now we only support Google Cloud.
+	var pbmsg *pubsubpb.PubsubMessage
+	if msg.As(&pbmsg) {
+		return pbmsg.MessageId, pbmsg.PublishTime.AsTime()
+	}
+	return "", time.Time{}
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [MessageSubscription.Serve].
