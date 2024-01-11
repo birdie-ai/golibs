@@ -222,7 +222,12 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 			}()
 
 			// TODO(katcipis): add metadata.
-			err := handler(Message{Body: msg.Body})
+			err := handler(Message{
+				Body: msg.Body,
+				Metadata: Metadata{
+					Attributes: msg.Metadata,
+				},
+			})
 			if err != nil {
 				if msg.Nackable() {
 					msg.Nack()
