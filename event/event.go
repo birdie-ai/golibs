@@ -43,9 +43,9 @@ type (
 	// by using [slog.FromCtx].
 	Handler[T any] func(context.Context, T) error
 
-	// HandlerWithMetadata is responsible for handling events from a [Subscription] with the associated event metadata.
-	// The context passed to the handler will have all common metadata also passed to calls to [Handler] and extra metadata
-	// that is more specific as defined on [Metadata].
+	// HandlerWithMetadata is responsible for handling events from a [Subscription] with its associated [Metadata].
+	// The context passed to the handler will have the same general metadata as the ones passed to [Handler], like the trace ID,
+	// and extra metadata that is more event specific as defined by [Metadata].
 	HandlerWithMetadata[T any] func(context.Context, T, Metadata) error
 
 	// Message represents a raw message received on a subscription.
