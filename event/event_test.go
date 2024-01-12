@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	// load in memory driver
 	"github.com/birdie-ai/golibs/event"
 	"github.com/birdie-ai/golibs/tracing"
 	"github.com/google/go-cmp/cmp"
 	"gocloud.dev/pubsub"
+
 	_ "gocloud.dev/pubsub/mempubsub"
 )
 
@@ -369,8 +369,8 @@ func TestRawSubscriptionServing(t *testing.T) {
 
 	go func() {
 		err := subscription.Serve(func(msg event.Message) error {
-			t.Logf("handler called, msg: %v", string(msg.Body()))
-			gotMsgs <- msg.Body()
+			t.Logf("handler called, msg: %v", string(msg.Body))
+			gotMsgs <- msg.Body
 			// we block the handlers to ensure concurrency is being respected
 			<-handlersDone
 			return nil
@@ -428,6 +428,101 @@ func TestRawSubscriptionServing(t *testing.T) {
 
 	// wait for subscription to shutdown
 	<-servingDone
+}
+
+func TestSubscriptionServingWithMetadata(t *testing.T) {
+	t.Parallel()
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = topic.Shutdown(ctx) }()
+
+	const maxConcurrency = 1
+	eventName := t.Name()
+
+	subscription, err := event.NewSubscription[struct{}](eventName, url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	receivedMetadata := make(chan event.Metadata)
+	go func() {
+		err := subscription.ServeWithMetadata(func(ctx context.Context, event struct{}, metadata event.Metadata) error {
+			receivedMetadata <- metadata
+			return nil
+		})
+		if err != nil {
+			t.Errorf("subscription serve failed: %v", err)
+		}
+		close(receivedMetadata)
+	}()
+
+	wantAttributes := map[string]string{"key": t.Name()}
+	publisher := event.NewPublisher[struct{}](eventName, topic)
+
+	if err = publisher.PublishWithAttrs(ctx, struct{}{}, wantAttributes); err != nil {
+		t.Fatalf("PublishWithAttrs failed: %v", err)
+	}
+
+	gotMetadata := <-receivedMetadata
+
+	assertEqual(t, gotMetadata.Attributes, wantAttributes)
+	// No easy way to test actual metadata, would need google cloud pubsub emulation or messing around with the gcppubsub driver
+	var zeroTime time.Time
+	assertEqual(t, gotMetadata.PublishedTime, zeroTime)
+	assertEqual(t, gotMetadata.ID, "")
+}
+
+func TestRawSubscriptionServingWithMetadata(t *testing.T) {
+	t.Parallel()
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = topic.Shutdown(ctx) }()
+
+	const maxConcurrency = 1
+	subscription, err := event.NewRawSubscription(url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	receivedMsgs := make(chan event.Message)
+	go func() {
+		err := subscription.Serve(func(msg event.Message) error {
+			receivedMsgs <- msg
+			return nil
+		})
+		if err != nil {
+			t.Errorf("subscription serve failed: %v", err)
+		}
+		close(receivedMsgs)
+	}()
+
+	wantBody := t.Name()
+	wantAttributes := map[string]string{"key": t.Name()}
+
+	if err := topic.Send(ctx, &pubsub.Message{Body: []byte(wantBody), Metadata: wantAttributes}); err != nil {
+		t.Fatalf("publishing message: %v", err)
+	}
+
+	gotMsg := <-receivedMsgs
+
+	assertEqual(t, string(gotMsg.Body), wantBody)
+	assertEqual(t, gotMsg.Metadata.Attributes, wantAttributes)
+	// No easy way to test actual metadata, would need google cloud pubsub emulation or messing around with the gcppubsub driver
+	var zeroTime time.Time
+	assertEqual(t, gotMsg.Metadata.PublishedTime, zeroTime)
+	assertEqual(t, gotMsg.Metadata.ID, "")
 }
 
 type shutdowner interface {

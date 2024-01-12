@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"cloud.google.com/go/pubsub/apiv1/pubsubpb"
 	"github.com/birdie-ai/golibs/slog"
 	"github.com/birdie-ai/golibs/tracing"
 	"github.com/google/uuid"
@@ -42,9 +43,26 @@ type (
 	// by using [slog.FromCtx].
 	Handler[T any] func(context.Context, T) error
 
+	// HandlerWithMetadata is responsible for handling events from a [Subscription] with its associated [Metadata].
+	// The context passed to the handler will have the same general metadata as the ones passed to [Handler], like the trace ID,
+	// and extra metadata that is more event specific as defined by [Metadata].
+	HandlerWithMetadata[T any] func(context.Context, T, Metadata) error
+
 	// Message represents a raw message received on a subscription.
 	Message struct {
-		body []byte
+		Body     []byte
+		Metadata Metadata
+	}
+
+	// Metadata has information that is defined by the event broker
+	// and attributes that may be defined by the publisher.
+	Metadata struct {
+		// ID is the event/message ID as defined by the event broker (if any).
+		ID string
+		// PublishedTime represents when an event was published as defined by the event broker (if any).
+		PublishedTime time.Time
+		// Attributes are defined by the publisher, like Google Cloud Pub Sub attributes (or similar concepts in other brokers).
+		Attributes map[string]string
 	}
 
 	// MessageSubscription represents a subscription that delivers messages as is.
@@ -68,8 +86,12 @@ func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 
 // Publish will publish the given event.
 func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
-	start := time.Now()
+	return p.PublishWithAttrs(ctx, event, nil)
+}
 
+// PublishWithAttrs will publish the given event with the provided attributes.
+// The attributes will be available when receiving the events as [Metadata.Attributes].
+func (p *Publisher[T]) PublishWithAttrs(ctx context.Context, event T, attributes map[string]string) error {
 	body := Envelope[T]{
 		TraceID: tracing.CtxGetTraceID(ctx),
 		OrgID:   tracing.CtxGetOrgID(ctx),
@@ -82,10 +104,11 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 		return err
 	}
 
+	start := time.Now()
 	err = p.topic.Send(ctx, &pubsub.Message{
-		Body: encBody,
+		Body:     encBody,
+		Metadata: attributes,
 	})
-
 	elapsed := time.Since(start)
 
 	samplePublish(p.name, elapsed, err)
@@ -132,32 +155,59 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
 func (s *Subscription[T]) Serve(handler Handler[T]) error {
-	return s.rawsub.Serve(SampledMessageHandler(func(msg Message) error {
-		var event Envelope[T]
-
-		ctx := context.Background()
-		log := slog.FromCtx(ctx)
-
-		if err := json.Unmarshal(msg.Body(), &event); err != nil {
-			log.Error("unable to parse event as JSON", "error", err, "event", msg)
-			return fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
+	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
+		ctx, event, err := s.createEvent(msg)
+		if err != nil {
+			return err
 		}
-
-		if event.Name != s.name {
-			log.Error("event name doesn't match handler", "expected", s.name, "received", event.Name)
-			return fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
-		}
-
-		ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
-		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
-
-		log = log.With("request_id", uuid.NewString())
-		log = log.With("trace_id", event.TraceID)
-		log = log.With("organization_id", event.OrgID)
-		ctx = slog.NewContext(ctx, log)
-
 		return handler(ctx, event.Event)
-	}, s.name))
+	}))
+}
+
+// ServeWithMetadata will start serving all events from the subscription calling handler for each
+// event, providing both the event and any metadata associated with it.
+// It will run until [Subscription.Shutdown] is called.
+// If the error is nil Ack is sent.
+// If a non-nil error is returned by the handler Unack will be sent.
+// If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
+// If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
+// ServeWithMetadata may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" goroutines.
+func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) error {
+	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
+		ctx, event, err := s.createEvent(msg)
+		if err != nil {
+			return err
+		}
+		return handler(ctx, event.Event, msg.Metadata)
+	}))
+}
+
+func (s *Subscription[T]) createEvent(msg Message) (context.Context, Envelope[T], error) {
+	var event Envelope[T]
+
+	ctx := context.Background()
+	log := slog.FromCtx(ctx)
+
+	if err := json.Unmarshal(msg.Body, &event); err != nil {
+		log.Error("unable to parse event as JSON", "error", err, "event", msg)
+		return nil, event, fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
+	}
+
+	if event.Name != s.name {
+		log.Error("event name doesn't match handler", "expected", s.name, "received", event.Name)
+		return nil, event, fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
+	}
+
+	ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
+	ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
+
+	log = log.With("request_id", uuid.NewString())
+	log = log.With("trace_id", event.TraceID)
+	log = log.With("organization_id", event.OrgID)
+	ctx = slog.NewContext(ctx, log)
+
+	return ctx, event, nil
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
@@ -187,7 +237,15 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 				<-semaphore
 			}()
 
-			err := handler(NewMessage(msg.Body))
+			id, publishedTime := getMetadata(msg)
+			err := handler(Message{
+				Body: msg.Body,
+				Metadata: Metadata{
+					ID:            id,
+					PublishedTime: publishedTime,
+					Attributes:    msg.Metadata,
+				},
+			})
 			if err != nil {
 				if msg.Nackable() {
 					msg.Nack()
@@ -199,23 +257,18 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 	}
 }
 
+func getMetadata(msg *pubsub.Message) (string, time.Time) {
+	// This is the only way to get broker specific metadata
+	// For now we only support Google Cloud.
+	var pbmsg *pubsubpb.PubsubMessage
+	if msg.As(&pbmsg) {
+		return pbmsg.MessageId, pbmsg.PublishTime.AsTime()
+	}
+	return "", time.Time{}
+}
+
 // Shutdown will shutdown the subscriber, stopping any calls to [MessageSubscription.Serve].
 // The subscription should not be used after this method is called.
 func (r *MessageSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
-}
-
-// NewMessage creates a new [Message] with the given body
-func NewMessage(body []byte) Message {
-	return Message{body: body}
-}
-
-// Body of the message.
-func (m Message) Body() []byte {
-	return m.body
-}
-
-// String representation of the message.
-func (m Message) String() string {
-	return string(m.body)
 }
