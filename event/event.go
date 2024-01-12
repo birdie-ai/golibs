@@ -190,7 +190,7 @@ func (s *Subscription[T]) createEvent(msg Message) (context.Context, Envelope[T]
 	log := slog.FromCtx(ctx)
 
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
-		log.Error("unable to parse event as JSON", "error", err, "event", msg)
+		log.Error("parsing event body", "name", s.name, "error", err, "body", string(msg.Body))
 		return nil, event, fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
 	}
 
