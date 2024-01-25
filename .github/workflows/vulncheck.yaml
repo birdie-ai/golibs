@@ -1,6 +1,8 @@
-name: CI
+name: Vulnerability check
 
-on: [push]
+on:
+  schedule:
+    - cron: '0 7 * * 1'  # Weekly on Mondays at 7:00 AM
 
 jobs:
   test:
@@ -17,8 +19,5 @@ jobs:
       - name: Install just
         uses: taiki-e/install-action@just
 
-      - name: Linting
-        run: just lint
-
-      - name: Testing
-        run: just test
+      - name: Vulncheck
+        run: just vulncheck
