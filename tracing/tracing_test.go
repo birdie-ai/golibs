@@ -11,6 +11,48 @@ import (
 	"github.com/birdie-ai/golibs/tracing"
 )
 
+func TestSetRequestHeaders(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "http://localhost", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const (
+		wantTraceID = "traceid"
+		wantOrgID   = "orgid"
+	)
+
+	ctx = tracing.CtxWithOrgID(ctx, wantOrgID)
+	ctx = tracing.CtxWithTraceID(ctx, wantTraceID)
+
+	tracing.SetRequestHeaders(ctx, req)
+	gotTraceID := req.Header.Get("traceparent")
+	gotOrgID := req.Header.Get("Birdie-Organization-ID")
+
+	if gotTraceID != wantTraceID {
+		t.Fatalf("got traceID %q; want %q", gotTraceID, wantTraceID)
+	}
+	if gotOrgID != wantOrgID {
+		t.Fatalf("got orgID %q; want %q", gotOrgID, wantOrgID)
+	}
+}
+
+func TestSetRequestHeadersEmptyCtx(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "http://localhost", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tracing.SetRequestHeaders(context.Background(), req)
+
+	if len(req.Header) != 0 {
+		t.Fatalf("unexpected headers: %v", req.Header)
+	}
+}
+
 func TestIntrumentedHTTPHandler(t *testing.T) {
 	const (
 		wantTraceID = "test-trace-id"

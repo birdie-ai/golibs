@@ -17,11 +17,11 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		// We don't parse/generate trace IDs exactly as in the spec, for now
 		// just using the specified header name.
-		traceID := req.Header.Get("traceparent")
+		traceID := req.Header.Get(traceIDHeader)
 		if traceID == "" {
 			traceID = uuid.NewString()
 		}
-		orgID := req.Header.Get("Birdie-Organization-ID")
+		orgID := req.Header.Get(orgIDHeader)
 
 		ctx := req.Context()
 		ctx = CtxWithTraceID(ctx, traceID)
@@ -85,6 +85,20 @@ func CtxGetOrgID(ctx context.Context) string {
 	return ctxget(ctx, orgIDKey)
 }
 
+// SetRequestHeaders adds headers to the given [Request] using information
+// extracted from the given [context.Context].
+//
+// It is intended for outgoing client request creation, making it easier to propagate trace IDs
+// (and other request scoped information).
+func SetRequestHeaders(ctx context.Context, req *http.Request) {
+	if traceID := CtxGetTraceID(ctx); traceID != "" {
+		req.Header.Set(traceIDHeader, traceID)
+	}
+	if orgID := CtxGetOrgID(ctx); orgID != "" {
+		req.Header.Set(orgIDHeader, orgID)
+	}
+}
+
 type (
 	responseWriter struct {
 		http.ResponseWriter
@@ -97,7 +111,9 @@ type (
 )
 
 const (
-	traceIDKey key = iota
+	traceIDHeader     = "traceparent"
+	orgIDHeader       = "Birdie-Organization-ID"
+	traceIDKey    key = iota
 	orgIDKey
 )
 
