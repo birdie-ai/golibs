@@ -73,13 +73,3 @@ func newRequest(t *testing.T, method, url string, body string) *http.Request {
 	}
 	return request
 }
-
-func readAll(t *testing.T, r io.Reader) []byte {
-	t.Helper()
-
-	v, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return v
-}
