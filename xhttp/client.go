@@ -37,5 +37,6 @@ type retrierClient struct {
 }
 
 func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
-	return nil, nil
+	// TODO: do actual retries :-)
+	return r.client.Do(req)
 }
