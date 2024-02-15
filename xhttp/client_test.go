@@ -3,6 +3,7 @@ package xhttp_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -160,6 +161,60 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 	}
 }
 
+func TestRetrierRetrySpecificErrors(t *testing.T) {
+	// This handles errors caught in production related to connection failing and other specific errors
+	// like HTTP2 errors. Sadly we didn't find a more programatic way to detect these errors besides
+	// inspecting the error string.
+	retryErrors := []string{
+		"<specific details> http2: server sent GOAWAY and closed the connection <specific details>",
+		"<specific details>: connection reset by peer",
+	}
+	for _, retryError := range retryErrors {
+		t.Run(retryError, func(t *testing.T) {
+			fakeClient := NewFakeClient()
+			client := xhttp.NewRetrierClient(fakeClient, noSleep())
+
+			fakeClient.PushError(errors.New(retryError))
+			fakeClient.PushResponse(&http.Response{
+				StatusCode: http.StatusOK,
+			})
+
+			const url = "http://test"
+			request := newRequest(t, http.MethodGet, url, nil)
+			res, err := client.Do(request)
+			if err != nil {
+				t.Fatalf("got err %v; want nil", err)
+			}
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("got status %d; want %d", res.StatusCode, http.StatusOK)
+			}
+			requests := fakeClient.Requests()
+			if len(requests) != 2 {
+				t.Fatalf("got %d requests; want 2", len(requests))
+			}
+		})
+	}
+}
+
+func TestWontRetryClientErrors(t *testing.T) {
+	fakeClient := NewFakeClient()
+	client := xhttp.NewRetrierClient(fakeClient, noSleep())
+
+	wantErr := errors.New("some error")
+	fakeClient.PushError(wantErr)
+
+	const url = "http://test"
+	request := newRequest(t, http.MethodGet, url, nil)
+	_, err := client.Do(request)
+	if !errors.Is(err, wantErr) {
+		t.Fatal(err)
+	}
+	requests := fakeClient.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("got %d requests; want 1", len(requests))
+	}
+}
+
 func TestRetrierRetryStatusCodes(t *testing.T) {
 	retryStatusCodes := []int{
 		http.StatusTooManyRequests,
@@ -261,6 +316,89 @@ func TestRetrierNoRetryStatusCodes(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestReadingRequestBodyFails(t *testing.T) {
+	fakeClient := NewFakeClient()
+	client := xhttp.NewRetrierClient(fakeClient, noSleep())
+	wantErr := errors.New("fake read error")
+
+	const url = "http://testing"
+	fakeReader := &fakeReaderCloser{
+		readErr: wantErr,
+	}
+	request, err := http.NewRequest(http.MethodPost, url, fakeReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.Do(request)
+	if !errors.Is(err, wantErr) {
+		t.Errorf("got err %v; want %v", err, wantErr)
+	}
+	got := fakeClient.Requests()
+	if len(got) > 0 {
+		t.Errorf("unexpected requests: %v", got)
+	}
+}
+
+func TestClosingRequestBodyFails(t *testing.T) {
+	fakeClient := NewFakeClient()
+	client := xhttp.NewRetrierClient(fakeClient, noSleep())
+	wantErr := errors.New("fake close error")
+
+	const url = "http://testing"
+	fakeReader := &fakeReaderCloser{
+		readErr:  io.EOF,
+		closeErr: wantErr,
+	}
+	request, err := http.NewRequest(http.MethodPost, url, fakeReader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Do(request)
+	if !errors.Is(err, wantErr) {
+		t.Errorf("got err %v; want %v", err, wantErr)
+	}
+	got := fakeClient.Requests()
+	if len(got) > 0 {
+		t.Errorf("unexpected requests: %v", got)
+	}
+}
+
+func TestNoRequestSentIfContextIsCancelled(t *testing.T) {
+	fakeClient := NewFakeClient()
+	client := xhttp.NewRetrierClient(fakeClient, noSleep())
+
+	const url = "http://testing"
+	request := newRequest(t, http.MethodPost, url, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	request = request.Clone(ctx)
+	cancel()
+
+	_, err := client.Do(request)
+	wantErr := context.Canceled
+	if !errors.Is(err, wantErr) {
+		t.Errorf("got err %v; want %v", err, wantErr)
+	}
+	got := fakeClient.Requests()
+	if len(got) > 0 {
+		t.Errorf("unexpected requests: %v", got)
+	}
+}
+
+type fakeReaderCloser struct {
+	readCalls int
+	readErr   error
+	closeErr  error
+}
+
+func (f *fakeReaderCloser) Read([]byte) (int, error) {
+	return 0, f.readErr
+}
+
+func (f *fakeReaderCloser) Close() error {
+	return f.closeErr
 }
 
 func newRequest(t *testing.T, method, url string, body []byte) *http.Request {

@@ -53,11 +53,12 @@ func (f *FakeClient) Do(req *http.Request) (*http.Response, error) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
+	f.requests = append(f.requests, req)
+
 	if len(f.responses) == 0 {
 		return nil, fmt.Errorf("no response configured on FakeClient for request: %v", req)
 	}
 
-	f.requests = append(f.requests, req)
 	response := f.responses[0]
 	f.responses = f.responses[1:]
 	return response.res, response.err
