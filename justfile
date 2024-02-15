@@ -4,9 +4,19 @@ golangci_lint_version := "v1.55.2"
 # test and lint the code
 default: test lint
 
-# run isolated tests
+covreport := "coverage.txt"
+
+# run tests
 test:
     go test ./... -timeout 10s -race -shuffle on
+
+# run tests and generate coverage report
+test-coverage:
+	go test -count=1 -coverprofile={{covreport}} ./...
+
+# run tests with coverage report and show the report on the local browser
+test-coverage-show: test-coverage
+	go tool cover -html={{covreport}}
 
 # lint the whole project
 lint:
