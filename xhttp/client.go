@@ -130,7 +130,6 @@ func (r *retrierClient) newRequest(ctx context.Context, req *http.Request, reque
 	if r.requestTimeout > 0 {
 		reqCtx, cancel = context.WithTimeout(ctx, r.requestTimeout)
 	}
-
 	newReq := req.Clone(reqCtx)
 	// We need to always guarantee that the request has a readable io.Reader for the original request body
 	newReq.Body = io.NopCloser(bytes.NewReader(requestBody))
