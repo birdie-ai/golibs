@@ -1,17 +1,199 @@
 package xhttp_test
 
 import (
+	"bytes"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/birdie-ai/golibs/xhttp"
+	"github.com/google/go-cmp/cmp"
 )
 
+func TestRetrierExponentialBackoff(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	gotSleepPeriods := []time.Duration{}
+	sleep := func(period time.Duration) {
+		gotSleepPeriods = append(gotSleepPeriods, period)
+	}
+
+	client := xhttp.NewRetrierClient(&http.Client{},
+		xhttp.RetrierWithMinPeriod(time.Second),
+		xhttp.RetrierWithSleep(sleep),
+	)
+
+	wantSleepPeriods := []time.Duration{
+		time.Second,
+		2 * time.Second,
+		4 * time.Second,
+		8 * time.Second,
+	}
+
+	retryDone := make(chan struct{})
+	go func() {
+		for range 4 {
+			req := <-server.Requests()
+			req.SendResponse(Response{
+				Status: http.StatusServiceUnavailable,
+			})
+		}
+
+		req := <-server.Requests()
+		req.SendResponse(Response{
+			Status: http.StatusOK,
+		})
+
+		close(retryDone)
+	}()
+
+	request := newRequest(t, http.MethodGet, server.URL, nil)
+	res, err := client.Do(request)
+	<-retryDone
+
+	if err != nil {
+		t.Fatalf("client.Do(%v) failed: %v", request, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+	}
+
+	assertNoPendingRequests(t, server)
+	assertEqual(t, gotSleepPeriods, wantSleepPeriods)
+}
+
+func TestRetrierRetryStatusCodes(t *testing.T) {
+	retryStatusCodes := []int{
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusServiceUnavailable,
+	}
+	for _, wantStatus := range retryStatusCodes {
+		for _, wantMethod := range httpMethods() {
+
+			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
+				server := NewServer()
+				defer server.Close()
+
+				client := xhttp.NewRetrierClient(&http.Client{}, noSleep())
+				wantPath := "/" + t.Name()
+				retryDone := make(chan struct{})
+
+				go func() {
+					assertReq := func(req Request) {
+						if req.URL == nil {
+							t.Errorf("pending request has no URL")
+							return
+						}
+						if req.URL.Path != wantPath {
+							t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
+						}
+						if req.Method != wantMethod {
+							t.Errorf("got method %q; want %q", req.Method, wantMethod)
+						}
+					}
+					req := <-server.Requests()
+					assertReq(req)
+					req.SendResponse(Response{
+						Status: wantStatus,
+					})
+
+					retryReq := <-server.Requests()
+					assertReq(retryReq)
+					retryReq.SendResponse(Response{
+						Status: http.StatusOK,
+					})
+					close(retryDone)
+				}()
+
+				url := server.URL + wantPath
+				request := newRequest(t, wantMethod, url, nil)
+
+				res, err := client.Do(request)
+				<-retryDone
+
+				if err != nil {
+					t.Fatalf("client.Do(%v) failed: %v", request, err)
+				}
+				if res.StatusCode != http.StatusOK {
+					t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+				}
+
+				assertNoPendingRequests(t, server)
+			})
+		}
+	}
+}
+
 func TestRetrierNoRetryStatusCodes(t *testing.T) {
-	httpMethods := []string{
+
+	for wantStatus := 200; wantStatus < 500; wantStatus++ {
+		if wantStatus == http.StatusTooManyRequests {
+			continue
+		}
+		for _, wantMethod := range httpMethods() {
+
+			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
+				server := NewServer()
+				defer server.Close()
+
+				client := xhttp.NewRetrierClient(&http.Client{}, noSleep())
+				wantPath := "/" + t.Name()
+
+				go func() {
+					req := <-server.Requests()
+					if req.URL.Path != wantPath {
+						t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
+					}
+					if req.Method != wantMethod {
+						t.Errorf("got method %q; want %q", req.Method, wantMethod)
+					}
+					req.SendResponse(Response{
+						Status: wantStatus,
+					})
+				}()
+
+				url := server.URL + wantPath
+				request := newRequest(t, wantMethod, url, nil)
+
+				res, err := client.Do(request)
+				if err != nil {
+					t.Fatalf("client.Do(%v) failed: %v", request, err)
+				}
+				if res.StatusCode != wantStatus {
+					t.Fatalf("got status %v; want %v", res.StatusCode, wantStatus)
+				}
+
+				assertNoPendingRequests(t, server)
+			})
+		}
+	}
+}
+
+func assertNoPendingRequests(t *testing.T, s *Server) {
+	t.Helper()
+
+	select {
+	case v := <-s.Requests():
+		t.Fatalf("unexpected pending request: %v", v)
+	default:
+	}
+}
+
+func newRequest(t *testing.T, method, url string, body []byte) *http.Request {
+	t.Helper()
+
+	request, err := http.NewRequest(method, url, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return request
+}
+
+func httpMethods() []string {
+	return []string{
 		http.MethodPost,
 		http.MethodGet,
 		http.MethodPut,
@@ -23,53 +205,18 @@ func TestRetrierNoRetryStatusCodes(t *testing.T) {
 		http.MethodOptions,
 	}
 
-	for wantStatus := 200; wantStatus < 500; wantStatus++ {
-		for _, wantMethod := range httpMethods {
-			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
-				server := NewServer()
-				client := xhttp.NewRetrierClient(&http.Client{})
-				wantPath := "/" + t.Name()
-				wantBody := t.Name()
-
-				go func() {
-					req := <-server.Requests()
-					if req.URL.Path != wantPath {
-						t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
-					}
-					if req.Method != wantMethod {
-						t.Errorf("got method %q; want %q", req.Method, wantMethod)
-					}
-					reqBody, err := io.ReadAll(req.Body)
-					if err != nil {
-						t.Errorf("reading request: %v", err)
-					}
-					req.SendResponse(Response{
-						Status: wantStatus,
-						Body:   reqBody,
-					})
-				}()
-
-				url := server.URL + wantPath
-				request := newRequest(t, wantMethod, url, wantBody)
-
-				res, err := client.Do(request)
-				if err != nil {
-					t.Fatalf("client.Do(%v) failed: %v", request, err)
-				}
-				if res.StatusCode != wantStatus {
-					t.Fatalf("got status %v; want %v", res.StatusCode, wantStatus)
-				}
-			})
-		}
-	}
 }
 
-func newRequest(t *testing.T, method, url string, body string) *http.Request {
+func noSleep() xhttp.RetrierOption {
+	return xhttp.RetrierWithSleep(func(time.Duration) {})
+}
+
+func assertEqual[T any](t *testing.T, got T, want T) {
 	t.Helper()
 
-	request, err := http.NewRequest(method, url, strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Logf("got: %v", got)
+		t.Logf("want: %v", want)
+		t.Fatalf("diff: %v", diff)
 	}
-	return request
 }

@@ -1,8 +1,10 @@
 package xhttp_test
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 )
 
 type (
@@ -75,4 +77,53 @@ func (s *Server) Requests() <-chan Request {
 func (r *Request) SendResponse(res Response) {
 	r.response <- res
 	close(r.response)
+}
+
+func TestServer(t *testing.T) {
+	server := NewServer()
+	client := &http.Client{}
+	const (
+		wantStatus = http.StatusOK
+		wantMethod = http.MethodPost
+		wantPath   = "/test"
+		wantBody   = "test"
+	)
+
+	go func() {
+		req := <-server.Requests()
+		if req.URL.Path != wantPath {
+			t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
+		}
+		if req.Method != wantMethod {
+			t.Errorf("got method %q; want %q", req.Method, wantMethod)
+		}
+		reqBody, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Errorf("reading request: %v", err)
+		}
+		req.SendResponse(Response{
+			Status: wantStatus,
+			Body:   reqBody,
+		})
+	}()
+
+	url := server.URL + wantPath
+	request := newRequest(t, wantMethod, url, []byte(wantBody))
+
+	res, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("client.Do(%v) failed: %v", request, err)
+	}
+	defer res.Body.Close() //nolint: errcheck
+	if res.StatusCode != wantStatus {
+		t.Fatalf("got status %v; want %v", res.StatusCode, wantStatus)
+	}
+	v, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(v)
+	if got != wantBody {
+		t.Fatalf("got response body %q; want %v", got, wantBody)
+	}
 }
