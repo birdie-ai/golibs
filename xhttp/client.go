@@ -34,8 +34,10 @@ func RetrierWithSleep(sleep func(time.Duration)) RetrierOption {
 
 // RetrierWithRequestTimeout configures a client retrier with the given timeout. This timeout is used per request/try.
 // When calling [Client.Do] if the request has a context with a deadline longer than this timeout the retrier
-// will keep retrying until the request context is cancelled/deadline expires.
-func RetrierWithRequestTimeout(int) RetrierOption {
+// will keep retrying until the parent request context is cancelled/deadline expires.
+// If this timeout is bigger than the deadline of the request context then the request context will be respected
+// (a context is created with this timeout and the request context as parent).
+func RetrierWithRequestTimeout(time.Duration) RetrierOption {
 	return func(*retrierClient) {
 		// TODO
 	}

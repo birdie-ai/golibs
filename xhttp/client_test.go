@@ -11,6 +11,61 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func TestRetrierPerRequestTryTimeout(t *testing.T) {
+	t.Skip()
+
+	fakeClient := NewFakeClient(t)
+	const timeoutPerRequest = time.Millisecond
+	// here we test the proper request timeout being set by setting a very small timeout
+	// per try/request and creating a request with no deadline at all, so we can check that the deadline exists
+	client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithRequestTimeout(timeoutPerRequest))
+	fakeClient.PushResponse(&http.Response{
+		StatusCode: http.StatusServiceUnavailable,
+	})
+	fakeClient.PushResponse(&http.Response{
+		StatusCode: http.StatusOK,
+	})
+
+	// The request has no deadline by default. But individual requests must
+	request := newRequest(t, http.MethodGet, "/test", nil)
+	res, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("got status %d; want %d", res.StatusCode, http.StatusOK)
+	}
+
+	requests := fakeClient.Requests()
+	if len(requests) != 2 {
+		t.Fatalf("got %d requests; want %d", len(requests), 2)
+	}
+
+	firstReq := requests[0]
+	firstDeadline, hasDeadline := firstReq.Context().Deadline()
+	if !hasDeadline {
+		t.Error("first request has no deadline")
+	}
+
+	secondReq := requests[1]
+	secondDeadline, hasDeadline := secondReq.Context().Deadline()
+	if !hasDeadline {
+		t.Error("second request has no deadline")
+	}
+	if !secondDeadline.After(firstDeadline) {
+		t.Errorf("want second deadline to be after first, got first deadline %v and second %v", firstDeadline, secondDeadline)
+	}
+
+	// This is not deterministic, but it is enough... I think :-)
+	time.Sleep(2 * timeoutPerRequest)
+	if firstReq.Context().Err() == nil {
+		t.Fatalf("expected first request to have expired context")
+	}
+	if secondReq.Context().Err() == nil {
+		t.Fatalf("expected second request to have expired context")
+	}
+}
+
 func TestRetrierExponentialBackoff(t *testing.T) {
 	server := NewServer()
 	defer server.Close()
