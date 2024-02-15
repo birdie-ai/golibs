@@ -4,19 +4,17 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"testing"
 )
 
 // FakeClient allows to fake interactions with an [xhttp.Client].
 type FakeClient struct {
-	t         *testing.T
 	requests  []*http.Request
 	responses []response
 	mutex     sync.Mutex
 }
 
-func NewFakeClient(t *testing.T) *FakeClient {
-	return &FakeClient{t: t}
+func NewFakeClient() *FakeClient {
+	return &FakeClient{}
 }
 
 // PushResponse will push the given response on the response queue of this [FakeClient].
@@ -56,9 +54,7 @@ func (f *FakeClient) Do(req *http.Request) (*http.Response, error) {
 	defer f.mutex.Unlock()
 
 	if len(f.responses) == 0 {
-		err := fmt.Errorf("no response configured on FakeClient for request: %v", req)
-		f.t.Error(err.Error())
-		return nil, err
+		return nil, fmt.Errorf("no response configured on FakeClient for request: %v", req)
 	}
 
 	f.requests = append(f.requests, req)

@@ -14,7 +14,7 @@ import (
 
 func TestRetrierWithoutPerRequestTimeout(t *testing.T) {
 	// With no per request timeout all requests must use the original request context
-	fakeClient := NewFakeClient(t)
+	fakeClient := NewFakeClient()
 	const timeoutPerRequest = time.Millisecond
 	// here we test the proper request timeout being set by setting a very small timeout
 	// per try/request and creating a request with no deadline at all, so we can check that the deadline exists
@@ -57,7 +57,7 @@ func TestRetrierWithoutPerRequestTimeout(t *testing.T) {
 }
 
 func TestRetrierPerRequestTryTimeout(t *testing.T) {
-	fakeClient := NewFakeClient(t)
+	fakeClient := NewFakeClient()
 	const timeoutPerRequest = time.Millisecond
 	// here we test the proper request timeout being set by setting a very small timeout
 	// per try/request and creating a request with no deadline at all, so we can check that the deadline exists
@@ -110,7 +110,7 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 }
 
 func TestRetrierExponentialBackoff(t *testing.T) {
-	fakeClient := NewFakeClient(t)
+	fakeClient := NewFakeClient()
 	gotSleepPeriods := []time.Duration{}
 	gotContexts := []context.Context{}
 	sleep := func(ctx context.Context, period time.Duration) {
@@ -226,8 +226,6 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 }
 
 func TestRetrierNoRetryStatusCodes(t *testing.T) {
-	t.Skip("simplify tests")
-
 	for wantStatus := 200; wantStatus < 500; wantStatus++ {
 		if wantStatus == http.StatusTooManyRequests {
 			continue
@@ -235,26 +233,13 @@ func TestRetrierNoRetryStatusCodes(t *testing.T) {
 		for _, wantMethod := range httpMethods() {
 
 			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
-				server := NewServer()
-				defer server.Close()
-
-				client := xhttp.NewRetrierClient(&http.Client{}, noSleep())
+				fakeClient := NewFakeClient()
+				client := xhttp.NewRetrierClient(fakeClient, noSleep())
 				wantPath := "/" + t.Name()
 
-				go func() {
-					req := <-server.Requests()
-					if req.URL.Path != wantPath {
-						t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
-					}
-					if req.Method != wantMethod {
-						t.Errorf("got method %q; want %q", req.Method, wantMethod)
-					}
-					req.SendResponse(Response{
-						Status: wantStatus,
-					})
-				}()
+				fakeClient.PushResponse(&http.Response{StatusCode: wantStatus})
 
-				url := server.URL + wantPath
+				url := "http://testing" + wantPath
 				request := newRequest(t, wantMethod, url, nil)
 
 				res, err := client.Do(request)
@@ -264,8 +249,17 @@ func TestRetrierNoRetryStatusCodes(t *testing.T) {
 				if res.StatusCode != wantStatus {
 					t.Fatalf("got status %v; want %v", res.StatusCode, wantStatus)
 				}
-
-				assertNoPendingRequests(t, server)
+				requests := fakeClient.Requests()
+				if len(requests) != 1 {
+					t.Fatalf("got %d requests; want 1", len(requests))
+				}
+				req := requests[0]
+				if req.URL.Path != wantPath {
+					t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
+				}
+				if req.Method != wantMethod {
+					t.Errorf("got method %q; want %q", req.Method, wantMethod)
+				}
 			})
 		}
 	}
