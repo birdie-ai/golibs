@@ -23,6 +23,7 @@ func TestRetrierWithoutPerRequestTimeout(t *testing.T) {
 	fakeClient.PushResponse(&http.Response{
 		StatusCode: http.StatusServiceUnavailable,
 	})
+	fakeClient.PushError(retryableError())
 	fakeClient.PushResponse(&http.Response{
 		StatusCode: http.StatusOK,
 	})
@@ -42,18 +43,14 @@ func TestRetrierWithoutPerRequestTimeout(t *testing.T) {
 	}
 
 	requests := fakeClient.Requests()
-	if len(requests) != 2 {
-		t.Fatalf("got %d requests; want %d", len(requests), 2)
+	if len(requests) != 3 {
+		t.Fatalf("got %d requests; want 3", len(requests))
 	}
 
-	firstReq := requests[0]
-	if firstReq.Context() != ctx {
-		t.Errorf("got %v; want %v", firstReq.Context(), ctx)
-	}
-
-	secondReq := requests[1]
-	if secondReq.Context() != ctx {
-		t.Errorf("got %v; want %v", secondReq.Context(), ctx)
+	for i, req := range requests {
+		if req.Context() != ctx {
+			t.Errorf("request %d got %v; want %v", i, req.Context(), ctx)
+		}
 	}
 }
 
@@ -63,6 +60,7 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 	// here we test the proper request timeout being set by setting a very small timeout
 	// per try/request and creating a request with no deadline at all, so we can check that the deadline exists
 	client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithRequestTimeout(timeoutPerRequest))
+	fakeClient.PushError(retryableError())
 	fakeClient.PushResponse(&http.Response{
 		StatusCode: http.StatusServiceUnavailable,
 	})
@@ -81,8 +79,8 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 	}
 
 	requests := fakeClient.Requests()
-	if len(requests) != 2 {
-		t.Fatalf("got %d requests; want %d", len(requests), 2)
+	if len(requests) != 3 {
+		t.Fatalf("got %d requests; want 3", len(requests))
 	}
 
 	firstReq := requests[0]
@@ -100,13 +98,21 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 		t.Errorf("want second deadline to be after first, got first deadline %v and second %v", firstDeadline, secondDeadline)
 	}
 
+	thirdReq := requests[2]
+	thirdDeadline, hasDeadline := thirdReq.Context().Deadline()
+	if !hasDeadline {
+		t.Error("third request has no deadline")
+	}
+	if !thirdDeadline.After(secondDeadline) {
+		t.Errorf("want third deadline to be after second, got second deadline %v and third %v", secondDeadline, thirdDeadline)
+	}
+
 	// This is not deterministic, but it is enough... I think :-)
 	time.Sleep(2 * timeoutPerRequest)
-	if firstReq.Context().Err() == nil {
-		t.Fatalf("expected first request to have expired context")
-	}
-	if secondReq.Context().Err() == nil {
-		t.Fatalf("expected second request to have expired context")
+	for i, req := range requests {
+		if req.Context().Err() == nil {
+			t.Fatalf("expected request %d to have expired context", i)
+		}
 	}
 }
 
@@ -131,10 +137,12 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 		8 * time.Second,
 	}
 
-	for range 4 {
+	for range 2 {
+		// Interleave HTTP status errors with client errors that are retryable
 		fakeClient.PushResponse(&http.Response{
 			StatusCode: http.StatusServiceUnavailable,
 		})
+		fakeClient.PushError(retryableError())
 	}
 	fakeClient.PushResponse(&http.Response{
 		StatusCode: http.StatusOK,
@@ -151,6 +159,11 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 	}
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+	}
+
+	requestsMade := len(fakeClient.Requests())
+	if requestsMade != 5 {
+		t.Fatalf("got %d requests; want 5", requestsMade)
 	}
 
 	assertEqual(t, gotSleepPeriods, wantSleepPeriods)
@@ -438,4 +451,8 @@ func assertEqual[T any](t *testing.T, got T, want T) {
 		t.Logf("want: %v", want)
 		t.Fatalf("diff: %v", diff)
 	}
+}
+
+func retryableError() error {
+	return errors.New("http2: server sent GOAWAY and closed the connection")
 }

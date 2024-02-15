@@ -108,10 +108,8 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		if strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
 			strings.HasSuffix(err.Error(), ": connection reset by peer") {
 
-			// TODO(katcipis): test this
-			//r.sleep(ctx, sleepPeriod)
-			//return r.do(ctx, req, requestBody, sleepPeriod*2)
-			return r.do(ctx, req, requestBody, sleepPeriod)
+			r.sleep(ctx, sleepPeriod)
+			return r.do(ctx, req, requestBody, sleepPeriod*2)
 		}
 		return nil, err
 	}
