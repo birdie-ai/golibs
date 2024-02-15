@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -15,7 +16,6 @@ import (
 func TestRetrierWithoutPerRequestTimeout(t *testing.T) {
 	// With no per request timeout all requests must use the original request context
 	fakeClient := NewFakeClient()
-	const timeoutPerRequest = time.Millisecond
 	// here we test the proper request timeout being set by setting a very small timeout
 	// per try/request and creating a request with no deadline at all, so we can check that the deadline exists
 	client := xhttp.NewRetrierClient(fakeClient, noSleep())
@@ -161,8 +161,6 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 }
 
 func TestRetrierRetryStatusCodes(t *testing.T) {
-	t.Skip("TODO: rewriter with simpler approach")
-
 	retryStatusCodes := []int{
 		http.StatusTooManyRequests,
 		http.StatusInternalServerError,
@@ -172,46 +170,22 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 		for _, wantMethod := range httpMethods() {
 
 			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
-				server := NewServer()
-				defer server.Close()
-
-				client := xhttp.NewRetrierClient(&http.Client{}, noSleep())
+				fakeClient := NewFakeClient()
+				client := xhttp.NewRetrierClient(fakeClient, noSleep())
 				wantPath := "/" + t.Name()
-				retryDone := make(chan struct{})
 
-				go func() {
-					assertReq := func(req Request) {
-						if req.URL == nil {
-							t.Errorf("pending request has no URL")
-							return
-						}
-						if req.URL.Path != wantPath {
-							t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
-						}
-						if req.Method != wantMethod {
-							t.Errorf("got method %q; want %q", req.Method, wantMethod)
-						}
-					}
-					req := <-server.Requests()
-					assertReq(req)
-					req.SendResponse(Response{
-						Status: wantStatus,
-					})
+				fakeClient.PushResponse(&http.Response{
+					StatusCode: wantStatus,
+				})
+				fakeClient.PushResponse(&http.Response{
+					StatusCode: http.StatusOK,
+				})
 
-					retryReq := <-server.Requests()
-					assertReq(retryReq)
-					retryReq.SendResponse(Response{
-						Status: http.StatusOK,
-					})
-					close(retryDone)
-				}()
-
-				url := server.URL + wantPath
-				request := newRequest(t, wantMethod, url, nil)
+				url := "http://test" + wantPath
+				wantBody := t.Name()
+				request := newRequest(t, wantMethod, url, []byte(wantBody))
 
 				res, err := client.Do(request)
-				<-retryDone
-
 				if err != nil {
 					t.Fatalf("client.Do(%v) failed: %v", request, err)
 				}
@@ -219,7 +193,31 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 					t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
 				}
 
-				assertNoPendingRequests(t, server)
+				assertReq := func(req *http.Request) {
+					t.Helper()
+
+					if req.URL.Path != wantPath {
+						t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
+					}
+					if req.Method != wantMethod {
+						t.Errorf("got method %q; want %q", req.Method, wantMethod)
+					}
+					// Each request made must have an independent/fully readable body
+					reqBody, err := io.ReadAll(req.Body)
+					if err != nil {
+						t.Errorf("reading request body %v", err)
+					}
+					gotBody := string(reqBody)
+					assertEqual(t, gotBody, wantBody)
+				}
+
+				requests := fakeClient.Requests()
+				if len(requests) != 2 {
+					t.Fatalf("got %d requests; want 2", len(requests))
+				}
+
+				assertReq(requests[0])
+				assertReq(requests[1])
 			})
 		}
 	}
@@ -262,16 +260,6 @@ func TestRetrierNoRetryStatusCodes(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-func assertNoPendingRequests(t *testing.T, s *Server) {
-	t.Helper()
-
-	select {
-	case v := <-s.Requests():
-		t.Fatalf("unexpected pending request: %v", v)
-	default:
 	}
 }
 

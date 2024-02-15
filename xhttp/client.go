@@ -1,7 +1,9 @@
 package xhttp
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"time"
 )
@@ -10,6 +12,7 @@ type (
 	// Client abstracts a [http.Client], allowing us to create wrappers for http clients adding useful
 	// functionality like retry and metrics. It has the same API as [http.Client] and is intended to be
 	// a drop-in replacement (but not all methods are supported yet).
+	// The client will have to read the entire request body in memory in order to properly retry a failed request.
 	Client interface {
 		Do(req *http.Request) (*http.Response, error)
 	}
@@ -68,11 +71,14 @@ type retrierClient struct {
 func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
 	// We need to keep the original request context while we retry since we create
 	// new requests recursively as we retry.
-	return r.do(req.Context(), req, r.minPeriod)
+	requestBody, _ := io.ReadAll(req.Body)
+	// TODO(katcipis): test this error handling
+	// TODO(katcipis): test closing orignal reader
+	return r.do(req.Context(), req, requestBody, r.minPeriod)
 }
 
-func (r *retrierClient) do(ctx context.Context, req *http.Request, sleepPeriod time.Duration) (*http.Response, error) {
-	req, cancel := r.newRequest(ctx, req)
+func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody []byte, sleepPeriod time.Duration) (*http.Response, error) {
+	req, cancel := r.newRequest(ctx, req, requestBody)
 	defer cancel()
 
 	res, err := r.client.Do(req)
@@ -80,28 +86,28 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, sleepPeriod t
 		return nil, err
 	}
 
-	// TODO: improve retry logic
 	if res.StatusCode == http.StatusInternalServerError ||
 		res.StatusCode == http.StatusServiceUnavailable ||
 		res.StatusCode == http.StatusTooManyRequests {
 
 		r.sleep(ctx, sleepPeriod)
 
-		req, cancel := r.newRequest(ctx, req)
-		defer cancel()
-
-		return r.do(ctx, req, sleepPeriod*2)
+		return r.do(ctx, req, requestBody, sleepPeriod*2)
 	}
 
 	return res, nil
 }
 
-func (r *retrierClient) newRequest(ctx context.Context, req *http.Request) (*http.Request, context.CancelFunc) {
+func (r *retrierClient) newRequest(ctx context.Context, req *http.Request, requestBody []byte) (*http.Request, context.CancelFunc) {
+	// We need to always guarantee that the request has a readable io.Reader for the original request body
 	if r.requestTimeout == 0 {
+		req := req.Clone(ctx)
+		req.Body = io.NopCloser(bytes.NewReader(requestBody))
 		return req, func() {}
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, r.requestTimeout)
 	req = req.Clone(reqCtx)
+	req.Body = io.NopCloser(bytes.NewReader(requestBody))
 	return req, cancel
 }
 

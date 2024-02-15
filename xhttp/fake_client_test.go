@@ -58,7 +58,6 @@ func (f *FakeClient) Do(req *http.Request) (*http.Response, error) {
 	}
 
 	f.requests = append(f.requests, req)
-
 	response := f.responses[0]
 	f.responses = f.responses[1:]
 	return response.res, response.err
