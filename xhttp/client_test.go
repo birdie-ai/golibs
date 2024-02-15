@@ -21,7 +21,7 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 	}
 
 	client := xhttp.NewRetrierClient(&http.Client{},
-		xhttp.RetrierWithMinPeriod(time.Second),
+		xhttp.RetrierWithMinSleepPeriod(time.Second),
 		xhttp.RetrierWithSleep(sleep),
 	)
 

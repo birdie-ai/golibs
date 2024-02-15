@@ -16,9 +16,9 @@ type (
 	RetrierOption func(*retrierClient)
 )
 
-// RetrierWithMinPeriod configures the min period that the retrier will sleep between retries.
+// RetrierWithMinSleepPeriod configures the min period that the retrier will sleep between retries.
 // Retrying uses an exponential backoff, so this will be only the initial sleep period, that then grows exponentially.
-func RetrierWithMinPeriod(minPeriod time.Duration) RetrierOption {
+func RetrierWithMinSleepPeriod(minPeriod time.Duration) RetrierOption {
 	return func(r *retrierClient) {
 		r.minPeriod = minPeriod
 	}
