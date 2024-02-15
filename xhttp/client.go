@@ -77,8 +77,6 @@ type retrierClient struct {
 }
 
 func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
-	// We need to keep the original request context while we retry since we create
-	// new requests recursively as we retry.
 	requestBody, err := io.ReadAll(req.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading request body: %w", err)
