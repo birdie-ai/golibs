@@ -70,12 +70,21 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 
 	// The request has no deadline by default. But individual requests must
 	request := newRequest(t, http.MethodGet, "/test", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request = request.Clone(ctx)
 	res, err := client.Do(request)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("got status %d; want %d", res.StatusCode, http.StatusOK)
+	}
+
+	// make sure that while we cancel created internal contexts we dont accidentally cancel the parent context
+	if ctx.Err() != nil {
+		t.Fatalf("want original context to be valid but got cancelled: %v", ctx.Err())
 	}
 
 	requests := fakeClient.Requests()
