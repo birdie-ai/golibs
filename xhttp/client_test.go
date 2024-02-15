@@ -401,9 +401,8 @@ func TestNoRequestSentIfContextIsCancelled(t *testing.T) {
 }
 
 type fakeReaderCloser struct {
-	readCalls int
-	readErr   error
-	closeErr  error
+	readErr  error
+	closeErr error
 }
 
 func (f *fakeReaderCloser) Read([]byte) (int, error) {
