@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/birdie-ai/golibs/xhttp"
+	"github.com/birdie-ai/golibs/xhttptest"
 	"github.com/google/go-cmp/cmp"
 )
 
 func TestRetrierWithoutPerRequestTimeout(t *testing.T) {
 	// With no per request timeout all requests must use the original request context
-	fakeClient := NewFakeClient()
+	fakeClient := xhttptest.NewClient()
 	// here we test the proper request timeout being set by setting a very small timeout
 	// per try/request and creating a request with no deadline at all, so we can check that the deadline exists
 	client := xhttp.NewRetrierClient(fakeClient, noSleep())
@@ -55,7 +56,7 @@ func TestRetrierWithoutPerRequestTimeout(t *testing.T) {
 }
 
 func TestRetrierPerRequestTryTimeout(t *testing.T) {
-	fakeClient := NewFakeClient()
+	fakeClient := xhttptest.NewClient()
 	const timeoutPerRequest = time.Millisecond
 	// here we test the proper request timeout being set by setting a very small timeout
 	// per try/request and creating a request with no deadline at all, so we can check that the deadline exists
@@ -126,7 +127,7 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 }
 
 func TestRetrierExponentialBackoff(t *testing.T) {
-	fakeClient := NewFakeClient()
+	fakeClient := xhttptest.NewClient()
 	gotSleepPeriods := []time.Duration{}
 	gotContexts := []context.Context{}
 	sleep := func(ctx context.Context, period time.Duration) {
@@ -193,7 +194,7 @@ func TestRetrierRetrySpecificErrors(t *testing.T) {
 	}
 	for _, retryError := range retryErrors {
 		t.Run(retryError, func(t *testing.T) {
-			fakeClient := NewFakeClient()
+			fakeClient := xhttptest.NewClient()
 			client := xhttp.NewRetrierClient(fakeClient, noSleep())
 
 			fakeClient.PushError(errors.New(retryError))
@@ -219,7 +220,7 @@ func TestRetrierRetrySpecificErrors(t *testing.T) {
 }
 
 func TestWontRetryClientErrors(t *testing.T) {
-	fakeClient := NewFakeClient()
+	fakeClient := xhttptest.NewClient()
 	client := xhttp.NewRetrierClient(fakeClient, noSleep())
 
 	wantErr := errors.New("some error")
@@ -247,7 +248,7 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 		for _, wantMethod := range httpMethods() {
 
 			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
-				fakeClient := NewFakeClient()
+				fakeClient := xhttptest.NewClient()
 				client := xhttp.NewRetrierClient(fakeClient, noSleep())
 				wantPath := "/" + t.Name()
 
@@ -308,7 +309,7 @@ func TestRetrierNoRetryStatusCodes(t *testing.T) {
 		for _, wantMethod := range httpMethods() {
 
 			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
-				fakeClient := NewFakeClient()
+				fakeClient := xhttptest.NewClient()
 				client := xhttp.NewRetrierClient(fakeClient, noSleep())
 				wantPath := "/" + t.Name()
 
@@ -341,7 +342,7 @@ func TestRetrierNoRetryStatusCodes(t *testing.T) {
 }
 
 func TestReadingRequestBodyFails(t *testing.T) {
-	fakeClient := NewFakeClient()
+	fakeClient := xhttptest.NewClient()
 	client := xhttp.NewRetrierClient(fakeClient, noSleep())
 	wantErr := errors.New("fake read error")
 
@@ -365,7 +366,7 @@ func TestReadingRequestBodyFails(t *testing.T) {
 }
 
 func TestClosingRequestBodyFails(t *testing.T) {
-	fakeClient := NewFakeClient()
+	fakeClient := xhttptest.NewClient()
 	client := xhttp.NewRetrierClient(fakeClient, noSleep())
 	wantErr := errors.New("fake close error")
 
@@ -389,7 +390,7 @@ func TestClosingRequestBodyFails(t *testing.T) {
 }
 
 func TestNoRequestSentIfContextIsCancelled(t *testing.T) {
-	fakeClient := NewFakeClient()
+	fakeClient := xhttptest.NewClient()
 	client := xhttp.NewRetrierClient(fakeClient, noSleep())
 
 	const url = "http://testing"
