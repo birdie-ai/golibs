@@ -62,6 +62,11 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 		client:    c,
 		sleep:     defaultSleep,
 		minPeriod: time.Second,
+		retryStatusCodes: map[int]struct{}{
+			http.StatusInternalServerError: {},
+			http.StatusServiceUnavailable:  {},
+			http.StatusTooManyRequests:     {},
+		},
 	}
 	for _, option := range options {
 		option(r)
@@ -70,10 +75,11 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 }
 
 type retrierClient struct {
-	client         Client
-	requestTimeout time.Duration
-	minPeriod      time.Duration
-	sleep          func(context.Context, time.Duration)
+	client           Client
+	requestTimeout   time.Duration
+	minPeriod        time.Duration
+	sleep            func(context.Context, time.Duration)
+	retryStatusCodes map[int]struct{}
 }
 
 func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
@@ -112,9 +118,8 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		return nil, err
 	}
 
-	if res.StatusCode == http.StatusInternalServerError ||
-		res.StatusCode == http.StatusServiceUnavailable ||
-		res.StatusCode == http.StatusTooManyRequests {
+	_, isRetryCode := r.retryStatusCodes[res.StatusCode]
+	if isRetryCode {
 		// Maybe add handling for Retry-After header, so far this seems to be enough
 		r.sleep(ctx, sleepPeriod)
 		return r.do(ctx, req, requestBody, sleepPeriod*2)
