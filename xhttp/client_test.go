@@ -244,60 +244,72 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 		http.StatusInternalServerError,
 		http.StatusServiceUnavailable,
 	}
+	testRetry := func(t *testing.T, fakeClient *xhttptest.Client, client xhttp.Client, wantMethod string, wantStatus int) {
+		const wantPath = "/test/retry"
+
+		fakeClient.PushResponse(&http.Response{
+			StatusCode: wantStatus,
+		})
+		fakeClient.PushResponse(&http.Response{
+			StatusCode: http.StatusOK,
+		})
+
+		url := "http://test" + wantPath
+		wantBody := t.Name()
+		request := newRequest(t, wantMethod, url, []byte(wantBody))
+
+		res, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("client.Do(%v) failed: %v", request, err)
+		}
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+		}
+
+		assertReq := func(req *http.Request) {
+			t.Helper()
+
+			if req.URL.Path != wantPath {
+				t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
+			}
+			if req.Method != wantMethod {
+				t.Errorf("got method %q; want %q", req.Method, wantMethod)
+			}
+			// Each request made must have an independent/fully readable body
+			reqBody, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Errorf("reading request body %v", err)
+			}
+			gotBody := string(reqBody)
+			assertEqual(t, gotBody, wantBody)
+		}
+
+		requests := fakeClient.Requests()
+		if len(requests) != 2 {
+			t.Fatalf("got %d requests; want 2", len(requests))
+		}
+
+		assertReq(requests[0])
+		assertReq(requests[1])
+	}
 	for _, wantStatus := range retryStatusCodes {
 		for _, wantMethod := range httpMethods() {
 
 			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
 				fakeClient := xhttptest.NewClient()
 				client := xhttp.NewRetrierClient(fakeClient, noSleep())
-				wantPath := "/" + t.Name()
-
-				fakeClient.PushResponse(&http.Response{
-					StatusCode: wantStatus,
-				})
-				fakeClient.PushResponse(&http.Response{
-					StatusCode: http.StatusOK,
-				})
-
-				url := "http://test" + wantPath
-				wantBody := t.Name()
-				request := newRequest(t, wantMethod, url, []byte(wantBody))
-
-				res, err := client.Do(request)
-				if err != nil {
-					t.Fatalf("client.Do(%v) failed: %v", request, err)
-				}
-				if res.StatusCode != http.StatusOK {
-					t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
-				}
-
-				assertReq := func(req *http.Request) {
-					t.Helper()
-
-					if req.URL.Path != wantPath {
-						t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
-					}
-					if req.Method != wantMethod {
-						t.Errorf("got method %q; want %q", req.Method, wantMethod)
-					}
-					// Each request made must have an independent/fully readable body
-					reqBody, err := io.ReadAll(req.Body)
-					if err != nil {
-						t.Errorf("reading request body %v", err)
-					}
-					gotBody := string(reqBody)
-					assertEqual(t, gotBody, wantBody)
-				}
-
-				requests := fakeClient.Requests()
-				if len(requests) != 2 {
-					t.Fatalf("got %d requests; want 2", len(requests))
-				}
-
-				assertReq(requests[0])
-				assertReq(requests[1])
+				testRetry(t, fakeClient, client, wantMethod, wantStatus)
 			})
 		}
+	}
+
+	for _, wantMethod := range httpMethods() {
+		t.Run("configuring customized retry status code", func(t *testing.T) {
+			const wantStatus = http.StatusConflict
+			fakeClient := xhttptest.NewClient()
+			client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithStatus(wantStatus))
+			testRetry(t, fakeClient, client, wantMethod, wantStatus)
+		})
 	}
 }
 

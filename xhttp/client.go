@@ -55,6 +55,14 @@ func RetrierWithRequestTimeout(timeout time.Duration) RetrierOption {
 	}
 }
 
+// RetrierWithStatus will configure the retrier to retry when this specific status code is received.
+// Multiple of this option can be passed to configure multiple different status code.
+func RetrierWithStatus(status int) RetrierOption {
+	return func(r *retrierClient) {
+		r.retryStatusCodes[status] = struct{}{}
+	}
+}
+
 // NewRetrierClient wraps the given client with retry logic.
 // The returned [Client] will automatically retry failed requests.
 func NewRetrierClient(c Client, options ...RetrierOption) Client {
