@@ -55,11 +55,14 @@ func RetrierWithRequestTimeout(timeout time.Duration) RetrierOption {
 	}
 }
 
-// RetrierWithStatus will configure the retrier to retry when this specific status code is received.
-// Multiple of this option can be passed to configure multiple different status code.
-func RetrierWithStatus(status int) RetrierOption {
+// RetrierWithStatuses will configure the retrier to retry when these specific status code are received.
+// This option only adds more status codes that will be retried, it will still retry on default error status codes
+// like [http.StatusServiceUnavailable] and [http.StatusInternalServerError]
+func RetrierWithStatuses(statuses ...int) RetrierOption {
 	return func(r *retrierClient) {
-		r.retryStatusCodes[status] = struct{}{}
+		for _, status := range statuses {
+			r.retryStatusCodes[status] = struct{}{}
+		}
 	}
 }
 
@@ -73,7 +76,6 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 		retryStatusCodes: map[int]struct{}{
 			http.StatusInternalServerError: {},
 			http.StatusServiceUnavailable:  {},
-			http.StatusTooManyRequests:     {},
 		},
 	}
 	for _, option := range options {

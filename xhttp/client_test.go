@@ -239,8 +239,8 @@ func TestWontRetryClientErrors(t *testing.T) {
 }
 
 func TestRetrierRetryStatusCodes(t *testing.T) {
+	// Default status codes that are always retried
 	retryStatusCodes := []int{
-		http.StatusTooManyRequests,
 		http.StatusInternalServerError,
 		http.StatusServiceUnavailable,
 	}
@@ -305,10 +305,15 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 
 	for _, wantMethod := range httpMethods() {
 		t.Run("configuring customized retry status code", func(t *testing.T) {
-			const wantStatus = http.StatusConflict
-			fakeClient := xhttptest.NewClient()
-			client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithStatus(wantStatus))
-			testRetry(t, fakeClient, client, wantMethod, wantStatus)
+			wantStatus := []int{
+				http.StatusConflict,
+				http.StatusTooManyRequests,
+			}
+			for _, w := range wantStatus {
+				fakeClient := xhttptest.NewClient()
+				client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithStatuses(wantStatus...))
+				testRetry(t, fakeClient, client, wantMethod, w)
+			}
 		})
 	}
 }
