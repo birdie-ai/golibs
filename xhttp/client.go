@@ -62,7 +62,7 @@ func RetrierWithSleep(sleep func(context.Context, time.Duration)) RetrierOption 
 // If this timeout is bigger than the deadline of the request context then the request context will be respected
 // A context is created with this timeout and the original request context as parent for each request.
 //
-// This is useful for situation where the service where the request is sent is hanging forever but only on some requests (for some reason).
+// This is useful for situations where the service where the request is sent is hanging forever but only on some requests.
 // On such a situation you can have two timeouts. One provided on the request passed to [Client.Do] on the request context and the timeout
 // defined with this option. Lets say the overall timeout is 10 min (when you created the original request) and this configuration here is
 // 30 secs. Now every 30 sec the request will fail since it timeouted and will be retried, until the parent timeout of 10 min expires.
