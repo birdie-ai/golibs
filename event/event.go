@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"time"
 
 	"cloud.google.com/go/pubsub/apiv1/pubsubpb"
@@ -249,17 +250,18 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 
 			id, publishedTime := getMetadata(msg)
 
-			//defer func() {
-			//if err := recover(); err != nil {
-			//const size = 64 << 10
-			//buf := make([]byte, size)
-			//buf = buf[:runtime.Stack(buf, false)]
-			//slog.Error("message subscription: panic handling message", "message", msg, "stack_trace", string(buf))
-			//if msg.Nackable() {
-			//msg.Nack()
-			//}
-			//}
-			//}()
+			defer func() {
+				if err := recover(); err != nil {
+					// 64KB, if it is good enough for Go's stdlib it is good enough for us :-)
+					const size = 64 << 10
+					buf := make([]byte, size)
+					buf = buf[:runtime.Stack(buf, false)]
+					slog.Error("panic: message subscription: handling message", "message", msg, "stack_trace", string(buf))
+					if msg.Nackable() {
+						msg.Nack()
+					}
+				}
+			}()
 
 			err := handler(Message{
 				Body: msg.Body,
