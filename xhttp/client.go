@@ -20,11 +20,27 @@ type (
 	}
 	// RetrierOption is used to configure retrier clients created with [NewRetrierClient].
 	RetrierOption func(*retrierClient)
+
+	// Logger is used when logging is enabled on the retrier.
+	Logger interface {
+		Debug(msg string, args ...any)
+	}
 )
 
+// DefaultMinSleepPeriod is the min sleep period between retries (which is increased exponentially).
+const DefaultMinSleepPeriod = 250 * time.Millisecond
+
+// RetrierWithLogger configures a logger to be used by the retrier.
+// By default no logging will be done.
+func RetrierWithLogger(logger Logger) RetrierOption {
+	return func(r *retrierClient) {
+		r.logger = logger
+	}
+}
+
 // RetrierWithMinSleepPeriod configures the min period that the retrier will sleep between retries.
-// Retrying uses an exponential backoff, so this will be only the initial sleep period, that then grows exponentially.
-// If not defined it will default to a second.
+// The retrier uses an exponential backoff, so this will be only the initial sleep period, that then grows exponentially.
+// If not defined it will default [DefaultMinSleepPeriod].
 func RetrierWithMinSleepPeriod(minPeriod time.Duration) RetrierOption {
 	return func(r *retrierClient) {
 		r.minPeriod = minPeriod
@@ -72,11 +88,12 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 	r := &retrierClient{
 		client:    c,
 		sleep:     defaultSleep,
-		minPeriod: time.Second,
+		minPeriod: DefaultMinSleepPeriod,
 		retryStatusCodes: map[int]struct{}{
 			http.StatusInternalServerError: {},
 			http.StatusServiceUnavailable:  {},
 		},
+		logger: nopLogger{},
 	}
 	for _, option := range options {
 		option(r)
@@ -84,12 +101,20 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 	return r
 }
 
-type retrierClient struct {
-	client           Client
-	requestTimeout   time.Duration
-	minPeriod        time.Duration
-	sleep            func(context.Context, time.Duration)
-	retryStatusCodes map[int]struct{}
+type (
+	retrierClient struct {
+		client           Client
+		requestTimeout   time.Duration
+		minPeriod        time.Duration
+		sleep            func(context.Context, time.Duration)
+		retryStatusCodes map[int]struct{}
+		logger           Logger
+	}
+	nopLogger struct {
+	}
+)
+
+func (nopLogger) Debug(string, ...any) {
 }
 
 func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
@@ -121,7 +146,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		// We need to go for some suffix matches.
 		if strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
 			strings.HasSuffix(err.Error(), ": connection reset by peer") {
-
+			r.logger.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod)
 			r.sleep(ctx, sleepPeriod)
 			return r.do(ctx, req, requestBody, sleepPeriod*2)
 		}
@@ -130,6 +155,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 
 	_, isRetryCode := r.retryStatusCodes[res.StatusCode]
 	if isRetryCode {
+		r.logger.Debug("xhttp.Client: retrying request with status code", "status_code", res.StatusCode, "sleep_period", sleepPeriod)
 		// Maybe add handling for Retry-After header, so far this seems to be enough
 		r.sleep(ctx, sleepPeriod)
 		return r.do(ctx, req, requestBody, sleepPeriod*2)
