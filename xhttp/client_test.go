@@ -184,6 +184,33 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 	}
 }
 
+func TestRetrierWontRetryIfParentCtxExceeded(t *testing.T) {
+	// Lets guarantee that we don't sleep at all when the parent context is cancelled using the default sleep implementation
+	// This test will hang for an hour if the default behavior is broken.
+	ctx, cancel := context.WithCancel(context.Background())
+	fakeClient := xhttptest.NewClient()
+	fakeClient.OnDo(func(*http.Request) {
+		// When the Do call returns it will try to retry with the min sleep of an hour
+		// but the parent context is cancelled, so it shouldn't sleep.
+		cancel()
+	})
+	client := xhttp.NewRetrierClient(fakeClient, xhttp.RetrierWithMinSleepPeriod(time.Hour))
+
+	fakeClient.PushError(context.DeadlineExceeded)
+
+	const url = "http://test"
+	request := newRequest(t, http.MethodGet, url, nil)
+	request = request.Clone(ctx)
+	_, err := client.Do(request)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("got err %v; want %v", err, context.Canceled)
+	}
+	requests := fakeClient.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("got %d requests; want 1", len(requests))
+	}
+}
+
 func TestRetrierRetrySpecificErrors(t *testing.T) {
 	// This handles errors caught in production related to connection failing and other specific errors
 	// like HTTP2 errors. Sadly we didn't find a more programatic way to detect these errors besides
