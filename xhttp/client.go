@@ -3,6 +3,7 @@ package xhttp
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -144,7 +145,8 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		// For connections reset...same problem:
 		// - https://github.com/golang/go/blob/d0dc93c8e1a5be4e0a44b7f8ecb0cb1417de50ce/src/net/http/transport_test.go#L2207
 		// We need to go for some suffix matches.
-		if strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
+		if errors.Is(err, context.DeadlineExceeded) ||
+			strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
 			strings.HasSuffix(err.Error(), ": connection reset by peer") {
 			r.logger.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod)
 			r.sleep(ctx, sleepPeriod)

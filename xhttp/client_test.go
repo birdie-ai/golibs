@@ -188,16 +188,17 @@ func TestRetrierRetrySpecificErrors(t *testing.T) {
 	// This handles errors caught in production related to connection failing and other specific errors
 	// like HTTP2 errors. Sadly we didn't find a more programatic way to detect these errors besides
 	// inspecting the error string.
-	retryErrors := []string{
-		"<specific details> http2: server sent GOAWAY and closed the connection <specific details>",
-		"<specific details>: connection reset by peer",
+	retryErrors := []error{
+		errors.New("<specific details> http2: server sent GOAWAY and closed the connection <specific details>"),
+		errors.New("<specific details>: connection reset by peer"),
+		context.DeadlineExceeded,
 	}
 	for _, retryError := range retryErrors {
-		t.Run(retryError, func(t *testing.T) {
+		t.Run(retryError.Error(), func(t *testing.T) {
 			fakeClient := xhttptest.NewClient()
 			client := xhttp.NewRetrierClient(fakeClient, noSleep())
 
-			fakeClient.PushError(errors.New(retryError))
+			fakeClient.PushError(retryError)
 			fakeClient.PushResponse(&http.Response{
 				StatusCode: http.StatusOK,
 			})
