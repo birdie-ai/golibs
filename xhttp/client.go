@@ -3,11 +3,14 @@ package xhttp
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/birdie-ai/golibs/slog"
 )
 
 type (
@@ -22,9 +25,12 @@ type (
 	RetrierOption func(*retrierClient)
 )
 
+// DefaultMinSleepPeriod is the min sleep period between retries (which is increased exponentially).
+const DefaultMinSleepPeriod = 250 * time.Millisecond
+
 // RetrierWithMinSleepPeriod configures the min period that the retrier will sleep between retries.
-// Retrying uses an exponential backoff, so this will be only the initial sleep period, that then grows exponentially.
-// If not defined it will default to a second.
+// The retrier uses an exponential backoff, so this will be only the initial sleep period, that then grows exponentially.
+// If not defined it will default [DefaultMinSleepPeriod].
 func RetrierWithMinSleepPeriod(minPeriod time.Duration) RetrierOption {
 	return func(r *retrierClient) {
 		r.minPeriod = minPeriod
@@ -45,7 +51,7 @@ func RetrierWithSleep(sleep func(context.Context, time.Duration)) RetrierOption 
 // If this timeout is bigger than the deadline of the request context then the request context will be respected
 // A context is created with this timeout and the original request context as parent for each request.
 //
-// This is useful for situation where the service where the request is sent is hanging forever but only on some requests (for some reason).
+// This is useful for situations where the service where the request is sent is hanging forever but only on some requests.
 // On such a situation you can have two timeouts. One provided on the request passed to [Client.Do] on the request context and the timeout
 // defined with this option. Lets say the overall timeout is 10 min (when you created the original request) and this configuration here is
 // 30 secs. Now every 30 sec the request will fail since it timeouted and will be retried, until the parent timeout of 10 min expires.
@@ -55,13 +61,28 @@ func RetrierWithRequestTimeout(timeout time.Duration) RetrierOption {
 	}
 }
 
+// RetrierWithStatuses will configure the retrier to retry when these specific status code are received.
+// This option only adds more status codes that will be retried, it will still retry on default error status codes
+// like [http.StatusServiceUnavailable] and [http.StatusInternalServerError]
+func RetrierWithStatuses(statuses ...int) RetrierOption {
+	return func(r *retrierClient) {
+		for _, status := range statuses {
+			r.retryStatusCodes[status] = struct{}{}
+		}
+	}
+}
+
 // NewRetrierClient wraps the given client with retry logic.
 // The returned [Client] will automatically retry failed requests.
 func NewRetrierClient(c Client, options ...RetrierOption) Client {
 	r := &retrierClient{
 		client:    c,
 		sleep:     defaultSleep,
-		minPeriod: time.Second,
+		minPeriod: DefaultMinSleepPeriod,
+		retryStatusCodes: map[int]struct{}{
+			http.StatusInternalServerError: {},
+			http.StatusServiceUnavailable:  {},
+		},
 	}
 	for _, option := range options {
 		option(r)
@@ -69,12 +90,15 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 	return r
 }
 
-type retrierClient struct {
-	client         Client
-	requestTimeout time.Duration
-	minPeriod      time.Duration
-	sleep          func(context.Context, time.Duration)
-}
+type (
+	retrierClient struct {
+		client           Client
+		requestTimeout   time.Duration
+		minPeriod        time.Duration
+		sleep            func(context.Context, time.Duration)
+		retryStatusCodes map[int]struct{}
+	}
+)
 
 func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
 	requestBody, err := io.ReadAll(req.Body)
@@ -103,18 +127,20 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		// For connections reset...same problem:
 		// - https://github.com/golang/go/blob/d0dc93c8e1a5be4e0a44b7f8ecb0cb1417de50ce/src/net/http/transport_test.go#L2207
 		// We need to go for some suffix matches.
-		if strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
+		if errors.Is(err, context.DeadlineExceeded) ||
+			strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
 			strings.HasSuffix(err.Error(), ": connection reset by peer") {
 
+			slog.FromCtx(ctx).Debug("xhttp.Client: retrying request with error", "request_url", req.URL, "error", err, "sleep_period", sleepPeriod)
 			r.sleep(ctx, sleepPeriod)
 			return r.do(ctx, req, requestBody, sleepPeriod*2)
 		}
 		return nil, err
 	}
 
-	if res.StatusCode == http.StatusInternalServerError ||
-		res.StatusCode == http.StatusServiceUnavailable ||
-		res.StatusCode == http.StatusTooManyRequests {
+	_, isRetryCode := r.retryStatusCodes[res.StatusCode]
+	if isRetryCode {
+		slog.FromCtx(ctx).Debug("xhttp.Client: retrying request with status code", "request_url", req.URL, "status_code", res.StatusCode, "sleep_period", sleepPeriod)
 		// Maybe add handling for Retry-After header, so far this seems to be enough
 		r.sleep(ctx, sleepPeriod)
 		return r.do(ctx, req, requestBody, sleepPeriod*2)

@@ -12,6 +12,7 @@ type Client struct {
 	requests  []*http.Request
 	responses []response
 	mutex     sync.Mutex
+	callback  func(*http.Request)
 }
 
 // NewClient creates a http client for test purposes.
@@ -29,6 +30,18 @@ func (c *Client) PushResponse(res *http.Response) {
 	c.responses = append(c.responses, response{
 		res: res,
 	})
+}
+
+// OnDo defines a callback that is called for each Do call on this fake client.
+// It doesn't allow to inject responses, it is designed only to observe requests
+// or do something between a request and the response is returned to the caller.
+// If the callback blocks it will block all other calls to Do until the callback returns,
+// callback calls are serial even if Do is called concurrently.
+func (c *Client) OnDo(callback func(*http.Request)) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.callback = callback
 }
 
 // PushError will push the given error on the response queue of this [FakeClient].
@@ -63,6 +76,10 @@ func (c *Client) Requests() []*http.Request {
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+
+	if c.callback != nil {
+		c.callback(req)
+	}
 
 	c.requests = append(c.requests, req)
 
