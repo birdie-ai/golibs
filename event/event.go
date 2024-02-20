@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"time"
 
 	"cloud.google.com/go/pubsub/apiv1/pubsubpb"
@@ -154,6 +155,11 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 // If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
+//
+// If the handler panics, the [Subscription] (the caller of the handler) assumes
+// that the effect of the panic was isolated to the active event handling.
+// It recovers the panic, logs a stack trace and returns an error (failing the event handling gracefully,
+// which in most event systems will trigger some form of retry).
 func (s *Subscription[T]) Serve(handler Handler[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
 		ctx, event, err := s.createEvent(msg)
@@ -222,6 +228,11 @@ func (s *Subscription[T]) Shutdown(ctx context.Context) error {
 // If a non-nil error is returned by the handler Unack will be sent.
 // Serve may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" goroutines.
+//
+// If the handler panics, the [MessageSubscription] (the caller of the handler) assumes
+// that the effect of the panic was isolated to the active event handling.
+// It recovers the panic, logs a stack trace and returns an error (failing the event handling gracefully,
+// which in most event systems will trigger some form of retry).
 func (r *MessageSubscription) Serve(handler MessageHandler) error {
 	semaphore := make(chan struct{}, r.maxConcurrency)
 	for {
@@ -238,6 +249,20 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 			}()
 
 			id, publishedTime := getMetadata(msg)
+
+			defer func() {
+				if err := recover(); err != nil {
+					// 64KB, if it is good enough for Go's stdlib it is good enough for us :-)
+					const size = 64 << 10
+					buf := make([]byte, size)
+					buf = buf[:runtime.Stack(buf, false)]
+					slog.Error("panic: message subscription: handling message", "message", msg, "stack_trace", string(buf))
+					if msg.Nackable() {
+						msg.Nack()
+					}
+				}
+			}()
+
 			err := handler(Message{
 				Body: msg.Body,
 				Metadata: Metadata{

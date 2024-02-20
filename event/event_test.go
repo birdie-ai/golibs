@@ -278,6 +278,66 @@ func TestSubscriptionServing(t *testing.T) {
 	<-servingDone
 }
 
+func TestSubscriptionRecoversFromPanic(t *testing.T) {
+	t.Parallel()
+
+	type Event struct {
+		ID int `json:"id"`
+	}
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown(t, topic)
+
+	const eventName = "eventname"
+	publisher := event.NewPublisher[Event](eventName, topic)
+
+	const maxConcurrency = 1
+
+	subscription, err := event.NewSubscription[Event](eventName, url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotEventsChan := make(chan Event)
+	servingDone := make(chan struct{})
+
+	go func() {
+		err := subscription.Serve(func(ctx context.Context, event Event) error {
+			gotEventsChan <- event
+			panic("oh no, something went terribly wrong")
+		})
+		t.Logf("subscription.Service error: %v", err)
+		close(servingDone)
+	}()
+
+	wantEvent := Event{ID: 555}
+	if err := publisher.Publish(ctx, wantEvent); err != nil {
+		t.Fatal(err)
+	}
+
+	timeout, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	select {
+	case event := <-gotEventsChan:
+		assertEqual(t, event, wantEvent)
+	case <-timeout.Done():
+		t.Fatal("timeout waiting for event")
+		break
+	}
+
+	if err := subscription.Shutdown(ctx); err != nil {
+		t.Fatalf("shutting down subscription: %v", err)
+	}
+	<-servingDone
+}
+
 func TestSubscriptionDiscardsEventsWithWrongName(t *testing.T) {
 	t.Parallel()
 
@@ -427,6 +487,59 @@ func TestRawSubscriptionServing(t *testing.T) {
 	}
 
 	// wait for subscription to shutdown
+	<-servingDone
+}
+
+func TestRawSubscriptionRecoversFromPanic(t *testing.T) {
+	t.Parallel()
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown(t, topic)
+
+	const maxConcurrency = 1
+
+	subscription, err := event.NewRawSubscription(url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotMsgs := make(chan event.Message)
+	servingDone := make(chan struct{})
+
+	go func() {
+		err := subscription.Serve(func(msg event.Message) error {
+			gotMsgs <- msg
+			panic("oh no, something went terribly wrong")
+		})
+		t.Logf("rawsubscription.Serve error: %v", err)
+		close(servingDone)
+	}()
+
+	const wantMsgBody = "test"
+	if err := topic.Send(ctx, &pubsub.Message{Body: []byte(wantMsgBody)}); err != nil {
+		t.Fatal(err)
+	}
+
+	timeout, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	select {
+	case msg := <-gotMsgs:
+		assertEqual(t, wantMsgBody, string(msg.Body))
+	case <-timeout.Done():
+		t.Fatal("timeout waiting for event")
+		break
+	}
+
+	if err := subscription.Shutdown(ctx); err != nil {
+		t.Fatalf("shutting down subscription: %v", err)
+	}
 	<-servingDone
 }
 
