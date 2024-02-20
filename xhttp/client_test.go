@@ -184,20 +184,48 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 	}
 }
 
+func TestRetrierWontRetryIfParentCtxExceeded(t *testing.T) {
+	// Lets guarantee that we don't sleep at all when the parent context is cancelled using the default sleep implementation
+	// This test will hang for an hour if the default behavior is broken.
+	ctx, cancel := context.WithCancel(context.Background())
+	fakeClient := xhttptest.NewClient()
+	fakeClient.OnDo(func(*http.Request) {
+		// When the Do call returns it will try to retry with the min sleep of an hour
+		// but the parent context is cancelled, so it shouldn't sleep.
+		cancel()
+	})
+	client := xhttp.NewRetrierClient(fakeClient, xhttp.RetrierWithMinSleepPeriod(time.Hour))
+
+	fakeClient.PushError(context.DeadlineExceeded)
+
+	const url = "http://test"
+	request := newRequest(t, http.MethodGet, url, nil)
+	request = request.Clone(ctx)
+	_, err := client.Do(request)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("got err %v; want %v", err, context.Canceled)
+	}
+	requests := fakeClient.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("got %d requests; want 1", len(requests))
+	}
+}
+
 func TestRetrierRetrySpecificErrors(t *testing.T) {
 	// This handles errors caught in production related to connection failing and other specific errors
 	// like HTTP2 errors. Sadly we didn't find a more programatic way to detect these errors besides
 	// inspecting the error string.
-	retryErrors := []string{
-		"<specific details> http2: server sent GOAWAY and closed the connection <specific details>",
-		"<specific details>: connection reset by peer",
+	retryErrors := []error{
+		errors.New("<specific details> http2: server sent GOAWAY and closed the connection <specific details>"),
+		errors.New("<specific details>: connection reset by peer"),
+		context.DeadlineExceeded,
 	}
 	for _, retryError := range retryErrors {
-		t.Run(retryError, func(t *testing.T) {
+		t.Run(retryError.Error(), func(t *testing.T) {
 			fakeClient := xhttptest.NewClient()
 			client := xhttp.NewRetrierClient(fakeClient, noSleep())
 
-			fakeClient.PushError(errors.New(retryError))
+			fakeClient.PushError(retryError)
 			fakeClient.PushResponse(&http.Response{
 				StatusCode: http.StatusOK,
 			})
@@ -239,10 +267,58 @@ func TestWontRetryClientErrors(t *testing.T) {
 }
 
 func TestRetrierRetryStatusCodes(t *testing.T) {
+	// Default status codes that are always retried
 	retryStatusCodes := []int{
-		http.StatusTooManyRequests,
 		http.StatusInternalServerError,
 		http.StatusServiceUnavailable,
+	}
+	testRetry := func(t *testing.T, fakeClient *xhttptest.Client, client xhttp.Client, wantMethod string, wantStatus int) {
+		const wantPath = "/test/retry"
+
+		fakeClient.PushResponse(&http.Response{
+			StatusCode: wantStatus,
+		})
+		fakeClient.PushResponse(&http.Response{
+			StatusCode: http.StatusOK,
+		})
+
+		url := "http://test" + wantPath
+		wantBody := t.Name()
+		request := newRequest(t, wantMethod, url, []byte(wantBody))
+
+		res, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("client.Do(%v) failed: %v", request, err)
+		}
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+		}
+
+		assertReq := func(req *http.Request) {
+			t.Helper()
+
+			if req.URL.Path != wantPath {
+				t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
+			}
+			if req.Method != wantMethod {
+				t.Errorf("got method %q; want %q", req.Method, wantMethod)
+			}
+			// Each request made must have an independent/fully readable body
+			reqBody, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Errorf("reading request body %v", err)
+			}
+			gotBody := string(reqBody)
+			assertEqual(t, gotBody, wantBody)
+		}
+
+		requests := fakeClient.Requests()
+		if len(requests) != 2 {
+			t.Fatalf("got %d requests; want 2", len(requests))
+		}
+
+		assertReq(requests[0])
+		assertReq(requests[1])
 	}
 	for _, wantStatus := range retryStatusCodes {
 		for _, wantMethod := range httpMethods() {
@@ -250,54 +326,23 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
 				fakeClient := xhttptest.NewClient()
 				client := xhttp.NewRetrierClient(fakeClient, noSleep())
-				wantPath := "/" + t.Name()
-
-				fakeClient.PushResponse(&http.Response{
-					StatusCode: wantStatus,
-				})
-				fakeClient.PushResponse(&http.Response{
-					StatusCode: http.StatusOK,
-				})
-
-				url := "http://test" + wantPath
-				wantBody := t.Name()
-				request := newRequest(t, wantMethod, url, []byte(wantBody))
-
-				res, err := client.Do(request)
-				if err != nil {
-					t.Fatalf("client.Do(%v) failed: %v", request, err)
-				}
-				if res.StatusCode != http.StatusOK {
-					t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
-				}
-
-				assertReq := func(req *http.Request) {
-					t.Helper()
-
-					if req.URL.Path != wantPath {
-						t.Errorf("got path %q; want %q", req.URL.Path, wantPath)
-					}
-					if req.Method != wantMethod {
-						t.Errorf("got method %q; want %q", req.Method, wantMethod)
-					}
-					// Each request made must have an independent/fully readable body
-					reqBody, err := io.ReadAll(req.Body)
-					if err != nil {
-						t.Errorf("reading request body %v", err)
-					}
-					gotBody := string(reqBody)
-					assertEqual(t, gotBody, wantBody)
-				}
-
-				requests := fakeClient.Requests()
-				if len(requests) != 2 {
-					t.Fatalf("got %d requests; want 2", len(requests))
-				}
-
-				assertReq(requests[0])
-				assertReq(requests[1])
+				testRetry(t, fakeClient, client, wantMethod, wantStatus)
 			})
 		}
+	}
+
+	for _, wantMethod := range httpMethods() {
+		t.Run("configuring customized retry status code", func(t *testing.T) {
+			wantStatus := []int{
+				http.StatusConflict,
+				http.StatusTooManyRequests,
+			}
+			for _, w := range wantStatus {
+				fakeClient := xhttptest.NewClient()
+				client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithStatuses(wantStatus...))
+				testRetry(t, fakeClient, client, wantMethod, w)
+			}
+		})
 	}
 }
 
