@@ -140,7 +140,11 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 
 	_, isRetryCode := r.retryStatusCodes[res.StatusCode]
 	if isRetryCode {
-		slog.FromCtx(ctx).Debug("xhttp.Client: retrying request with status code", "request_url", req.URL, "status_code", res.StatusCode, "sleep_period", sleepPeriod)
+		log := slog.FromCtx(ctx).With("request_url", req.URL, "status_code", res.StatusCode, "sleep_period", sleepPeriod)
+		if err := res.Body.Close(); err != nil {
+			log.Debug("xhttp.Client: unable to close response body while retrying", "error", err)
+		}
+		log.Debug("xhttp.Client: retrying request with status code")
 		// Maybe add handling for Retry-After header, so far this seems to be enough
 		r.sleep(ctx, sleepPeriod)
 		return r.do(ctx, req, requestBody, sleepPeriod*2)
