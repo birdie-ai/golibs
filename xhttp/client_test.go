@@ -479,7 +479,7 @@ func (f *fakeReaderCloser) Read([]byte) (int, error) {
 }
 
 func (f *fakeReaderCloser) Close() error {
-	f.closeCalls += 1
+	f.closeCalls++
 	return f.closeErr
 }
 
