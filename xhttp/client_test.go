@@ -275,11 +275,16 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 	testRetry := func(t *testing.T, fakeClient *xhttptest.Client, client xhttp.Client, wantMethod string, wantStatus int) {
 		const wantPath = "/test/retry"
 
+		failedRespBody := &fakeReaderCloser{}
+		successRespBody := &fakeReaderCloser{}
+
 		fakeClient.PushResponse(&http.Response{
 			StatusCode: wantStatus,
+			Body:       failedRespBody,
 		})
 		fakeClient.PushResponse(&http.Response{
 			StatusCode: http.StatusOK,
+			Body:       successRespBody,
 		})
 
 		url := "http://test" + wantPath
@@ -292,6 +297,14 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 		}
 		if res.StatusCode != http.StatusOK {
 			t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+		}
+
+		// Here we guarantee that retried requests will have their responses body closed
+		if failedRespBody.closeCalls != 1 {
+			t.Fatalf("got %d Close calls on the failed response, want 1", failedRespBody.closeCalls)
+		}
+		if successRespBody.closeCalls != 0 {
+			t.Fatalf("got %d Close calls on the success response, want 0", successRespBody.closeCalls)
 		}
 
 		assertReq := func(req *http.Request) {
@@ -456,8 +469,9 @@ func TestNoRequestSentIfContextIsCancelled(t *testing.T) {
 }
 
 type fakeReaderCloser struct {
-	readErr  error
-	closeErr error
+	readErr    error
+	closeErr   error
+	closeCalls int
 }
 
 func (f *fakeReaderCloser) Read([]byte) (int, error) {
@@ -465,6 +479,7 @@ func (f *fakeReaderCloser) Read([]byte) (int, error) {
 }
 
 func (f *fakeReaderCloser) Close() error {
+	f.closeCalls += 1
 	return f.closeErr
 }
 

@@ -2,6 +2,7 @@ package xhttptest
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 )
@@ -27,6 +28,10 @@ func (c *Client) PushResponse(res *http.Response) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	// The real http.Do guarantees that responses always have a non nil body, lets do the same
+	if res.Body == nil {
+		res.Body = &nopReaderCloser{}
+	}
 	c.responses = append(c.responses, response{
 		res: res,
 	})
@@ -92,7 +97,18 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	return response.res, response.err
 }
 
-type response struct {
-	res *http.Response
-	err error
+type (
+	response struct {
+		res *http.Response
+		err error
+	}
+	nopReaderCloser struct{}
+)
+
+func (*nopReaderCloser) Read([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (*nopReaderCloser) Close() error {
+	return nil
 }
