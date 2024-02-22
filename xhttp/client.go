@@ -101,13 +101,19 @@ type (
 )
 
 func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
-	requestBody, err := io.ReadAll(req.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading request body: %w", err)
+	var requestBody []byte
+
+	if req.Body != nil {
+		var err error
+		requestBody, err = io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("reading request body: %w", err)
+		}
+		if err := req.Body.Close(); err != nil {
+			return nil, fmt.Errorf("closing request body: %w", err)
+		}
 	}
-	if err := req.Body.Close(); err != nil {
-		return nil, fmt.Errorf("closing request body: %w", err)
-	}
+
 	return r.do(req.Context(), req, requestBody, r.minPeriod)
 }
 
