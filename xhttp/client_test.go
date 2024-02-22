@@ -272,7 +272,7 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 		http.StatusInternalServerError,
 		http.StatusServiceUnavailable,
 	}
-	testRetry := func(t *testing.T, fakeClient *xhttptest.Client, client xhttp.Client, wantMethod string, wantStatus int) {
+	testRetry := func(t *testing.T, fakeClient *xhttptest.Client, client xhttp.Client, wantMethod string, wantStatus int, withBody bool) {
 		const wantPath = "/test/retry"
 
 		failedRespBody := &fakeReaderCloser{}
@@ -288,8 +288,18 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 		})
 
 		url := "http://test" + wantPath
-		wantBody := t.Name()
-		request := newRequest(t, wantMethod, url, []byte(wantBody))
+
+		var (
+			wantBody string
+			request  *http.Request
+		)
+
+		if withBody {
+			wantBody = t.Name()
+			request = newRequest(t, wantMethod, url, []byte(wantBody))
+		} else {
+			request = newRequest(t, wantMethod, url, nil)
+		}
 
 		res, err := client.Do(request)
 		if err != nil {
@@ -317,12 +327,14 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 				t.Errorf("got method %q; want %q", req.Method, wantMethod)
 			}
 			// Each request made must have an independent/fully readable body
-			reqBody, err := io.ReadAll(req.Body)
-			if err != nil {
-				t.Errorf("reading request body %v", err)
+			if withBody {
+				reqBody, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Errorf("reading request body %v", err)
+				}
+				gotBody := string(reqBody)
+				assertEqual(t, gotBody, wantBody)
 			}
-			gotBody := string(reqBody)
-			assertEqual(t, gotBody, wantBody)
 		}
 
 		requests := fakeClient.Requests()
@@ -337,9 +349,16 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 		for _, wantMethod := range httpMethods() {
 
 			t.Run(fmt.Sprintf("%s %d", wantMethod, wantStatus), func(t *testing.T) {
-				fakeClient := xhttptest.NewClient()
-				client := xhttp.NewRetrierClient(fakeClient, noSleep())
-				testRetry(t, fakeClient, client, wantMethod, wantStatus)
+				t.Run("with body", func(t *testing.T) {
+					fakeClient := xhttptest.NewClient()
+					client := xhttp.NewRetrierClient(fakeClient, noSleep())
+					testRetry(t, fakeClient, client, wantMethod, wantStatus, true)
+				})
+				t.Run("no body", func(t *testing.T) {
+					fakeClient := xhttptest.NewClient()
+					client := xhttp.NewRetrierClient(fakeClient, noSleep())
+					testRetry(t, fakeClient, client, wantMethod, wantStatus, false)
+				})
 			})
 		}
 	}
@@ -351,9 +370,16 @@ func TestRetrierRetryStatusCodes(t *testing.T) {
 				http.StatusTooManyRequests,
 			}
 			for _, w := range wantStatus {
-				fakeClient := xhttptest.NewClient()
-				client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithStatuses(wantStatus...))
-				testRetry(t, fakeClient, client, wantMethod, w)
+				t.Run("with body", func(t *testing.T) {
+					fakeClient := xhttptest.NewClient()
+					client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithStatuses(wantStatus...))
+					testRetry(t, fakeClient, client, wantMethod, w, true)
+				})
+				t.Run("no body", func(t *testing.T) {
+					fakeClient := xhttptest.NewClient()
+					client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithStatuses(wantStatus...))
+					testRetry(t, fakeClient, client, wantMethod, w, false)
+				})
 			}
 		})
 	}
@@ -486,7 +512,13 @@ func (f *fakeReaderCloser) Close() error {
 func newRequest(t *testing.T, method, url string, body []byte) *http.Request {
 	t.Helper()
 
-	request, err := http.NewRequest(method, url, bytes.NewReader(body))
+	// In order to test some scenarios we need to build requests with no body
+	var r io.Reader
+	if body != nil {
+		r = bytes.NewReader(body)
+	}
+
+	request, err := http.NewRequest(method, url, r)
 	if err != nil {
 		t.Fatal(err)
 	}
