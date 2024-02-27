@@ -119,6 +119,7 @@ func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
 
 func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody []byte, sleepPeriod time.Duration) (*http.Response, error) {
 	if ctx.Err() != nil {
+		slog.FromCtx(ctx).Debug("xhttp.Client: stopping retry: parent context canceled", "error", ctx.Err())
 		return nil, ctx.Err()
 	}
 	req, cancel := r.newRequest(ctx, req, requestBody)
@@ -137,16 +138,18 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
 			strings.HasSuffix(err.Error(), ": connection reset by peer") {
 
-			slog.FromCtx(ctx).Debug("xhttp.Client: retrying request with error", "request_url", req.URL, "error", err, "sleep_period", sleepPeriod)
+			slog.FromCtx(ctx).Debug("xhttp.Client: retrying request with error", "request_url", req.URL, "error", err, "sleep_period", sleepPeriod.String())
 			r.sleep(ctx, sleepPeriod)
 			return r.do(ctx, req, requestBody, sleepPeriod*2)
 		}
+
+		slog.FromCtx(ctx).Debug("xhttp.Client: stopping retry: non recoverable error", "error", err)
 		return nil, err
 	}
 
 	_, isRetryCode := r.retryStatusCodes[res.StatusCode]
 	if isRetryCode {
-		log := slog.FromCtx(ctx).With("request_url", req.URL, "status_code", res.StatusCode, "sleep_period", sleepPeriod)
+		log := slog.FromCtx(ctx).With("request_url", req.URL, "status_code", res.StatusCode, "sleep_period", sleepPeriod.String())
 		if err := res.Body.Close(); err != nil {
 			log.Debug("xhttp.Client: unable to close response body while retrying", "error", err)
 		}
