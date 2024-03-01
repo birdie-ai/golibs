@@ -136,7 +136,11 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		// We need to go for some suffix matches.
 		if errors.Is(err, context.DeadlineExceeded) ||
 			strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
-			strings.HasSuffix(err.Error(), ": connection reset by peer") {
+			strings.HasSuffix(err.Error(), "i/o timeout") ||
+			strings.HasSuffix(err.Error(), "connect: connection refused") ||
+			strings.HasSuffix(err.Error(), "EOF") ||
+			strings.HasSuffix(err.Error(), "write: broken pipe") ||
+			strings.HasSuffix(err.Error(), "connection reset by peer") {
 
 			slog.FromCtx(ctx).Debug("xhttp.Client: retrying request with error", "request_url", req.URL, "error", err, "sleep_period", sleepPeriod.String())
 			r.sleep(ctx, sleepPeriod)
