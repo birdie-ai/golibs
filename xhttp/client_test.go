@@ -218,6 +218,10 @@ func TestRetrierRetrySpecificErrors(t *testing.T) {
 	retryErrors := []error{
 		errors.New("<specific details> http2: server sent GOAWAY and closed the connection <specific details>"),
 		errors.New("<specific details>: connection reset by peer"),
+		errors.New("<specific details>: i/o timeout"),
+		errors.New("<specific details>: connect: connection refused"),
+		errors.New("<specific details>: EOF"),
+		errors.New("<specific details>: write: broken pipe"),
 		context.DeadlineExceeded,
 	}
 	for _, retryError := range retryErrors {
