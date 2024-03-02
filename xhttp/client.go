@@ -130,13 +130,11 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 	}
 
 	if r.checkResponse {
-		// assuming that res.Body is never nil since http.Do guarantees that responses always have
-		// a response respBody, even if empty:
+		// assuming that res.Body is never nil (from http.Do docs):
 		// "If the returned error is nil, the Response will contain a non-nil Body which the user is expected to close."
-		respBody := res.Body
 		log.Debug("xhttp.Client: checking response body")
-		respBodyBytes, err := io.ReadAll(respBody)
-		if cerr := respBody.Close(); cerr != nil {
+		respBodyBytes, err := io.ReadAll(res.Body)
+		if cerr := res.Body.Close(); cerr != nil {
 			log.Debug("xhttp.Client: error closing response body", "error", cerr)
 		}
 		if err != nil {
