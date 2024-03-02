@@ -130,18 +130,22 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 	}
 
 	if r.checkResponse {
+		// assuming that res.Body is never nil since http.Do guarantees that responses always have
+		// a response respBody, even if empty:
+		// "If the returned error is nil, the Response will contain a non-nil Body which the user is expected to close."
+		respBody := res.Body
 		log.Debug("xhttp.Client: checking response body")
-		respBody, err := io.ReadAll(res.Body)
+		respBodyBytes, err := io.ReadAll(respBody)
+		if cerr := respBody.Close(); cerr != nil {
+			log.Debug("xhttp.Client: error closing response body", "error", cerr)
+		}
 		if err != nil {
 			log.Debug("xhttp.Client: retrying request with error reading response body", "error", err)
 			r.sleep(ctx, sleepPeriod)
 			return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
 		}
-		if err := res.Body.Close(); err != nil {
-			log.Debug("xhttp.Client: error closing response body", "error", err)
-		}
 		log.Debug("xhttp.Client: response body read with success")
-		res.Body = io.NopCloser(bytes.NewReader(respBody))
+		res.Body = io.NopCloser(bytes.NewReader(respBodyBytes))
 	}
 
 	return res, nil
