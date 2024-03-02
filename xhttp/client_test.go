@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,6 +138,7 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 
 	client := xhttp.NewRetrierClient(fakeClient,
 		xhttp.RetrierWithMinSleepPeriod(time.Second),
+		xhttp.RetrierWithMaxSleepPeriod(10*time.Second),
 		xhttp.RetrierWithSleep(sleep),
 	)
 
@@ -145,9 +147,11 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 		2 * time.Second,
 		4 * time.Second,
 		8 * time.Second,
+		10 * time.Second,
+		10 * time.Second,
 	}
 
-	for range 2 {
+	for range 3 {
 		// Interleave HTTP status errors with client errors that are retryable
 		fakeClient.PushResponse(&http.Response{
 			StatusCode: http.StatusServiceUnavailable,
@@ -172,8 +176,8 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 	}
 
 	requestsMade := len(fakeClient.Requests())
-	if requestsMade != 5 {
-		t.Fatalf("got %d requests; want 5", requestsMade)
+	if requestsMade != 7 {
+		t.Fatalf("got %d requests; want 7", requestsMade)
 	}
 
 	assertEqual(t, gotSleepPeriods, wantSleepPeriods)
@@ -208,6 +212,66 @@ func TestRetrierWontRetryIfParentCtxExceeded(t *testing.T) {
 	requests := fakeClient.Requests()
 	if len(requests) != 1 {
 		t.Fatalf("got %d requests; want 1", len(requests))
+	}
+}
+
+func TestRetrierByDefaultWontRetryIfResponseBodyCantBeRead(t *testing.T) {
+	fakeClient := xhttptest.NewClient()
+	client := xhttp.NewRetrierClient(fakeClient, noSleep())
+
+	fakeClient.PushResponse(&http.Response{
+		Body:       &fakeReaderCloser{readErr: errors.New("fake error when reading")},
+		StatusCode: http.StatusOK,
+	})
+
+	const url = "http://test"
+	request := newRequest(t, http.MethodGet, url, nil)
+	res, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("got err %v; want nil", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("got status %d; want %d", res.StatusCode, http.StatusOK)
+	}
+	requests := fakeClient.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("got %d requests; want 1", len(requests))
+	}
+}
+
+func TestRetrierRetryOnFailedResponseRead(t *testing.T) {
+	const wantBody = "successfully read response body !!"
+	fakeClient := xhttptest.NewClient()
+	client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithRespCheck())
+
+	fakeClient.PushResponse(&http.Response{
+		Body:       &fakeReaderCloser{readErr: errors.New("fake error")},
+		StatusCode: http.StatusOK,
+	})
+	fakeClient.PushResponse(&http.Response{
+		Body:       io.NopCloser(strings.NewReader(wantBody)),
+		StatusCode: http.StatusOK,
+	})
+
+	const url = "http://test"
+	request := newRequest(t, http.MethodGet, url, nil)
+	res, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("got err %v; want nil", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("got status %d; want %d", res.StatusCode, http.StatusOK)
+	}
+	gotResp, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("got err %v reading response body", err)
+	}
+
+	assertEqual(t, string(gotResp), wantBody)
+
+	requests := fakeClient.Requests()
+	if len(requests) != 2 {
+		t.Fatalf("got %d requests; want 2", len(requests))
 	}
 }
 

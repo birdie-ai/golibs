@@ -25,52 +25,13 @@ type (
 	RetrierOption func(*retrierClient)
 )
 
-// DefaultMinSleepPeriod is the min sleep period between retries (which is increased exponentially).
-const DefaultMinSleepPeriod = 250 * time.Millisecond
+const (
+	// DefaultMinSleepPeriod is the min sleep period between retries (which is increased exponentially).
+	DefaultMinSleepPeriod = 250 * time.Millisecond
 
-// RetrierWithMinSleepPeriod configures the min period that the retrier will sleep between retries.
-// The retrier uses an exponential backoff, so this will be only the initial sleep period, that then grows exponentially.
-// If not defined it will default [DefaultMinSleepPeriod].
-func RetrierWithMinSleepPeriod(minPeriod time.Duration) RetrierOption {
-	return func(r *retrierClient) {
-		r.minPeriod = minPeriod
-	}
-}
-
-// RetrierWithSleep configures the sleep function used to sleep between retries, usually used for testing.
-// But can be used as a way to measure how much retries happened since this is called before each retry.
-func RetrierWithSleep(sleep func(context.Context, time.Duration)) RetrierOption {
-	return func(r *retrierClient) {
-		r.sleep = sleep
-	}
-}
-
-// RetrierWithRequestTimeout configures a client retrier with the given timeout. This timeout is used per request/try.
-// When calling [Client.Do] if the request has a context with a deadline longer than this timeout the retrier
-// will keep retrying until the parent request context is cancelled/deadline expires.
-// If this timeout is bigger than the deadline of the request context then the request context will be respected
-// A context is created with this timeout and the original request context as parent for each request.
-//
-// This is useful for situations where the service where the request is sent is hanging forever but only on some requests.
-// On such a situation you can have two timeouts. One provided on the request passed to [Client.Do] on the request context and the timeout
-// defined with this option. Lets say the overall timeout is 10 min (when you created the original request) and this configuration here is
-// 30 secs. Now every 30 sec the request will fail since it timeouted and will be retried, until the parent timeout of 10 min expires.
-func RetrierWithRequestTimeout(timeout time.Duration) RetrierOption {
-	return func(r *retrierClient) {
-		r.requestTimeout = timeout
-	}
-}
-
-// RetrierWithStatuses will configure the retrier to retry when these specific status code are received.
-// This option only adds more status codes that will be retried, it will still retry on default error status codes
-// like [http.StatusServiceUnavailable] and [http.StatusInternalServerError]
-func RetrierWithStatuses(statuses ...int) RetrierOption {
-	return func(r *retrierClient) {
-		for _, status := range statuses {
-			r.retryStatusCodes[status] = struct{}{}
-		}
-	}
-}
+	// DefaultMaxSleepPeriod is the max sleep period between retries.
+	DefaultMaxSleepPeriod = 30 * time.Second
+)
 
 // NewRetrierClient wraps the given client with retry logic.
 // The returned [Client] will automatically retry failed requests.
@@ -79,6 +40,7 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 		client:    c,
 		sleep:     defaultSleep,
 		minPeriod: DefaultMinSleepPeriod,
+		maxPeriod: DefaultMaxSleepPeriod,
 		retryStatusCodes: map[int]struct{}{
 			http.StatusInternalServerError: {},
 			http.StatusServiceUnavailable:  {},
@@ -95,6 +57,8 @@ type (
 		client           Client
 		requestTimeout   time.Duration
 		minPeriod        time.Duration
+		maxPeriod        time.Duration
+		checkResponse    bool
 		sleep            func(context.Context, time.Duration)
 		retryStatusCodes map[int]struct{}
 	}
@@ -125,6 +89,8 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 	req, cancel := r.newRequest(ctx, req, requestBody)
 	defer cancel()
 
+	log := slog.FromCtx(ctx).With("request_url", req.URL)
+
 	res, err := r.client.Do(req)
 	if err != nil {
 		// Sadly there is no other way to detect this error other than using the opaque string message
@@ -142,25 +108,42 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			strings.HasSuffix(err.Error(), "write: broken pipe") ||
 			strings.HasSuffix(err.Error(), "connection reset by peer") {
 
-			slog.FromCtx(ctx).Debug("xhttp.Client: retrying request with error", "request_url", req.URL, "error", err, "sleep_period", sleepPeriod.String())
+			log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
 			r.sleep(ctx, sleepPeriod)
-			return r.do(ctx, req, requestBody, sleepPeriod*2)
+			return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
 		}
 
-		slog.FromCtx(ctx).Debug("xhttp.Client: stopping retry: non recoverable error", "error", err)
+		log.Debug("xhttp.Client: non recoverable error", "error", err)
 		return nil, err
 	}
 
 	_, isRetryCode := r.retryStatusCodes[res.StatusCode]
 	if isRetryCode {
-		log := slog.FromCtx(ctx).With("request_url", req.URL, "status_code", res.StatusCode, "sleep_period", sleepPeriod.String())
+		log := slog.FromCtx(ctx).With("status_code", res.StatusCode, "sleep_period", sleepPeriod.String())
 		if err := res.Body.Close(); err != nil {
 			log.Debug("xhttp.Client: unable to close response body while retrying", "error", err)
 		}
-		log.Debug("xhttp.Client: retrying request with status code")
+		log.Debug("xhttp.Client: retrying request with error status code")
 		// Maybe add handling for Retry-After header, so far this seems to be enough
 		r.sleep(ctx, sleepPeriod)
-		return r.do(ctx, req, requestBody, sleepPeriod*2)
+		return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
+	}
+
+	if r.checkResponse {
+		// assuming that res.Body is never nil (from http.Do docs):
+		// "If the returned error is nil, the Response will contain a non-nil Body which the user is expected to close."
+		log.Debug("xhttp.Client: checking response body")
+		respBodyBytes, err := io.ReadAll(res.Body)
+		if cerr := res.Body.Close(); cerr != nil {
+			log.Debug("xhttp.Client: error closing response body", "error", cerr)
+		}
+		if err != nil {
+			log.Debug("xhttp.Client: retrying request with error reading response body", "error", err)
+			r.sleep(ctx, sleepPeriod)
+			return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
+		}
+		log.Debug("xhttp.Client: response body read with success")
+		res.Body = io.NopCloser(bytes.NewReader(respBodyBytes))
 	}
 
 	return res, nil
