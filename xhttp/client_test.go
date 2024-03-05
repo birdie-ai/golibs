@@ -116,7 +116,7 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 	}
 
 	// This is not deterministic, but it is enough... I think :-)
-	time.Sleep(2 * timeoutPerRequest)
+	time.Sleep(10 * timeoutPerRequest)
 	for i, req := range requests {
 		if req.Context().Err() == nil {
 			t.Fatalf("expected request %d to have expired context", i)
@@ -126,6 +126,42 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 	// make sure that while we cancel created internal contexts we dont accidentally cancel the parent context
 	if ctx.Err() != nil {
 		t.Fatalf("want original context to be valid but got cancelled: %v", ctx.Err())
+	}
+}
+
+func TestRetrierPerRequestTimeoutCancelPerReqContextOnError(t *testing.T) {
+	t.Parallel()
+
+	// Here we test that when we create contexts to be used on a per request basis they must not be cancelled
+	// when we return the response. If we cancel the context inside the retry logic (the usual defer cancel())
+	// the response body will fail when we try to read it (sometimes, cancellation is async...).
+	const timeoutPerRequest = time.Hour
+	fakeClient := xhttptest.NewClient()
+	client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithRequestTimeout(timeoutPerRequest))
+	fakeClient.PushError(errors.New("non recoverable error"))
+
+	// The request has no deadline by default. But individual requests must
+	request := newRequest(t, http.MethodGet, "/test", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request = request.Clone(ctx)
+	res, err := client.Do(request)
+	if err == nil {
+		t.Fatalf("got response: %v want error", res)
+	}
+	requests := fakeClient.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("got %d requests; want 1", len(requests))
+	}
+
+	// Guarantee that the context created for the request was cancelled
+	req := requests[0]
+	if req.Context().Err() == nil {
+		t.Fatal("want request context to be cancelled after response error")
+	}
+	if ctx.Err() != nil {
+		t.Fatal("parent context should not be cancelled after response error")
 	}
 }
 
@@ -173,11 +209,8 @@ func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	// cancels then reading the response body will fail, so here we introspect into the requests
 	// contexts to guarantee that the request context won't be cancelled before we read/close the response body.
 	req := requests[0]
-	// lets wait for a while, bugs involving context cancellation are async
-	select {
-	case <-req.Context().Done():
+	if req.Context().Err() != nil {
 		t.Fatalf("request context is cancelled: %v", req.Context().Err())
-	case <-time.NewTimer(100 * time.Millisecond).C:
 	}
 
 	gotBody, err := io.ReadAll(res.Body)
@@ -194,10 +227,7 @@ func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	if resBody.CloseCalls != 1 {
 		t.Fatalf("got %d Close calls; want 1", resBody.CloseCalls)
 	}
-
-	select {
-	case <-req.Context().Done():
-	case <-time.NewTimer(100 * time.Millisecond).C:
+	if req.Context().Err() == nil {
 		t.Fatal("want request context to be cancelled after closing response body")
 	}
 }

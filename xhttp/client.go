@@ -101,8 +101,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 
 	res, err := r.client.Do(req)
 	if err != nil {
-		// TODO(katcipis): test this
-		//cancel()
+		cancel()
 
 		// Sadly there is no other way to detect this error other than using the opaque string message
 		// The error type is internal and the http pkg does not provide a way to check it
@@ -163,15 +162,13 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 }
 
 func (r *retrierClient) newRequest(ctx context.Context, req *http.Request, requestBody []byte) (*http.Request, context.CancelFunc) {
-	reqCtx := ctx
-	cancel := func() {}
-
-	if r.requestTimeout > 0 {
-		reqCtx, cancel = context.WithTimeout(ctx, r.requestTimeout)
-	}
-	newReq := req.Clone(reqCtx)
 	// We need to always guarantee that the request has a readable io.Reader for the original request body
-	newReq.Body = io.NopCloser(bytes.NewReader(requestBody))
+	req.Body = io.NopCloser(bytes.NewReader(requestBody))
+	if r.requestTimeout == 0 {
+		return req, func() {}
+	}
+	newCtx, cancel := context.WithTimeout(ctx, r.requestTimeout)
+	newReq := req.Clone(newCtx)
 	return newReq, cancel
 }
 
