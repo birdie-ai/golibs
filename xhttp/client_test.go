@@ -219,7 +219,7 @@ func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	}
 	assertEqual(t, string(gotBody), wantResponseBody)
 
-	// after the response body is closed then context created for the specific request should be cancelled
+	// after the response body is closed then the context created for the specific request should be cancelled
 	if err := res.Body.Close(); err != nil {
 		t.Fatalf("failed to close response body: %v", err)
 	}
