@@ -230,6 +230,9 @@ func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	if req.Context().Err() == nil {
 		t.Fatal("want request context to be cancelled after closing response body")
 	}
+	if ctx.Err() != nil {
+		t.Fatal("parent context should not be cancelled after closing response body")
+	}
 }
 
 func TestRetrierExponentialBackoff(t *testing.T) {
