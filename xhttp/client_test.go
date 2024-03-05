@@ -158,10 +158,10 @@ func TestRetrierPerRequestTimeoutCancelPerReqContextOnError(t *testing.T) {
 	// Guarantee that the context created for the request was cancelled
 	req := requests[0]
 	if req.Context().Err() == nil {
-		t.Fatal("want request context to be cancelled after response error")
+		t.Fatal("want request context to be cancelled after error response")
 	}
 	if ctx.Err() != nil {
-		t.Fatal("parent context should not be cancelled after response error")
+		t.Fatal("parent context should not be cancelled after error response")
 	}
 }
 
