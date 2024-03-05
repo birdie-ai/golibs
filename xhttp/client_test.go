@@ -129,18 +129,23 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 	}
 }
 
-func TestRetrierPerRequestTryTimeoutWontCancelContext(t *testing.T) {
+func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	t.Parallel()
 
 	// Here we test that when we create contexts to be used on a per request basis they must not be cancelled
 	// when we return the response. If we cancel the context inside the retry logic (the usual defer cancel())
 	// the response body will fail when we try to read it (sometimes, cancellation is async...).
 	fakeClient := xhttptest.NewClient()
-	const timeoutPerRequest = time.Hour
+	const (
+		timeoutPerRequest = time.Hour
+		wantResponseBody  = "per request test body"
+	)
 
+	resBody := watchClose(strings.NewReader(wantResponseBody))
 	client := xhttp.NewRetrierClient(fakeClient, noSleep(), xhttp.RetrierWithRequestTimeout(timeoutPerRequest))
 	fakeClient.PushResponse(&http.Response{
 		StatusCode: http.StatusOK,
+		Body:       resBody,
 	})
 
 	// The request has no deadline by default. But individual requests must
@@ -175,10 +180,21 @@ func TestRetrierPerRequestTryTimeoutWontCancelContext(t *testing.T) {
 	case <-time.NewTimer(100 * time.Millisecond).C:
 	}
 
-	// after the request body is closed the context should be cancelled
-	if err := req.Body.Close(); err != nil {
+	gotBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("reading response body: %v", err)
+	}
+	assertEqual(t, string(gotBody), wantResponseBody)
+
+	// after the response body is closed then context created for the specific request should be cancelled
+	if err := res.Body.Close(); err != nil {
 		t.Fatalf("failed to close response body: %v", err)
 	}
+	// Ensure that on top of cancelling context we also actually call the underlying response body close method
+	if resBody.CloseCalls != 1 {
+		t.Fatalf("got %d Close calls; want 1", resBody.CloseCalls)
+	}
+
 	select {
 	case <-req.Context().Done():
 	case <-time.NewTimer(100 * time.Millisecond).C:
@@ -665,6 +681,20 @@ func httpMethods() []string {
 		http.MethodOptions,
 	}
 
+}
+
+type closeWatcher struct {
+	io.Reader
+	CloseCalls int
+}
+
+func (c *closeWatcher) Close() error {
+	c.CloseCalls++
+	return nil
+}
+
+func watchClose(r io.Reader) *closeWatcher {
+	return &closeWatcher{r, 0}
 }
 
 func noSleep() xhttp.RetrierOption {
