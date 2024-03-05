@@ -210,7 +210,7 @@ func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	// contexts to guarantee that the request context won't be cancelled before we read/close the response body.
 	req := requests[0]
 	if req.Context().Err() != nil {
-		t.Fatalf("request context is cancelled: %v", req.Context().Err())
+		t.Fatalf("want request context to not be cancelled before closing response body, got: %v", req.Context().Err())
 	}
 
 	gotBody, err := io.ReadAll(res.Body)
