@@ -68,11 +68,7 @@ func (c *Client) Requests() []*http.Request {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	clonedReqs := make([]*http.Request, len(c.requests))
-	for i, req := range c.requests {
-		clonedReqs[i] = req.Clone(req.Context())
-	}
-	return clonedReqs
+	return c.requests
 }
 
 // Do records requests and sends responses/errors.
@@ -86,7 +82,8 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		c.callback(req)
 	}
 
-	c.requests = append(c.requests, req)
+	// We need to clone the request since the original request may be mutated after this method returns
+	c.requests = append(c.requests, req.Clone(req.Context()))
 
 	if len(c.responses) == 0 {
 		return nil, fmt.Errorf("no response configured on FakeClient for request: %v", req)
