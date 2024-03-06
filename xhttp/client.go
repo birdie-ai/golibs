@@ -62,7 +62,16 @@ type (
 		sleep            func(context.Context, time.Duration)
 		retryStatusCodes map[int]struct{}
 	}
+	readerCloserCanceller struct {
+		io.ReadCloser
+		cancel context.CancelFunc
+	}
 )
+
+func (c *readerCloserCanceller) Close() error {
+	c.cancel()
+	return c.ReadCloser.Close()
+}
 
 func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
 	var requestBody []byte
@@ -87,12 +96,13 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		return nil, ctx.Err()
 	}
 	req, cancel := r.newRequest(ctx, req, requestBody)
-	defer cancel()
 
 	log := slog.FromCtx(ctx).With("request_url", req.URL)
 
 	res, err := r.client.Do(req)
 	if err != nil {
+		cancel()
+
 		// Sadly there is no other way to detect this error other than using the opaque string message
 		// The error type is internal and the http pkg does not provide a way to check it
 		// - https://cs.opensource.google/go/go/+/refs/tags/go1.21.4:src/net/http/h2_bundle.go;l=9250
@@ -116,6 +126,8 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		log.Debug("xhttp.Client: non recoverable error", "error", err)
 		return nil, err
 	}
+
+	res.Body = &readerCloserCanceller{res.Body, cancel}
 
 	_, isRetryCode := r.retryStatusCodes[res.StatusCode]
 	if isRetryCode {
@@ -150,15 +162,13 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 }
 
 func (r *retrierClient) newRequest(ctx context.Context, req *http.Request, requestBody []byte) (*http.Request, context.CancelFunc) {
-	reqCtx := ctx
-	cancel := func() {}
-
-	if r.requestTimeout > 0 {
-		reqCtx, cancel = context.WithTimeout(ctx, r.requestTimeout)
-	}
-	newReq := req.Clone(reqCtx)
 	// We need to always guarantee that the request has a readable io.Reader for the original request body
-	newReq.Body = io.NopCloser(bytes.NewReader(requestBody))
+	req.Body = io.NopCloser(bytes.NewReader(requestBody))
+	if r.requestTimeout == 0 {
+		return req, func() {}
+	}
+	newCtx, cancel := context.WithTimeout(ctx, r.requestTimeout)
+	newReq := req.Clone(newCtx)
 	return newReq, cancel
 }
 
