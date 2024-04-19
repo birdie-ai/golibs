@@ -256,9 +256,12 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 					const size = 64 << 10
 					buf := make([]byte, size)
 					buf = buf[:runtime.Stack(buf, false)]
+					messageID, publishTime := getMetadata(msg)
 					slog.Error("panic: message subscription: handling message",
 						"error", err,
-						"message_body", msg.Body,
+						"message_body", string(msg.Body),
+						"message_id", messageID,
+						"publish_time", publishTime,
 						"stack_trace", string(buf))
 					if msg.Nackable() {
 						msg.Nack()
