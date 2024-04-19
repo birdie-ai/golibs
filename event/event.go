@@ -237,7 +237,7 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 	semaphore := make(chan struct{}, r.maxConcurrency)
 	for {
 		semaphore <- struct{}{}
-		msg, err := r.sub.Receive(context.Background())
+		gocloudMsg, err := r.sub.Receive(context.Background())
 		if err != nil {
 			// From: https://pkg.go.dev/gocloud.dev@v0.30.0/pubsub#example-Subscription.Receive-Concurrent
 			// Errors from Receive indicate that Receive will no longer succeed.
@@ -248,7 +248,15 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 				<-semaphore
 			}()
 
-			id, publishedTime := getMetadata(msg)
+			id, publishedTime := getMetadata(gocloudMsg)
+			msg := Message{
+				Body: gocloudMsg.Body,
+				Metadata: Metadata{
+					ID:            id,
+					PublishedTime: publishedTime,
+					Attributes:    gocloudMsg.Metadata,
+				},
+			}
 
 			defer func() {
 				if err := recover(); err != nil {
@@ -256,28 +264,25 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 					const size = 64 << 10
 					buf := make([]byte, size)
 					buf = buf[:runtime.Stack(buf, false)]
-					slog.Error("panic: message subscription: handling message", "message", msg, "stack_trace", string(buf))
-					if msg.Nackable() {
-						msg.Nack()
+					slog.Error("panic: message subscription: handling message",
+						"error", err,
+						"message_body", msg.Body,
+						"metadata", msg.Metadata,
+						"stack_trace", string(buf))
+					if gocloudMsg.Nackable() {
+						gocloudMsg.Nack()
 					}
 				}
 			}()
 
-			err := handler(Message{
-				Body: msg.Body,
-				Metadata: Metadata{
-					ID:            id,
-					PublishedTime: publishedTime,
-					Attributes:    msg.Metadata,
-				},
-			})
+			err := handler(msg)
 			if err != nil {
-				if msg.Nackable() {
-					msg.Nack()
+				if gocloudMsg.Nackable() {
+					gocloudMsg.Nack()
 				}
 				return
 			}
-			msg.Ack()
+			gocloudMsg.Ack()
 		}()
 	}
 }
