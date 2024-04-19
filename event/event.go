@@ -266,7 +266,7 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 					buf = buf[:runtime.Stack(buf, false)]
 					slog.Error("panic: message subscription: handling message",
 						"error", err,
-						"message", msg.Body,
+						"message_body", msg.Body,
 						"metadata", msg.Metadata,
 						"stack_trace", string(buf))
 					if gocloudMsg.Nackable() {
