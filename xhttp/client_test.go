@@ -235,6 +235,61 @@ func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	}
 }
 
+func TestRetrierWithOnRequestDoneCallback(t *testing.T) {
+	fakeClient := xhttptest.NewClient()
+	gotRequests := []*http.Request{}
+	gotResponses := []*http.Response{}
+	gotElapsed := []time.Duration{}
+	gotErrors := []error{}
+	onRequestDone := func(req *http.Request, res *http.Response, err error, elapsed time.Duration) {
+		gotRequests = append(gotRequests, req)
+		gotResponses = append(gotResponses, res)
+		gotElapsed = append(gotElapsed, elapsed)
+		gotErrors = append(gotErrors, err)
+	}
+	sleep := func(context.Context, time.Duration) {}
+
+	client := xhttp.NewRetrierClient(fakeClient,
+		xhttp.RetrierWithOnRequestDone(onRequestDone),
+		xhttp.RetrierWithSleep(sleep),
+	)
+
+	// Lets inject some controlled delay so we can test elapsed calculation
+	const minDelay = 10 * time.Millisecond
+	fakeClient.OnDo(func(*http.Request) {
+		time.Sleep(minDelay)
+	})
+	fakeClient.PushResponse(&http.Response{
+		StatusCode: http.StatusServiceUnavailable,
+	})
+	wantErr := retryableError()
+	fakeClient.PushError(wantErr)
+	fakeClient.PushResponse(&http.Response{
+		StatusCode: http.StatusOK,
+	})
+
+	request := newRequest(t, http.MethodGet, "/test", nil)
+	res, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("client.Do(%v) failed: %v", request, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+	}
+
+	requestsMade := fakeClient.Requests()
+	assertEqual(t, len(gotRequests), len(requestsMade))
+
+	for i, got := range gotRequests {
+		want := requestsMade[i]
+		assertEqual(t, got.URL, want.URL)
+		assertEqual(t, got.Method, want.Method)
+		assertEqual(t, got.Header, want.Header)
+	}
+
+	// TODO(katcipis): test both responses and errors
+}
+
 func TestRetrierExponentialBackoff(t *testing.T) {
 	fakeClient := xhttptest.NewClient()
 	gotSleepPeriods := []time.Duration{}

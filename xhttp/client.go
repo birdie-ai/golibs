@@ -25,11 +25,12 @@ type (
 	RetrierOption func(*retrierClient)
 
 	// RetrierOnRequestDoneFunc is the callback called when using [RetrierWithOnRequestDone].
-	// The [http.Request] is the original http request that just finished.
+	// The [*http.Request] is the original http request that just finished.
+	// The [*http.Response] is the response of the request or nil if the request failed with an error (then the error will be non-nil).
+	// The [error] is the request error, if the request failed, or nil if it succeeded (and the response will be non-nil).
 	// The [time.Duration] is how long the http request took to be finished.
 	// This is called for every request that is done, including retries.
-	// Any changes made on the given [http.Request] may be reflected on retry behavior.
-	RetrierOnRequestDoneFunc func(req *http.Request, res *http.Response, elapsed time.Duration)
+	RetrierOnRequestDoneFunc func(req *http.Request, res *http.Response, err error, elapsed time.Duration)
 )
 
 const (
@@ -109,6 +110,8 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 	log := slog.FromCtx(ctx).With("request_url", req.URL)
 
 	res, err := r.client.Do(req)
+	// TODO: handle errors/responses and calculate proper elapsed
+	r.onRequestDone(req, nil, nil, 0)
 	if err != nil {
 		cancel()
 
@@ -187,5 +190,5 @@ func defaultSleep(ctx context.Context, period time.Duration) {
 	<-sleepCtx.Done()
 }
 
-func defaultOnRequestDone(*http.Request, *http.Response, time.Duration) {
+func defaultOnRequestDone(*http.Request, *http.Response, error, time.Duration) {
 }
