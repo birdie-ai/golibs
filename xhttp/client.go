@@ -111,7 +111,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 
 	res, err := r.client.Do(req)
 	// TODO: handle errors/responses and calculate proper elapsed
-	r.onRequestDone(req, nil, nil, 0)
+	r.onRequestDone(req, res, err, 0)
 	if err != nil {
 		cancel()
 

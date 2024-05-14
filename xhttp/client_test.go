@@ -259,14 +259,16 @@ func TestRetrierWithOnRequestDoneCallback(t *testing.T) {
 	fakeClient.OnDo(func(*http.Request) {
 		time.Sleep(minDelay)
 	})
-	fakeClient.PushResponse(&http.Response{
+	firstResponse := &http.Response{
 		StatusCode: http.StatusServiceUnavailable,
-	})
+	}
+	fakeClient.PushResponse(firstResponse)
 	wantErr := retryableError()
 	fakeClient.PushError(wantErr)
-	fakeClient.PushResponse(&http.Response{
+	thirdResponse := &http.Response{
 		StatusCode: http.StatusOK,
-	})
+	}
+	fakeClient.PushResponse(thirdResponse)
 
 	request := newRequest(t, http.MethodGet, "/test", nil)
 	res, err := client.Do(request)
@@ -285,6 +287,29 @@ func TestRetrierWithOnRequestDoneCallback(t *testing.T) {
 		assertEqual(t, got.URL, want.URL)
 		assertEqual(t, got.Method, want.Method)
 		assertEqual(t, got.Header, want.Header)
+	}
+
+	wantErrs := []error{nil, wantErr, nil}
+	assertEqual(t, len(gotErrors), len(wantErrs))
+	for i, got := range gotErrors {
+		want := wantErrs[i]
+		if !errors.Is(got, want) {
+			t.Errorf("got error %v; want %v", got, want)
+		}
+	}
+
+	wantResponses := []*http.Response{firstResponse, nil, thirdResponse}
+	assertEqual(t, len(gotResponses), len(wantResponses))
+	for i, got := range gotResponses {
+		want := wantResponses[i]
+		if (want != nil) != (got != nil) {
+			t.Errorf("got response %d %v; want %v", i, got, want)
+			continue
+		}
+		if want == nil {
+			continue
+		}
+		assertEqual(t, got.StatusCode, want.StatusCode)
 	}
 
 	// TODO(katcipis): test both responses and errors
