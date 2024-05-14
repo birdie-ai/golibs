@@ -26,8 +26,8 @@ type (
 
 	// RetrierOnRequestDoneFunc is the callback called when using [RetrierWithOnRequestDone].
 	// The [*http.Request] is the original http request that just finished.
-	// The [*http.Response] is the response of the request or nil if the request failed with an error (then the error will be non-nil).
-	// The [error] is the request error, if the request failed, or nil if it succeeded (and the response will be non-nil).
+	// The [*http.Response] is the response returned by the [Client.Do] call.
+	// The [error] is the response error returned by the [Client.Do] call.
 	// The [time.Duration] is how long the http request took to be finished.
 	// This is called for every request that is done, including retries.
 	RetrierOnRequestDoneFunc func(req *http.Request, res *http.Response, err error, elapsed time.Duration)
