@@ -109,9 +109,9 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 
 	log := slog.FromCtx(ctx).With("request_url", req.URL)
 
+	start := time.Now()
 	res, err := r.client.Do(req)
-	// TODO: handle errors/responses and calculate proper elapsed
-	r.onRequestDone(req, res, err, 0)
+	r.onRequestDone(req, res, err, time.Since(start))
 	if err != nil {
 		cancel()
 

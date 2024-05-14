@@ -312,7 +312,11 @@ func TestRetrierWithOnRequestDoneCallback(t *testing.T) {
 		assertEqual(t, got.StatusCode, want.StatusCode)
 	}
 
-	// TODO(katcipis): test both responses and errors
+	for i, got := range gotElapsed {
+		if got < minDelay {
+			t.Errorf("elapsed on call[%d] %v is smaller than min delay %v on Do() call", i, got, minDelay)
+		}
+	}
 }
 
 func TestRetrierExponentialBackoff(t *testing.T) {
