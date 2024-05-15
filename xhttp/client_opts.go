@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+// RetrierWithOnRetry configures a callback function that will be called for each request retry.
+// It includes only retried requests. The callback is called after a response/error is received
+// and it is decided that the request is a retry-able failure but before the request is actually retried.
+// The callback is called from the same goroutine that called the retrier Do method.
+func RetrierWithOnRetry(f RetrierOnRetryFunc) RetrierOption {
+	return func(r *retrierClient) {
+		r.onRetry = f
+	}
+}
+
 // RetrierWithOnRequestDone configures a callback function that will be called for each request done by the retrier.
 // This includes retried requests. The callback is called after a response/error is received but before the response/error is processed (for retrying).
 // The callback is called from the same goroutine that called the retrier Do method.

@@ -31,6 +31,13 @@ type (
 	// The [time.Duration] is how long the http request took to be finished.
 	// This is called for every request that is done, including retries.
 	RetrierOnRequestDoneFunc func(req *http.Request, res *http.Response, err error, elapsed time.Duration)
+
+	// RetrierOnRetryFunc is the callback called when using [RetrierWithOnRetry].
+	// The [*http.Request] is the original http request that just finished.
+	// The [*http.Response] is the response returned by the [Client.Do] call.
+	// The [error] is the response error returned by the [Client.Do] call.
+	// This is called every time a request is retried.
+	RetrierOnRetryFunc func(req *http.Request, res *http.Response, err error)
 )
 
 const (
@@ -50,6 +57,7 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 		minPeriod:     DefaultMinSleepPeriod,
 		maxPeriod:     DefaultMaxSleepPeriod,
 		onRequestDone: defaultOnRequestDone,
+		onRetry:       defaultOnRetry,
 		retryStatusCodes: map[int]struct{}{
 			http.StatusInternalServerError: {},
 			http.StatusServiceUnavailable:  {},
@@ -71,6 +79,7 @@ type (
 		sleep            func(context.Context, time.Duration)
 		retryStatusCodes map[int]struct{}
 		onRequestDone    RetrierOnRequestDoneFunc
+		onRetry          RetrierOnRetryFunc
 	}
 	readerCloserCanceller struct {
 		io.ReadCloser
@@ -130,6 +139,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			strings.HasSuffix(err.Error(), "connection reset by peer") {
 
 			log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
+			r.onRetry(req, res, err)
 			r.sleep(ctx, sleepPeriod)
 			return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
 		}
@@ -147,6 +157,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			log.Debug("xhttp.Client: unable to close response body while retrying", "error", err)
 		}
 		log.Debug("xhttp.Client: retrying request with error status code")
+		r.onRetry(req, res, err)
 		// Maybe add handling for Retry-After header, so far this seems to be enough
 		r.sleep(ctx, sleepPeriod)
 		return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
@@ -191,4 +202,7 @@ func defaultSleep(ctx context.Context, period time.Duration) {
 }
 
 func defaultOnRequestDone(*http.Request, *http.Response, error, time.Duration) {
+}
+
+func defaultOnRetry(*http.Request, *http.Response, error) {
 }
