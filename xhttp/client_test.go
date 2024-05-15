@@ -319,6 +319,78 @@ func TestRetrierWithOnRequestDoneCallback(t *testing.T) {
 	}
 }
 
+func TestRetrierWithOnRetryCallback(t *testing.T) {
+	fakeClient := xhttptest.NewClient()
+	gotRetriedReqs := []*http.Request{}
+	gotRetriedRes := []*http.Response{}
+	gotRetriedErrs := []error{}
+	onRetry := func(req *http.Request, res *http.Response, err error) {
+		gotRetriedReqs = append(gotRetriedReqs, req)
+		gotRetriedRes = append(gotRetriedRes, res)
+		gotRetriedErrs = append(gotRetriedErrs, err)
+	}
+	sleep := func(context.Context, time.Duration) {}
+
+	client := xhttp.NewRetrierClient(fakeClient,
+		xhttp.RetrierWithOnRetry(onRetry),
+		xhttp.RetrierWithSleep(sleep),
+	)
+
+	firstResponse := &http.Response{
+		StatusCode: http.StatusServiceUnavailable,
+	}
+	fakeClient.PushResponse(firstResponse)
+	wantErr := retryableError()
+	fakeClient.PushError(wantErr)
+	thirdResponse := &http.Response{
+		StatusCode: http.StatusOK,
+	}
+	fakeClient.PushResponse(thirdResponse)
+
+	request := newRequest(t, http.MethodGet, "/test", nil)
+	res, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("client.Do(%v) failed: %v", request, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+	}
+
+	// The last request is a success, it should not be included when comparing with retried requests
+	requestsMade := fakeClient.Requests()[0:2]
+	assertEqual(t, len(gotRetriedReqs), len(requestsMade))
+
+	for i, got := range gotRetriedReqs {
+		want := requestsMade[i]
+		assertEqual(t, got.URL, want.URL)
+		assertEqual(t, got.Method, want.Method)
+		assertEqual(t, got.Header, want.Header)
+	}
+
+	wantErrs := []error{nil, wantErr}
+	assertEqual(t, len(gotRetriedErrs), len(wantErrs))
+	for i, got := range gotRetriedErrs {
+		want := wantErrs[i]
+		if !errors.Is(got, want) {
+			t.Errorf("got error %v; want %v", got, want)
+		}
+	}
+
+	wantResponses := []*http.Response{firstResponse, nil}
+	assertEqual(t, len(gotRetriedRes), len(wantResponses))
+	for i, got := range gotRetriedRes {
+		want := wantResponses[i]
+		if (want != nil) != (got != nil) {
+			t.Errorf("got response %d %v; want %v", i, got, want)
+			continue
+		}
+		if want == nil {
+			continue
+		}
+		assertEqual(t, got.StatusCode, want.StatusCode)
+	}
+}
+
 func TestRetrierExponentialBackoff(t *testing.T) {
 	fakeClient := xhttptest.NewClient()
 	gotSleepPeriods := []time.Duration{}
