@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+// RetrierWithOnRequestDone configures a callback function that will be called for each request done by the retrier.
+// This includes retried requests. The callback is called after a response/error is received but before the response/error is processed (for retrying).
+// The callback is called from the same goroutine that called the retrier Do method.
+func RetrierWithOnRequestDone(f RetrierOnRequestDoneFunc) RetrierOption {
+	return func(r *retrierClient) {
+		r.onRequestDone = f
+	}
+}
+
 // RetrierWithMinSleepPeriod configures the min period that the retrier will sleep between retries.
 // The retrier uses an exponential backoff, so this will be only the initial sleep period, that then grows exponentially.
 // If not defined it will default [DefaultMinSleepPeriod].
