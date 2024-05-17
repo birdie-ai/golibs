@@ -40,7 +40,7 @@ func TestRangeDuration(t *testing.T) {
 		want     time.Duration
 	}{
 		{tm(1, 0), tm(1, 0), time.Duration(0)},
-		{tm(1, 0), tm(2, 0), 1 * time.Hour},
+		{tm(1, 0), tm(2, 0), time.Hour},
 		{tm(1, 0), tm(3, 0), 2 * time.Hour},
 	}
 	for _, c := range cases {
@@ -67,7 +67,7 @@ func TestRangeSplit(t *testing.T) {
 		{
 			tm(1, 0),
 			tm(2, 0),
-			1 * time.Hour,
+			time.Hour,
 			[]xtime.Range{{tm(1, 0), tm(2, 0)}},
 		},
 		{
