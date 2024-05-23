@@ -161,18 +161,18 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		r.onRetry(req, res, err)
 
 		// handle Retry-After header
-		const minSleepPeriod = time.Second
+		const minRetryAfterDuration = time.Second
 		retryAfter := res.Header.Get("Retry-After")
 		requestedDuration, requestedTime, err := ParseRetryAfter(retryAfter)
 		switch {
 		case err != nil:
 			log.Warn(fmt.Sprintf("xhttp.Client: %v", err))
-		case requestedDuration > minSleepPeriod:
+		case requestedDuration > minRetryAfterDuration:
 			log.Debug("xhttp.Client: following Retry-After header", "duration", requestedDuration)
 			sleepPeriod = requestedDuration
 		case !requestedTime.IsZero():
 			calculatedDuration := time.Until(requestedTime)
-			if calculatedDuration > minSleepPeriod {
+			if calculatedDuration > minRetryAfterDuration {
 				log.Debug("xhttp.Client: following Retry-After header", "time", requestedTime,
 					"calculated_duration", calculatedDuration)
 				sleepPeriod = calculatedDuration
