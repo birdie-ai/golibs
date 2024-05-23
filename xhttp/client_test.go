@@ -926,3 +926,17 @@ func TestParseRetryAfter(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRetryAfterInvalid(t *testing.T) {
+	cases := []string{
+		"abc",
+		"1.5",
+		"Wed, 32 Oct 2015 07:28:00 GMT",
+	}
+	for _, c := range cases {
+		_, _, err := xhttp.ParseRetryAfter(c)
+		if err == nil {
+			t.Errorf("xhttp.ParseRetryAfter(%q) did not return error", c)
+		}
+	}
+}
