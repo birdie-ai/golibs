@@ -903,3 +903,26 @@ func assertEqual[T any](t *testing.T, got T, want T) {
 func retryableError() error {
 	return errors.New("http2: server sent GOAWAY and closed the connection")
 }
+
+func TestParseRetryAfter(t *testing.T) {
+	cases := []struct {
+		value string
+		d     time.Duration
+		tm    time.Time
+	}{
+		{value: ""},
+		{value: "123", d: 123 * time.Second},
+		{value: "Wed, 21 Oct 2015 07:28:00 GMT", tm: time.Date(2015, 10, 21, 7, 28, 0, 0, time.UTC)},
+	}
+	for _, c := range cases {
+		d, tm, err := xhttp.ParseRetryAfter(c.value)
+		if err != nil {
+			t.Errorf("ParseRetryAfter(%q) returned error: %v", c.value, err)
+		} else if !(d == c.d && tm.Equal(c.tm)) {
+			t.Errorf("ParseRetryAfter(%q) == (%v, %v, nil), want (%v, %v, nil)",
+				c.value,
+				d, tm,
+				c.d, c.tm)
+		}
+	}
+}
