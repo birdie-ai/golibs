@@ -228,8 +228,8 @@ func ParseRetryAfter(value string) (time.Duration, time.Time, error) {
 	if value == "" {
 		return 0, time.Time{}, nil
 	}
-	if intValue, err := strconv.Atoi(value); err == nil {
-		return time.Duration(intValue) * time.Second, time.Time{}, nil
+	if seconds, err := strconv.Atoi(value); err == nil {
+		return time.Duration(seconds) * time.Second, time.Time{}, nil
 	}
 	if t, err := http.ParseTime(value); err == nil {
 		return 0, t, nil
