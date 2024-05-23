@@ -167,7 +167,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		switch {
 		case err != nil:
 			log.Warn(fmt.Sprintf("xhttp.Client: %v", err))
-		case requestedDuration > minRetryAfterDuration:
+		case requestedDuration >= minRetryAfterDuration:
 			log.Debug("xhttp.Client: following Retry-After header", "duration", requestedDuration)
 			sleepPeriod = requestedDuration
 		case !requestedTime.IsZero():
