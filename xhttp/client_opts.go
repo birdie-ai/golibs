@@ -51,7 +51,6 @@ func RetrierWithRespCheck() RetrierOption {
 }
 
 // RetrierWithSleep configures the sleep function used to sleep between retries, usually used for testing.
-// But can be used as a way to measure how much retries happened since this is called before each retry.
 func RetrierWithSleep(sleep func(context.Context, time.Duration)) RetrierOption {
 	return func(r *retrierClient) {
 		r.sleep = sleep

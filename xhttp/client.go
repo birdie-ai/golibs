@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -158,7 +159,26 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		}
 		log.Debug("xhttp.Client: retrying request with error status code")
 		r.onRetry(req, res, err)
-		// Maybe add handling for Retry-After header, so far this seems to be enough
+
+		// handle Retry-After header
+		const minRetryAfterDuration = time.Second
+		retryAfter := res.Header.Get("Retry-After")
+		requestedDuration, requestedTime, err := ParseRetryAfter(retryAfter)
+		switch {
+		case err != nil:
+			log.Warn(fmt.Sprintf("xhttp.Client: %v", err))
+		case requestedDuration >= minRetryAfterDuration:
+			log.Debug("xhttp.Client: following Retry-After header", "duration", requestedDuration)
+			sleepPeriod = requestedDuration
+		case !requestedTime.IsZero():
+			calculatedDuration := time.Until(requestedTime)
+			if calculatedDuration >= minRetryAfterDuration {
+				log.Debug("xhttp.Client: following Retry-After header", "time", requestedTime,
+					"calculated_duration", calculatedDuration)
+				sleepPeriod = calculatedDuration
+			}
+		}
+
 		r.sleep(ctx, sleepPeriod)
 		return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
 	}
@@ -205,4 +225,18 @@ func defaultOnRequestDone(*http.Request, *http.Response, error, time.Duration) {
 }
 
 func defaultOnRetry(*http.Request, *http.Response, error) {
+}
+
+// ParseRetryAfter parses the Retry-After header in the response.
+func ParseRetryAfter(value string) (time.Duration, time.Time, error) {
+	if value == "" {
+		return 0, time.Time{}, nil
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		return time.Duration(seconds) * time.Second, time.Time{}, nil
+	}
+	if t, err := http.ParseTime(value); err == nil {
+		return 0, t, nil
+	}
+	return 0, time.Time{}, fmt.Errorf("invalid Retry-After header in http response: %s", value)
 }
