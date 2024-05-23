@@ -172,7 +172,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			sleepPeriod = requestedDuration
 		case !requestedTime.IsZero():
 			calculatedDuration := time.Until(requestedTime)
-			if calculatedDuration > minRetryAfterDuration {
+			if calculatedDuration >= minRetryAfterDuration {
 				log.Debug("xhttp.Client: following Retry-After header", "time", requestedTime,
 					"calculated_duration", calculatedDuration)
 				sleepPeriod = calculatedDuration
