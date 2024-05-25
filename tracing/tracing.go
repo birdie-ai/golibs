@@ -46,9 +46,7 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		}
 
 		log.Debug("handling request", "http_request", httpReq)
-		resWriter := &responseWriter{
-			ResponseWriter: res,
-		}
+		resWriter := newResponseWriter(res)
 		start := time.Now()
 		defer func() {
 			elapsed := time.Since(start)
@@ -102,6 +100,7 @@ func SetRequestHeaders(ctx context.Context, req *http.Request) {
 type (
 	responseWriter struct {
 		http.ResponseWriter
+		flush         func()
 		status        int
 		contentLength int
 	}
@@ -116,6 +115,28 @@ const (
 	traceIDKey    key = iota
 	orgIDKey
 )
+
+func newResponseWriter(r http.ResponseWriter) *responseWriter {
+	// We may need to flush data when streaming, so we neeed to support http.Flusher.
+	// We can only do this safely if the underlying http.ResponseWriter implements http.Flusher.
+	flush := func() {
+		slog.Debug("tracing.responseWriter: http.Flush called but underlying http.ResponseWriter doesn't support it")
+	}
+	flusher, ok := r.(http.Flusher)
+	if ok {
+		flush = func() {
+			flusher.Flush()
+		}
+	}
+	return &responseWriter{
+		ResponseWriter: r,
+		flush:          flush,
+	}
+}
+
+func (r *responseWriter) Flush() {
+	r.flush()
+}
 
 func (r *responseWriter) WriteHeader(statusCode int) {
 	r.status = statusCode
