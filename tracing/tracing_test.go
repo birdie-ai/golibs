@@ -61,9 +61,10 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		wantBody    = "Worked!"
 	)
 	var (
-		gotLogger  *slog.Logger
-		gotTraceID string
-		gotOrgID   string
+		gotLogger         *slog.Logger
+		gotTraceID        string
+		gotOrgID          string
+		gotResponseWriter http.ResponseWriter
 	)
 	handler := tracing.InstrumentHTTP(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		gotLogger = slog.FromCtx(req.Context())
@@ -71,6 +72,7 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		gotOrgID = tracing.CtxGetOrgID(req.Context())
 		w.WriteHeader(wantStatus)
 		fmt.Fprint(w, wantBody)
+		gotResponseWriter = w
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -83,21 +85,23 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 	if gotLogger == nil {
 		t.Fatal("got nil logger")
 	}
-
 	if gotTraceID != wantTraceID {
 		t.Fatalf("got %q != want %q", gotTraceID, wantTraceID)
 	}
-
 	if gotOrgID != wantOrgID {
 		t.Fatalf("got %q != want %q", gotOrgID, wantOrgID)
 	}
-
 	res := w.Result()
 	if got := res.StatusCode; got != wantStatus {
 		t.Fatalf("got status %v; want %v", got, wantStatus)
 	}
 	if got := w.Body.String(); got != wantBody {
 		t.Fatalf("got body %v; want %v", got, wantBody)
+	}
+	// HTTP1/2 http.ResponseWriter always implement http.Flush
+	// Lets guarantee that our wrapping doesn't break this
+	if _, ok := gotResponseWriter.(http.Flusher); !ok {
+		t.Fatal("wrapped response writter doesn't implement http.Flusher")
 	}
 }
 
