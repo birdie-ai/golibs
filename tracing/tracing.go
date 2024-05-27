@@ -46,14 +46,12 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		}
 
 		log.Debug("handling request", "http_request", httpReq)
-		resWriter := &responseWriter{
-			ResponseWriter: res,
-		}
+		resWriter := newResponseWriter(res)
 		start := time.Now()
 		defer func() {
 			elapsed := time.Since(start)
-			httpReq["status_code"] = resWriter.status
-			httpReq["response_size"] = resWriter.contentLength
+			httpReq["status_code"] = resWriter.Status()
+			httpReq["response_size"] = resWriter.ContentLength()
 			httpReq["elapsed"] = elapsed.String()
 			log.Info("handled request", "http_request", httpReq)
 		}()
@@ -100,10 +98,19 @@ func SetRequestHeaders(ctx context.Context, req *http.Request) {
 }
 
 type (
+	responseWriterObserver interface {
+		http.ResponseWriter
+		Status() int
+		ContentLength() int
+	}
 	responseWriter struct {
 		http.ResponseWriter
 		status        int
 		contentLength int
+	}
+	responseWriterFlusher struct {
+		*responseWriter
+		http.Flusher
 	}
 
 	// key is the type used to store data on contexts.
@@ -117,9 +124,29 @@ const (
 	orgIDKey
 )
 
+func newResponseWriter(r http.ResponseWriter) responseWriterObserver {
+	rw := &responseWriter{ResponseWriter: r}
+	flusher, ok := r.(http.Flusher)
+	if ok {
+		return &responseWriterFlusher{
+			responseWriter: rw,
+			Flusher:        flusher,
+		}
+	}
+	return rw
+}
+
 func (r *responseWriter) WriteHeader(statusCode int) {
 	r.status = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (r *responseWriter) Status() int {
+	return r.status
+}
+
+func (r *responseWriter) ContentLength() int {
+	return r.contentLength
 }
 
 func (r *responseWriter) Write(b []byte) (int, error) {
