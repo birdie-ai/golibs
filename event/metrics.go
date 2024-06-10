@@ -9,7 +9,8 @@ import (
 // MustRegisterMetrics will register all event related metrics on the given registry.
 // If metrics with the same name already exist no the register this function will panic.
 func MustRegisterMetrics(registry *prometheus.Registry) {
-	registry.MustRegister(publishDuration, publishCounter, processCounter, processDuration)
+	registry.MustRegister(publishMsgBodySize, publishDuration, publishCounter,
+		processMsgBodySize, processCounter, processDuration)
 }
 
 // SampledMessageHandler will instrument the given MessageHandler returning a new one
