@@ -35,6 +35,15 @@ Labels:
 
 ### Subscription
 
+#### event_process_msg_body_size_bytes : histogram
+
+Measure the event's message body size in bytes.
+
+Labels:
+
+* status : "ok" or "error".
+* name : name of the event.
+
 #### event_process_duration_seconds : histogram
 
 Measure how long it took to process each event.
