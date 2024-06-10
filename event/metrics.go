@@ -54,12 +54,13 @@ func sampleProcess(msg Message, name string, elapsed time.Duration, err error) {
 }
 
 var (
+	// GCP max message size is 10mb
+	bodySizeBuckets    = prometheus.ExponentialBucketsRange(256, 1024*1024*10, 30)
 	publishMsgBodySize = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "event_publish_msg_body_size_bytes",
-			Help: "Size in bytes of published event message body",
-			// GCP max message size is 10mb
-			Buckets: prometheus.ExponentialBucketsRange(256, 1024*1024*10, 30),
+			Name:    "event_publish_msg_body_size_bytes",
+			Help:    "Size in bytes of published event message body",
+			Buckets: bodySizeBuckets,
 		},
 		[]string{"status", "name"},
 	)
@@ -97,10 +98,9 @@ var (
 	)
 	processMsgBodySize = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "event_process_msg_body_size_bytes",
-			Help: "Size in bytes of processed event message body",
-			// GCP max message size is 10mb
-			Buckets: prometheus.ExponentialBucketsRange(256, 1024*1024*10, 30),
+			Name:    "event_process_msg_body_size_bytes",
+			Help:    "Size in bytes of processed event message body",
+			Buckets: bodySizeBuckets,
 		},
 		[]string{"status", "name"},
 	)
