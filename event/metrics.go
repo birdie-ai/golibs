@@ -20,12 +20,12 @@ func SampledMessageHandler(eventName string, handler MessageHandler) MessageHand
 		start := time.Now()
 		err := handler(msg)
 		elapsed := time.Since(start)
-		sampleProcess(eventName, elapsed, err)
+		sampleProcess(msg, eventName, elapsed, err)
 		return err
 	}
 }
 
-func samplePublish(name string, elapsed time.Duration, err error) {
+func samplePublish(name string, elapsed time.Duration, bodySize int, err error) {
 	status := "ok"
 	if err != nil {
 		status = "error"
@@ -34,11 +34,12 @@ func samplePublish(name string, elapsed time.Duration, err error) {
 		"status": status,
 		"name":   name,
 	}
+	publishMsgBodySize.With(labels).Observe(float64(bodySize))
 	publishDuration.With(labels).Observe(elapsed.Seconds())
 	publishCounter.With(labels).Inc()
 }
 
-func sampleProcess(name string, elapsed time.Duration, err error) {
+func sampleProcess(msg Message, name string, elapsed time.Duration, err error) {
 	status := "ok"
 	if err != nil {
 		status = "error"
@@ -47,11 +48,22 @@ func sampleProcess(name string, elapsed time.Duration, err error) {
 		"status": status,
 		"name":   name,
 	}
+	processMsgBodySize.With(labels).Observe(float64(len(msg.Body)))
 	processDuration.With(labels).Observe(elapsed.Seconds())
 	processCounter.With(labels).Inc()
 }
 
 var (
+	// GCP max message size is 10mb
+	bodySizeBuckets    = prometheus.ExponentialBucketsRange(256, 1024*1024*10, 30)
+	publishMsgBodySize = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "event_publish_msg_body_size_bytes",
+			Help:    "Size in bytes of published event message body",
+			Buckets: bodySizeBuckets,
+		},
+		[]string{"status", "name"},
+	)
 	publishDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name: "event_publish_duration_seconds",
@@ -81,6 +93,14 @@ var (
 				2, 3, 4, 5, 10, 15, 20, 30, 60, 90, 120,
 				180, 240, 300, 360, 420, 480, 540, 600,
 			},
+		},
+		[]string{"status", "name"},
+	)
+	processMsgBodySize = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "event_process_msg_body_size_bytes",
+			Help:    "Size in bytes of processed event message body",
+			Buckets: bodySizeBuckets,
 		},
 		[]string{"status", "name"},
 	)

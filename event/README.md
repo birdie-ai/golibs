@@ -14,6 +14,15 @@ Here we document the metrics generated.
 
 ### Publisher
 
+#### event_publish_msg_body_size_bytes : histogram
+
+Measure the published event's message body size in bytes.
+
+Labels:
+
+* status : "ok" or "error".
+* name : name of the event.
+
 #### event_publish_duration_seconds : histogram
 
 Measure publish duration time for each event.
@@ -34,6 +43,15 @@ Labels:
 * name : name of the event.
 
 ### Subscription
+
+#### event_process_msg_body_size_bytes : histogram
+
+Measure the processed event's message body size in bytes.
+
+Labels:
+
+* status : "ok" or "error".
+* name : name of the event.
 
 #### event_process_duration_seconds : histogram
 

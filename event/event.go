@@ -112,7 +112,7 @@ func (p *Publisher[T]) PublishWithAttrs(ctx context.Context, event T, attributes
 	})
 	elapsed := time.Since(start)
 
-	samplePublish(p.name, elapsed, err)
+	samplePublish(p.name, elapsed, len(encBody), err)
 
 	return err
 }
