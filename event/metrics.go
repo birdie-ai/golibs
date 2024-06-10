@@ -25,7 +25,7 @@ func SampledMessageHandler(eventName string, handler MessageHandler) MessageHand
 	}
 }
 
-func samplePublish(name string, elapsed time.Duration, err error) {
+func samplePublish(name string, elapsed time.Duration, bodySize int, err error) {
 	status := "ok"
 	if err != nil {
 		status = "error"
@@ -34,6 +34,7 @@ func samplePublish(name string, elapsed time.Duration, err error) {
 		"status": status,
 		"name":   name,
 	}
+	publishMsgBodySize.With(labels).Observe(float64(bodySize))
 	publishDuration.With(labels).Observe(elapsed.Seconds())
 	publishCounter.With(labels).Inc()
 }
@@ -47,12 +48,21 @@ func sampleProcess(msg Message, name string, elapsed time.Duration, err error) {
 		"status": status,
 		"name":   name,
 	}
-	processMsgSize.With(labels).Observe(float64(len(msg.Body)))
+	processMsgBodySize.With(labels).Observe(float64(len(msg.Body)))
 	processDuration.With(labels).Observe(elapsed.Seconds())
 	processCounter.With(labels).Inc()
 }
 
 var (
+	publishMsgBodySize = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "event_publish_msg_body_size_bytes",
+			Help: "Size in bytes of published event message body",
+			// GCP max message size is 10mb
+			Buckets: prometheus.ExponentialBucketsRange(256, 1024*1024*10, 30),
+		},
+		[]string{"status", "name"},
+	)
 	publishDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name: "event_publish_duration_seconds",
@@ -85,7 +95,7 @@ var (
 		},
 		[]string{"status", "name"},
 	)
-	processMsgSize = prometheus.NewHistogramVec(
+	processMsgBodySize = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name: "event_process_msg_body_size_bytes",
 			Help: "Size in bytes of processed event message body",
