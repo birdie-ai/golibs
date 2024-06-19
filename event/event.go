@@ -71,6 +71,7 @@ type (
 	MessageSubscription struct {
 		sub            *pubsub.Subscription
 		maxConcurrency int
+		ackImmediately bool
 	}
 
 	// MessageHandler is responsible for handling messages from a [MsgSubscription].
@@ -118,8 +119,8 @@ func (p *Publisher[T]) PublishWithAttrs(ctx context.Context, event T, attributes
 }
 
 // NewSubscription creates a subscription that will accept on events of the given type and name.
-func NewSubscription[T any](name, url string, maxConcurrency int) (*Subscription[T], error) {
-	rawsub, err := NewRawSubscription(url, maxConcurrency)
+func NewSubscription[T any](name, url string, maxConcurrency int, ackImmediately bool) (*Subscription[T], error) {
+	rawsub, err := NewRawSubscription(url, maxConcurrency, ackImmediately)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,7 @@ func NewSubscription[T any](name, url string, maxConcurrency int) (*Subscription
 // NewRawSubscription creates a new raw subscription. It provides messages in a
 // service like manner (serve) and manages concurrent execution, each message
 // is processed in its own goroutines respecting the given maxConcurrency.
-func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, error) {
+func NewRawSubscription(url string, maxConcurrency int, ackImmediately bool) (*MessageSubscription, error) {
 	if maxConcurrency <= 0 {
 		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
 	}
@@ -144,6 +145,7 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 	return &MessageSubscription{
 		sub:            sub,
 		maxConcurrency: maxConcurrency,
+		ackImmediately: ackImmediately,
 	}, nil
 }
 
@@ -243,6 +245,9 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 			// Errors from Receive indicate that Receive will no longer succeed.
 			return fmt.Errorf("receive from subscription failed, stopping serving: %v", err)
 		}
+		if r.ackImmediately {
+			gocloudMsg.Ack()
+		}
 		go func() {
 			defer func() {
 				<-semaphore
@@ -269,7 +274,7 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 						"message_body", msg.Body,
 						"metadata", msg.Metadata,
 						"stack_trace", string(buf))
-					if gocloudMsg.Nackable() {
+					if !r.ackImmediately && gocloudMsg.Nackable() {
 						gocloudMsg.Nack()
 					}
 				}
@@ -277,12 +282,14 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 
 			err := handler(msg)
 			if err != nil {
-				if gocloudMsg.Nackable() {
+				if !r.ackImmediately && gocloudMsg.Nackable() {
 					gocloudMsg.Nack()
 				}
 				return
 			}
-			gocloudMsg.Ack()
+			if !r.ackImmediately {
+				gocloudMsg.Ack()
+			}
 		}()
 	}
 }

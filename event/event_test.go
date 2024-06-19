@@ -173,7 +173,7 @@ func TestSubscriptionServing(t *testing.T) {
 
 	const maxConcurrency = 5
 
-	subscription, err := event.NewSubscription[Event](eventName, url, maxConcurrency)
+	subscription, err := event.NewSubscription[Event](eventName, url, maxConcurrency, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestSubscriptionRecoversFromPanic(t *testing.T) {
 
 	const maxConcurrency = 1
 
-	subscription, err := event.NewSubscription[Event](eventName, url, maxConcurrency)
+	subscription, err := event.NewSubscription[Event](eventName, url, maxConcurrency, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +358,7 @@ func TestSubscriptionDiscardsEventsWithWrongName(t *testing.T) {
 
 	const maxConcurrency = 1
 
-	subscription, err := event.NewSubscription[Event]("wrong_name", url, maxConcurrency)
+	subscription, err := event.NewSubscription[Event]("wrong_name", url, maxConcurrency, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +418,7 @@ func TestRawSubscriptionServing(t *testing.T) {
 
 	const maxConcurrency = 5
 
-	subscription, err := event.NewRawSubscription(url, maxConcurrency)
+	subscription, err := event.NewRawSubscription(url, maxConcurrency, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +504,7 @@ func TestRawSubscriptionRecoversFromPanic(t *testing.T) {
 
 	const maxConcurrency = 1
 
-	subscription, err := event.NewRawSubscription(url, maxConcurrency)
+	subscription, err := event.NewRawSubscription(url, maxConcurrency, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +558,7 @@ func TestSubscriptionServingWithMetadata(t *testing.T) {
 	const maxConcurrency = 1
 	eventName := t.Name()
 
-	subscription, err := event.NewSubscription[struct{}](eventName, url, maxConcurrency)
+	subscription, err := event.NewSubscription[struct{}](eventName, url, maxConcurrency, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -604,7 +604,7 @@ func TestRawSubscriptionServingWithMetadata(t *testing.T) {
 	defer func() { _ = topic.Shutdown(ctx) }()
 
 	const maxConcurrency = 1
-	subscription, err := event.NewRawSubscription(url, maxConcurrency)
+	subscription, err := event.NewRawSubscription(url, maxConcurrency, false)
 	if err != nil {
 		t.Fatal(err)
 	}
