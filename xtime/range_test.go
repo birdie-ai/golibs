@@ -34,6 +34,12 @@ func TestRangeNewValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("invalid range got no error")
 	}
+
+	var zero time.Time
+	_, err = xtime.NewRange(zero, zero)
+	if err == nil {
+		t.Fatal("invalid range got no error")
+	}
 }
 
 func TestRangeContains(t *testing.T) {
