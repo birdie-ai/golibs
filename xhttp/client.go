@@ -137,7 +137,9 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			strings.HasSuffix(err.Error(), "connect: connection refused") ||
 			strings.HasSuffix(err.Error(), "EOF") ||
 			strings.HasSuffix(err.Error(), "write: broken pipe") ||
-			strings.HasSuffix(err.Error(), "connection reset by peer") {
+			strings.HasSuffix(err.Error(), "connection reset by peer") ||
+			strings.HasSuffix(err.Error(), "server closed idle connection") ||
+			strings.HasSuffix(err.Error(), "cannot assign requested address") {
 
 			log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
 			r.onRetry(req, res, err)
