@@ -51,6 +51,9 @@ func (r Range) Split(max time.Duration) []Range {
 // NewRange creates a new [Range] validating start/end.
 // It ensures the invariant that [Range] always has start <= end.
 func NewRange(start, end time.Time) (Range, error) {
+	if start.IsZero() || end.IsZero() {
+		return Range{}, fmt.Errorf("creating range: start %v and end %v can't be zero value", start, end)
+	}
 	if start.After(end) {
 		return Range{}, fmt.Errorf("creating range: start %v can't be after end %v", start, end)
 	}
