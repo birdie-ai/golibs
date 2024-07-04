@@ -550,6 +550,8 @@ func TestRetrierRetrySpecificErrors(t *testing.T) {
 		errors.New("<specific details>: connect: connection refused"),
 		errors.New("<specific details>: EOF"),
 		errors.New("<specific details>: write: broken pipe"),
+		errors.New("<specific details>: server closed idle connection"),
+		errors.New("<specific details>: cannot assign requested address"),
 		context.DeadlineExceeded,
 	}
 	for _, retryError := range retryErrors {
