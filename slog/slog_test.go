@@ -9,7 +9,7 @@ import (
 )
 
 func ExampleNew() {
-	logger := slog.New(slog.NewGoogleCloudHandler(os.Stdout, &slog.HandlerOptions{
+	logger := slog.New(slog.NewGoogleCloudHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelWarn,
 	}))
 	logger.Info("omit", "a", 666)
