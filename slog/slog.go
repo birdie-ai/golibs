@@ -6,26 +6,33 @@ package slog
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"os"
 	"strings"
 )
 
-// It is a good idea to extract this package as an library that multiple
-// services can use. For now we have only one service in Go :-).
+type (
+	// A Handler handles log records produced by a Logger.
+	Handler = slog.Handler
 
-// Level determines the importance or severity of a log record
-type Level = slog.Level
+	// HandlerOptions are options for a [TextHandler] or [JSONHandler].
+	// A zero HandlerOptions consists entirely of default values.
+	HandlerOptions = slog.HandlerOptions
 
-// Logger represents a logger instance with its own context.
-// It extends Go's slog.Logger by adding new methods, like [Logger.Fatal].
-type Logger struct {
-	*slog.Logger
-}
+	// Level determines the importance or severity of a log record
+	Level = slog.Level
 
-// Format determines the output format of the log records
-type Format string
+	// Logger represents a logger instance with its own context.
+	// It extends Go's slog.Logger by adding new methods, like [Logger.Fatal].
+	Logger struct {
+		*slog.Logger
+	}
+
+	// Format determines the output format of the log records
+	Format string
+)
 
 // All available log levels
 const (
@@ -93,10 +100,36 @@ func LoadConfig(service string) (Config, error) {
 	}, nil
 }
 
+// New creates a new Logger with the given non-nil Handler.
+func New(h Handler) *Logger {
+	return &Logger{slog.New(h)}
+}
+
+// NewGoogleCloudHandler creates a [JSONHandler] that writes to w in a format that works well with Google Cloud Logging.
+func NewGoogleCloudHandler(w io.Writer, opts *slog.HandlerOptions) *slog.JSONHandler {
+	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
+		// Customize the name of some fields to match Google Cloud expectations
+		// More: https://cloud.google.com/logging/docs/agent/logging/configuration#process-payload
+		if len(groups) > 0 {
+			return a
+		}
+		switch a.Key {
+		case slog.LevelKey:
+			a.Key = "severity"
+		case slog.MessageKey:
+			a.Key = "message"
+		case "http_request":
+			a.Key, a.Value = convertHTTPRequest(a.Key, a.Value)
+		}
+		return a
+	}
+	return slog.NewJSONHandler(w, opts)
+}
+
 // Configure will change the default logger configuration.
 // It should be called as soon as possible, usually on the main of your program.
 func Configure(cfg Config) error {
-	th := &slog.HandlerOptions{
+	opts := &slog.HandlerOptions{
 		Level: cfg.Level,
 	}
 
@@ -104,31 +137,14 @@ func Configure(cfg Config) error {
 
 	switch cfg.Format {
 	case FormatText:
-		handler = slog.NewTextHandler(os.Stderr, th)
+		handler = slog.NewTextHandler(os.Stderr, opts)
 	case FormatGcloud:
-		th.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
-			// Customize the name of some fields to match Google Cloud expectations
-			// More: https://cloud.google.com/logging/docs/agent/logging/configuration#process-payload
-			if len(groups) > 0 {
-				return a
-			}
-			switch a.Key {
-			case slog.LevelKey:
-				a.Key = "severity"
-			case slog.MessageKey:
-				a.Key = "message"
-			case "http_request":
-				a.Key, a.Value = convertHTTPRequest(a.Key, a.Value)
-			}
-			return a
-		}
-		handler = slog.NewJSONHandler(os.Stderr, th)
+		handler = NewGoogleCloudHandler(os.Stderr, opts)
 	default:
 		return fmt.Errorf("unknown log format: %v", cfg.Format)
 	}
 
 	logger := slog.New(handler)
-
 	slog.SetDefault(logger)
 	return nil
 }

@@ -2,10 +2,19 @@ package slog_test
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/birdie-ai/golibs/slog"
 )
+
+func ExampleNew() {
+	logger := slog.New(slog.NewGoogleCloudHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelWarn,
+	}))
+	logger.Info("omit", "a", 666)
+	logger.Warn("yeah", "b", "yeah")
+}
 
 func TestLoadConfigDefault(t *testing.T) {
 	config, err := slog.LoadConfig("DEFAULT")
