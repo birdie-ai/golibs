@@ -13,20 +13,23 @@ import (
 	"strings"
 )
 
-// It is a good idea to extract this package as an library that multiple
-// services can use. For now we have only one service in Go :-).
+type (
+	// HandlerOptions are options for a [TextHandler] or [JSONHandler].
+	// A zero HandlerOptions consists entirely of default values.
+	HandlerOptions = slog.HandlerOptions
 
-// Level determines the importance or severity of a log record
-type Level = slog.Level
+	// Level determines the importance or severity of a log record
+	Level = slog.Level
 
-// Logger represents a logger instance with its own context.
-// It extends Go's slog.Logger by adding new methods, like [Logger.Fatal].
-type Logger struct {
-	*slog.Logger
-}
+	// Logger represents a logger instance with its own context.
+	// It extends Go's slog.Logger by adding new methods, like [Logger.Fatal].
+	Logger struct {
+		*slog.Logger
+	}
 
-// Format determines the output format of the log records
-type Format string
+	// Format determines the output format of the log records
+	Format string
+)
 
 // All available log levels
 const (
