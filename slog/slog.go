@@ -14,6 +14,9 @@ import (
 )
 
 type (
+	// A Handler handles log records produced by a Logger.
+	Handler = slog.Handler
+
 	// HandlerOptions are options for a [TextHandler] or [JSONHandler].
 	// A zero HandlerOptions consists entirely of default values.
 	HandlerOptions = slog.HandlerOptions
@@ -95,6 +98,11 @@ func LoadConfig(service string) (Config, error) {
 		Level:  logLevel,
 		Format: logFormat,
 	}, nil
+}
+
+// New creates a new Logger with the given non-nil Handler.
+func New(h Handler) *Logger {
+	return &Logger{slog.New(h)}
 }
 
 // NewGoogleCloudHandler creates a [JSONHandler] that writes to w in a format that works well with Google Cloud Logging.
