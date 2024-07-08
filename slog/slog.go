@@ -22,6 +22,7 @@ type Level = slog.Level
 // It extends Go's slog.Logger by adding new methods, like [Logger.Fatal].
 type Logger struct {
 	*slog.Logger
+	*Level
 }
 
 // Format determines the output format of the log records
@@ -62,7 +63,12 @@ func (l *Logger) Fatal(msg string, args ...any) {
 
 // With calls Logger.With on the default logger returning a new Logger instance.
 func (l *Logger) With(args ...any) *Logger {
-	return &Logger{l.Logger.With(args...)}
+	return &Logger{l.Logger.With(args...), nil}
+}
+
+// SetLevel can be used to get similar behaviour to changing the level for a logger in runtime
+func (l *Logger) SetLevel(level Level) {
+	l.Level = &level
 }
 
 // LoadConfig will load the log Config of the service from environment variables.
@@ -164,6 +170,46 @@ func convertHTTPRequest(origKey string, origValue slog.Value) (string, slog.Valu
 	return "httpRequest", slog.GroupValue(attrs...)
 }
 
+// Info calls Logger.Info on the a specific logger.
+func (l *Logger) Info(msg string, args ...any) {
+	if l.Level != nil {
+		if *l.Level > LevelInfo {
+			return
+		}
+	}
+	slog.Info(msg, args...)
+}
+
+// Debug calls Logger.Debug on a specific logger.
+func (l *Logger) Debug(msg string, args ...any) {
+	if l.Level != nil {
+		if *l.Level > LevelDebug {
+			return
+		}
+	}
+	slog.Debug(msg, args...)
+}
+
+// Warn calls Logger.Warn on a specific logger.
+func (l *Logger) Warn(msg string, args ...any) {
+	if l.Level != nil {
+		if *l.Level > LevelWarn {
+			return
+		}
+	}
+	slog.Warn(msg, args...)
+}
+
+// Error calls Logger.Error a specific logger.
+func (l *Logger) Error(msg string, args ...any) {
+	if l.Level != nil {
+		if *l.Level > LevelError {
+			return
+		}
+	}
+	slog.Error(msg, args...)
+}
+
 // Info calls Logger.Info on the default logger.
 func Info(msg string, args ...any) {
 	slog.Info(msg, args...)
@@ -192,12 +238,12 @@ func Fatal(msg string, args ...any) {
 
 // With calls Logger.With on the default logger returning a new Logger instance.
 func With(args ...any) *Logger {
-	return &Logger{slog.With(args...)}
+	return &Logger{slog.With(args...), nil}
 }
 
 // Default creates a new [Logger] with default configurations.
 func Default() *Logger {
-	return &Logger{slog.Default()}
+	return &Logger{slog.Default(), nil}
 }
 
 // FromCtx gets the [Logger] associated with the given context. A default [Logger] is
