@@ -6,6 +6,7 @@ package slog
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"os"
@@ -93,10 +94,31 @@ func LoadConfig(service string) (Config, error) {
 	}, nil
 }
 
+// NewGoogleCloudHandler creates a [JSONHandler] that writes to w in a format that works well with Google Cloud Logging.
+func NewGoogleCloudHandler(w io.Writer, opts *slog.HandlerOptions) *slog.JSONHandler {
+	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
+		// Customize the name of some fields to match Google Cloud expectations
+		// More: https://cloud.google.com/logging/docs/agent/logging/configuration#process-payload
+		if len(groups) > 0 {
+			return a
+		}
+		switch a.Key {
+		case slog.LevelKey:
+			a.Key = "severity"
+		case slog.MessageKey:
+			a.Key = "message"
+		case "http_request":
+			a.Key, a.Value = convertHTTPRequest(a.Key, a.Value)
+		}
+		return a
+	}
+	return slog.NewJSONHandler(w, opts)
+}
+
 // Configure will change the default logger configuration.
 // It should be called as soon as possible, usually on the main of your program.
 func Configure(cfg Config) error {
-	th := &slog.HandlerOptions{
+	opts := &slog.HandlerOptions{
 		Level: cfg.Level,
 	}
 
@@ -104,31 +126,14 @@ func Configure(cfg Config) error {
 
 	switch cfg.Format {
 	case FormatText:
-		handler = slog.NewTextHandler(os.Stderr, th)
+		handler = slog.NewTextHandler(os.Stderr, opts)
 	case FormatGcloud:
-		th.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
-			// Customize the name of some fields to match Google Cloud expectations
-			// More: https://cloud.google.com/logging/docs/agent/logging/configuration#process-payload
-			if len(groups) > 0 {
-				return a
-			}
-			switch a.Key {
-			case slog.LevelKey:
-				a.Key = "severity"
-			case slog.MessageKey:
-				a.Key = "message"
-			case "http_request":
-				a.Key, a.Value = convertHTTPRequest(a.Key, a.Value)
-			}
-			return a
-		}
-		handler = slog.NewJSONHandler(os.Stderr, th)
+		handler = NewGoogleCloudHandler(os.Stderr, opts)
 	default:
 		return fmt.Errorf("unknown log format: %v", cfg.Format)
 	}
 
 	logger := slog.New(handler)
-
 	slog.SetDefault(logger)
 	return nil
 }
