@@ -308,7 +308,7 @@ func TestSubscriptionRecoversFromPanic(t *testing.T) {
 	servingDone := make(chan struct{})
 
 	go func() {
-		err := subscription.Serve(func(ctx context.Context, event Event) error {
+		err := subscription.Serve(func(_ context.Context, event Event) error {
 			gotEventsChan <- event
 			panic("oh no, something went terribly wrong")
 		})
@@ -367,7 +367,7 @@ func TestSubscriptionDiscardsEventsWithWrongName(t *testing.T) {
 	servingDone := make(chan struct{})
 
 	go func() {
-		err := subscription.Serve(func(ctx context.Context, event Event) error {
+		err := subscription.Serve(func(_ context.Context, event Event) error {
 			gotEvents <- event
 			return nil
 		})
@@ -565,7 +565,7 @@ func TestSubscriptionServingWithMetadata(t *testing.T) {
 
 	receivedMetadata := make(chan event.Metadata)
 	go func() {
-		err := subscription.ServeWithMetadata(func(ctx context.Context, event struct{}, metadata event.Metadata) error {
+		err := subscription.ServeWithMetadata(func(_ context.Context, _ struct{}, metadata event.Metadata) error {
 			receivedMetadata <- metadata
 			return nil
 		})
