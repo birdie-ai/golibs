@@ -10,6 +10,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// RequestStats contains stats for a completed request.
+type RequestStats struct {
+	Method       string `json:"method,omitempty"`
+	URL          string `json:"url,omitempty"`
+	RequestSize  int64  `json:"request_size,omitempty"`
+	UserAgent    string `json:"user_agent,omitempty"`
+	Protocol     string `json:"protocol,omitempty"`
+	StatusCode   int    `json:"status_code,omitempty"`
+	ResponseSize int    `json:"response_size,omitempty"`
+	Elapsed      string `json:"elapsed,omitempty"`
+}
+
 // InstrumentHTTP will instrument the given [http.handler] by adding a slog.Logger on the request context.
 // The logger will have `trace_id` added to it.
 // Use slog.FromCtx(ctx) to retrieve the logger.
@@ -37,12 +49,12 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		}
 		ctx = slog.NewContext(ctx, log)
 
-		httpReq := map[string]any{
-			"method":       req.Method,
-			"url":          req.URL.String(),
-			"request_size": req.ContentLength,
-			"user_agent":   req.UserAgent(),
-			"protocol":     req.Proto,
+		httpReq := RequestStats{
+			Method:      req.Method,
+			URL:         req.URL.String(),
+			RequestSize: req.ContentLength,
+			UserAgent:   req.UserAgent(),
+			Protocol:    req.Proto,
 		}
 
 		log.Debug("handling request", "http_request", httpReq)
@@ -50,9 +62,9 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		start := time.Now()
 		defer func() {
 			elapsed := time.Since(start)
-			httpReq["status_code"] = resWriter.Status()
-			httpReq["response_size"] = resWriter.ContentLength()
-			httpReq["elapsed"] = elapsed.String()
+			httpReq.StatusCode = resWriter.Status()
+			httpReq.ResponseSize = resWriter.ContentLength()
+			httpReq.Elapsed = elapsed.String()
 			log.Info("handled request", "http_request", httpReq)
 		}()
 
