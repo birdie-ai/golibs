@@ -30,7 +30,9 @@ type StatsHandler func(context.Context, RequestStats)
 // Use slog.FromCtx(ctx) to retrieve the logger.
 // It will log each completed request on the INFO level (may be too much for some services, for more fine grained control see [InstrumentHTTPWithStats]).
 func InstrumentHTTP(h http.Handler) http.Handler {
-	return InstrumentHTTPWithStats(h, LogInfoRequestStats)
+	return InstrumentHTTPWithStats(h, func(ctx context.Context, req RequestStats) {
+		slog.FromCtx(ctx).Info("handled request", "http_request", req)
+	})
 }
 
 // InstrumentHTTPWithStats will instrument the given [http.handler] by adding a slog.Logger on the request context.
@@ -81,16 +83,6 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 
 		h.ServeHTTP(resWriter, req.WithContext(ctx))
 	})
-}
-
-// LogInfoRequestStats will log the given request stats on INFO level.
-func LogInfoRequestStats(ctx context.Context, req RequestStats) {
-	slog.FromCtx(ctx).Info("handled request", "http_request", req)
-}
-
-// LogDebugRequestStats will log the given request stats on DEBUG level.
-func LogDebugRequestStats(ctx context.Context, req RequestStats) {
-	slog.FromCtx(ctx).Debug("handled request", "http_request", req)
 }
 
 // CtxWithTraceID creates a new [context.Context] with the given trace ID associated with it.
