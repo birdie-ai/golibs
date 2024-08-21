@@ -11,15 +11,16 @@ import (
 )
 
 // RequestStats contains stats for a completed request.
+// The JSON representations follows: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#HttpRequest
 type RequestStats struct {
-	Method       string `json:"method,omitempty"`
-	URL          string `json:"url,omitempty"`
-	RequestSize  int64  `json:"request_size,omitempty"`
-	UserAgent    string `json:"user_agent,omitempty"`
+	Method       string `json:"requestMethod,omitempty"`
+	URL          string `json:"requestUrl,omitempty"`
+	RequestSize  int64  `json:"requestSize,omitempty"`
+	UserAgent    string `json:"userAgent,omitempty"`
 	Protocol     string `json:"protocol,omitempty"`
-	StatusCode   int    `json:"status_code,omitempty"`
-	ResponseSize int    `json:"response_size,omitempty"`
-	Elapsed      string `json:"elapsed,omitempty"`
+	Status       int    `json:"status,omitempty"`
+	ResponseSize int    `json:"responseSize,omitempty"`
+	Latency      string `json:"latency,omitempty"`
 }
 
 // StatsHandler handles completed requests stats (like logging).
@@ -31,7 +32,8 @@ type StatsHandler func(context.Context, RequestStats)
 // It will log each completed request on the INFO level (may be too much for some services, for more fine grained control see [InstrumentHTTPWithStats]).
 func InstrumentHTTP(h http.Handler) http.Handler {
 	return InstrumentHTTPWithStats(h, func(ctx context.Context, req RequestStats) {
-		slog.FromCtx(ctx).Info("handled request", "http_request", req)
+		// More: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#HttpRequest
+		slog.FromCtx(ctx).Info("handled request", "httpRequest", req)
 	})
 }
 
@@ -82,7 +84,7 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 			}
 			httpReq.StatusCode = status
 			httpReq.ResponseSize = resWriter.ContentLength()
-			httpReq.Elapsed = elapsed.String()
+			httpReq.Latency = elapsed.String()
 			statsHandler(ctx, httpReq)
 		}()
 
