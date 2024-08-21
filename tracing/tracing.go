@@ -77,7 +77,12 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 		start := time.Now()
 		defer func() {
 			elapsed := time.Since(start)
-			httpReq.Status = resWriter.Status()
+			status := resWriter.Status()
+			if status == 0 {
+				// Handler did not write a status code. This means 200 OK.
+				status = http.StatusOK
+			}
+			httpReq.Status = status
 			httpReq.ResponseSize = resWriter.ContentLength()
 			httpReq.Latency = elapsed.String()
 			statsHandler(ctx, httpReq)
