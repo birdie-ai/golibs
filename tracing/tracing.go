@@ -77,7 +77,7 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 			elapsed := time.Since(start)
 			status := resWriter.Status()
 			if status == 0 {
-				// Handle did not write a status code. For Go http handlers this means 200 OK
+				// Handler did not write a status code. This means 200 OK.
 				status = http.StatusOK
 			}
 			httpReq.StatusCode = status
