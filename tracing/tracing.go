@@ -32,6 +32,7 @@ type StatsHandler func(context.Context, RequestStats)
 // It will log each completed request on the INFO level (may be too much for some services, for more fine grained control see [InstrumentHTTPWithStats]).
 func InstrumentHTTP(h http.Handler) http.Handler {
 	return InstrumentHTTPWithStats(h, func(ctx context.Context, req RequestStats) {
+		// More: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#HttpRequest
 		slog.FromCtx(ctx).Info("handled request", "httpRequest", req)
 	})
 }
