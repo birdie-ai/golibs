@@ -82,7 +82,7 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 				// Handler did not write a status code. This means 200 OK.
 				status = http.StatusOK
 			}
-			httpReq.StatusCode = status
+			httpReq.Status = status
 			httpReq.ResponseSize = resWriter.ContentLength()
 			httpReq.Latency = elapsed.String()
 			statsHandler(ctx, httpReq)
