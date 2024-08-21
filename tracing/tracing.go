@@ -10,10 +10,36 @@ import (
 	"github.com/google/uuid"
 )
 
+// RequestStats contains stats for a completed request.
+type RequestStats struct {
+	Method       string `json:"method,omitempty"`
+	URL          string `json:"url,omitempty"`
+	RequestSize  int64  `json:"request_size,omitempty"`
+	UserAgent    string `json:"user_agent,omitempty"`
+	Protocol     string `json:"protocol,omitempty"`
+	StatusCode   int    `json:"status_code,omitempty"`
+	ResponseSize int    `json:"response_size,omitempty"`
+	Elapsed      string `json:"elapsed,omitempty"`
+}
+
+// StatsHandler handles completed requests stats (like logging).
+type StatsHandler func(context.Context, RequestStats)
+
 // InstrumentHTTP will instrument the given [http.handler] by adding a slog.Logger on the request context.
-// The logger will have `trace_id` added to it.
+// The logger will have `trace_id`, `request_id` and `organization_id` added to it.
 // Use slog.FromCtx(ctx) to retrieve the logger.
+// It will log each completed request on the INFO level (may be too much for some services, for more fine grained control see [InstrumentHTTPWithStats]).
 func InstrumentHTTP(h http.Handler) http.Handler {
+	return InstrumentHTTPWithStats(h, func(ctx context.Context, req RequestStats) {
+		slog.FromCtx(ctx).Info("handled request", "http_request", req)
+	})
+}
+
+// InstrumentHTTPWithStats will instrument the given [http.handler] by adding a slog.Logger on the request context.
+// The logger will have `trace_id`, `request_id` and `organization_id` added to it.
+// Use slog.FromCtx(ctx) to retrieve the logger.
+// For each completed request the provided [StatsHandler] will be called.
+func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Handler {
 	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		// We don't parse/generate trace IDs exactly as in the spec, for now
 		// just using the specified header name.
@@ -37,23 +63,22 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 		}
 		ctx = slog.NewContext(ctx, log)
 
-		httpReq := map[string]any{
-			"method":       req.Method,
-			"url":          req.URL.String(),
-			"request_size": req.ContentLength,
-			"user_agent":   req.UserAgent(),
-			"protocol":     req.Proto,
+		httpReq := RequestStats{
+			Method:      req.Method,
+			URL:         req.URL.String(),
+			RequestSize: req.ContentLength,
+			UserAgent:   req.UserAgent(),
+			Protocol:    req.Proto,
 		}
 
-		log.Debug("handling request", "http_request", httpReq)
 		resWriter := newResponseWriter(res)
 		start := time.Now()
 		defer func() {
 			elapsed := time.Since(start)
-			httpReq["status_code"] = resWriter.Status()
-			httpReq["response_size"] = resWriter.ContentLength()
-			httpReq["elapsed"] = elapsed.String()
-			log.Info("handled request", "http_request", httpReq)
+			httpReq.StatusCode = resWriter.Status()
+			httpReq.ResponseSize = resWriter.ContentLength()
+			httpReq.Elapsed = elapsed.String()
+			statsHandler(ctx, httpReq)
 		}()
 
 		h.ServeHTTP(resWriter, req.WithContext(ctx))

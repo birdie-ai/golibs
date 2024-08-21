@@ -71,7 +71,7 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		gotTraceID = tracing.CtxGetTraceID(req.Context())
 		gotOrgID = tracing.CtxGetOrgID(req.Context())
 		w.WriteHeader(wantStatus)
-		fmt.Fprint(w, wantBody)
+		_, _ = fmt.Fprint(w, wantBody)
 		gotResponseWriter = w
 	}))
 
@@ -123,7 +123,7 @@ func TestIntrumentedHTTPHandlerNoFlusher(t *testing.T) {
 		gotTraceID = tracing.CtxGetTraceID(req.Context())
 		gotOrgID = tracing.CtxGetOrgID(req.Context())
 		w.WriteHeader(wantStatus)
-		fmt.Fprint(w, wantBody)
+		_, _ = fmt.Fprint(w, wantBody)
 		gotResponseWriter = w
 	}))
 	// Lets force the http.ResponseWriter to be non-flusheable

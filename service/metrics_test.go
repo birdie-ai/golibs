@@ -20,7 +20,7 @@ func TestMetricInstrumentation(t *testing.T) {
 	service.SampleBuildInfo()
 
 	called := false
-	handler := service.InstrumentHTTP(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	handler := service.InstrumentHTTP(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		called = true
 	}))
 	handler = service.InstrumentHTTPByPath(handler, "/test")
