@@ -52,7 +52,7 @@ func TestPublishEvent(t *testing.T) {
 	}
 
 	go func() {
-		// tracing info stored on the context is propagated to the events.
+		// Tracing info stored on the context is propagated to the events.
 		ctx := tracing.CtxWithTraceID(ctx, traceID)
 		ctx = tracing.CtxWithOrgID(ctx, orgID)
 
@@ -187,7 +187,7 @@ func TestSubscriptionServing(t *testing.T) {
 			t.Logf("handler called, event: %v", event)
 			event.ctx = ctx
 			gotEvents <- event
-			// we block the handlers to ensure concurrency is being respected
+			// We block the handlers to ensure concurrency is being respected
 			<-handlersDone
 			return nil
 		})
@@ -198,7 +198,7 @@ func TestSubscriptionServing(t *testing.T) {
 	want := []Event{}
 	got := []Event{}
 
-	// Lets check that all goroutines were created and handled each message
+	// Lets check that all go-routines were created and handled each message
 	for i := 0; i < maxConcurrency; i++ {
 		event := Event{
 			ID: i,
@@ -244,9 +244,9 @@ func TestSubscriptionServing(t *testing.T) {
 		assertCtxData(g)
 	}
 
-	// Now lets ensure we didn't create any extra goroutines
-	// Ensure is a strong word, this is time sensitive, but we dont have false positives
-	// here, only false negatives, so good enough ? (no random/wrong failures, only false successes maybe).
+	// Now lets ensure we didn't create any extra go-routines
+	// Ensure is a strong word, this is time sensitive, but we don't have false positives
+	// here, only false negatives, so good enough? (no random/wrong failures, only false successes maybe).
 	finalEvent := Event{
 		ID: 666,
 	}
@@ -262,7 +262,7 @@ func TestSubscriptionServing(t *testing.T) {
 		break
 	}
 
-	// now lets free all blocked handlers
+	// Now lets free all blocked handlers
 	close(handlersDone)
 
 	gotFinalEvent := <-gotEvents
@@ -274,7 +274,7 @@ func TestSubscriptionServing(t *testing.T) {
 		t.Fatalf("shutting down subscription: %v", err)
 	}
 
-	// wait for subscription to shutdown
+	// Wait for subscription to shutdown
 	<-servingDone
 }
 
@@ -393,7 +393,7 @@ func TestSubscriptionDiscardsEventsWithWrongName(t *testing.T) {
 		t.Fatalf("shutting down subscription: %v", err)
 	}
 
-	// wait for subscription to shutdown
+	// Wait for subscription to shutdown
 	<-servingDone
 }
 
@@ -431,7 +431,7 @@ func TestRawSubscriptionServing(t *testing.T) {
 		err := subscription.Serve(func(msg event.Message) error {
 			t.Logf("handler called, msg: %v", string(msg.Body))
 			gotMsgs <- msg.Body
-			// we block the handlers to ensure concurrency is being respected
+			// We block the handlers to ensure concurrency is being respected
 			<-handlersDone
 			return nil
 		})
@@ -442,7 +442,7 @@ func TestRawSubscriptionServing(t *testing.T) {
 	want := []string{}
 	got := []string{}
 
-	// Lets check that all goroutines were created and handled each message
+	// Lets check that all go-routines were created and handled each message
 	for i := 0; i < maxConcurrency; i++ {
 		msg := fmt.Sprintf("message %d", i)
 		want = append(want, msg)
@@ -459,9 +459,9 @@ func TestRawSubscriptionServing(t *testing.T) {
 	sort.Strings(got)
 	assertEqual(t, got, want)
 
-	// Now lets ensure we didn't create any extra goroutines
-	// Ensure is a strong word, this is time sensitive, but we dont have false positives
-	// here, only false negatives, so good enough ? (no random/wrong failures, only false successes maybe).
+	// Now lets ensure we didn't create any extra go-routines
+	// Ensure is a strong word, this is time sensitive, but we don't have false positives
+	// here, only false negatives, so good enough? (no random/wrong failures, only false successes maybe).
 	const finalMsg = "final message"
 
 	sendMsg([]byte(finalMsg))
@@ -476,7 +476,7 @@ func TestRawSubscriptionServing(t *testing.T) {
 		break
 	}
 
-	// now lets free all blocked handlers
+	// Now lets free all blocked handlers
 	close(handlersDone)
 
 	gotFinalMsg := string(<-gotMsgs)
@@ -486,7 +486,7 @@ func TestRawSubscriptionServing(t *testing.T) {
 		t.Fatalf("shutting down subscription: %v", err)
 	}
 
-	// wait for subscription to shutdown
+	// Wait for subscription to shutdown
 	<-servingDone
 }
 
@@ -585,7 +585,7 @@ func TestSubscriptionServingWithMetadata(t *testing.T) {
 	gotMetadata := <-receivedMetadata
 
 	assertEqual(t, gotMetadata.Attributes, wantAttributes)
-	// No easy way to test actual metadata, would need google cloud pubsub emulation or messing around with the gcppubsub driver
+	// No easy way to test actual metadata, would need google cloud pubsub emulation or messing around with the pubsub driver
 	var zeroTime time.Time
 	assertEqual(t, gotMetadata.PublishedTime, zeroTime)
 	assertEqual(t, gotMetadata.ID, "")
@@ -632,7 +632,7 @@ func TestRawSubscriptionServingWithMetadata(t *testing.T) {
 
 	assertEqual(t, string(gotMsg.Body), wantBody)
 	assertEqual(t, gotMsg.Metadata.Attributes, wantAttributes)
-	// No easy way to test actual metadata, would need google cloud pubsub emulation or messing around with the gcppubsub driver
+	// No easy way to test actual metadata, would need google cloud pubsub emulation or messing around with the pubsub driver
 	var zeroTime time.Time
 	assertEqual(t, gotMsg.Metadata.PublishedTime, zeroTime)
 	assertEqual(t, gotMsg.Metadata.ID, "")
@@ -656,9 +656,9 @@ func newTopicURL(t *testing.T) string {
 
 func assertEqual[T any](t *testing.T, got T, want T) {
 	t.Helper()
-	// parametric helps to ensure we don't compare things of different types (which doesn't make sense)
+	// Parametric helps to ensure we don't compare things of different types (which doesn't make sense)
 	// so we want 2 of any that are of the same type.
-	// maybe this could be generalized in an small assert lib :-).
+	// maybe this could be generalized in a small assert lib :-).
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Logf("got: %v", got)
