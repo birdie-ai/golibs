@@ -1,4 +1,4 @@
-// Package event provides functionality for publish/suscribe of events.
+// Package event provides functionality for publish/subscribe of events.
 package event
 
 import (
@@ -16,7 +16,7 @@ import (
 )
 
 type (
-	// Publisher represents a publisher of events of type T.
+	// Publisher represents a publisher of events of type [T].
 	// The publisher guarantees that the events conform to our basic schema for events.
 	Publisher[T any] struct {
 		name  string
@@ -32,7 +32,7 @@ type (
 	}
 
 	// Subscription is a subscription that received only specific types of events
-	// defined by T.
+	// defined by [T].
 	Subscription[T any] struct {
 		name   string
 		rawsub *MessageSubscription
@@ -73,7 +73,7 @@ type (
 		maxConcurrency int
 	}
 
-	// MessageHandler is responsible for handling messages from a [MsgSubscription].
+	// MessageHandler is responsible for handling messages from a [MessageSubscription].
 	MessageHandler func(Message) error
 )
 
@@ -131,12 +131,12 @@ func NewSubscription[T any](name, url string, maxConcurrency int) (*Subscription
 
 // NewRawSubscription creates a new raw subscription. It provides messages in a
 // service like manner (serve) and manages concurrent execution, each message
-// is processed in its own goroutines respecting the given maxConcurrency.
+// is processed in its own go-routines respecting the given maxConcurrency.
 func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, error) {
 	if maxConcurrency <= 0 {
 		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
 	}
-	// We dont want the subscription to expire, so we use the background context.
+	// We don't want the subscription to expire, so we use the background context.
 	sub, err := pubsub.OpenSubscription(context.Background(), url)
 	if err != nil {
 		return nil, err
@@ -150,11 +150,11 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 // Serve will start serving all events from the subscription calling handler for each
 // event. It will run until [Subscription.Shutdown] is called.
 // If the error is nil Ack is sent.
-// If a non-nil error is returned by the handler Unack will be sent.
+// If a non-nil error is returned by the handler Nack will be sent.
 // If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
 // If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
 // Serve may be called multiple times, each time will start a new serving service that will
-// run up to "maxConcurrency" goroutines.
+// run up to "maxConcurrency" go-routines.
 //
 // If the handler panics, the [Subscription] (the caller of the handler) assumes
 // that the effect of the panic was isolated to the active event handling.
@@ -174,11 +174,11 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 // event, providing both the event and any metadata associated with it.
 // It will run until [Subscription.Shutdown] is called.
 // If the error is nil Ack is sent.
-// If a non-nil error is returned by the handler Unack will be sent.
+// If a non-nil error is returned by the handler Nack will be sent.
 // If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
 // If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
 // ServeWithMetadata may be called multiple times, each time will start a new serving service that will
-// run up to "maxConcurrency" goroutines.
+// run up to "maxConcurrency" go-routines.
 func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
 		ctx, event, err := s.createEvent(msg)
@@ -225,9 +225,9 @@ func (s *Subscription[T]) Shutdown(ctx context.Context) error {
 // Serve will start serving all messages from the subscription calling handler for each
 // message. It will run until [MessageSubscription.Shutdown] is called.
 // If the error is nil Ack is sent.
-// If a non-nil error is returned by the handler Unack will be sent.
+// If a non-nil error is returned by the handler then a Nack will be sent.
 // Serve may be called multiple times, each time will start a new serving service that will
-// run up to "maxConcurrency" goroutines.
+// run up to "maxConcurrency" go-routines.
 //
 // If the handler panics, the [MessageSubscription] (the caller of the handler) assumes
 // that the effect of the panic was isolated to the active event handling.
@@ -237,7 +237,7 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 	semaphore := make(chan struct{}, r.maxConcurrency)
 	for {
 		semaphore <- struct{}{}
-		gocloudMsg, err := r.sub.Receive(context.Background())
+		rmsg, err := r.receive(context.Background())
 		if err != nil {
 			// From: https://pkg.go.dev/gocloud.dev@v0.30.0/pubsub#example-Subscription.Receive-Concurrent
 			// Errors from Receive indicate that Receive will no longer succeed.
@@ -248,43 +248,71 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 				<-semaphore
 			}()
 
-			id, publishedTime := getMetadata(gocloudMsg)
-			msg := Message{
-				Body: gocloudMsg.Body,
-				Metadata: Metadata{
-					ID:            id,
-					PublishedTime: publishedTime,
-					Attributes:    gocloudMsg.Metadata,
-				},
-			}
-
 			defer func() {
 				if err := recover(); err != nil {
-					// 64KB, if it is good enough for Go's stdlib it is good enough for us :-)
+					// 64KB, if it is good enough for Go's standard lib it is good enough for us :-)
 					const size = 64 << 10
 					buf := make([]byte, size)
 					buf = buf[:runtime.Stack(buf, false)]
 					slog.Error("panic: message subscription: handling message",
 						"error", err,
-						"message_body", msg.Body,
-						"metadata", msg.Metadata,
+						"message_body", rmsg.Body,
+						"metadata", rmsg.Metadata,
 						"stack_trace", string(buf))
-					if gocloudMsg.Nackable() {
-						gocloudMsg.Nack()
-					}
+					rmsg.Nack()
 				}
 			}()
 
-			err := handler(msg)
+			err := handler(rmsg.Message)
 			if err != nil {
-				if gocloudMsg.Nackable() {
-					gocloudMsg.Nack()
-				}
+				rmsg.Nack()
 				return
 			}
-			gocloudMsg.Ack()
+			rmsg.Ack()
 		}()
 	}
+}
+
+// Shutdown will shutdown the subscriber, stopping any calls to [MessageSubscription.Serve].
+// The subscription should not be used after this method is called.
+func (r *MessageSubscription) Shutdown(ctx context.Context) error {
+	return r.sub.Shutdown(ctx)
+}
+
+func (r *MessageSubscription) receive(ctx context.Context) (*message, error) {
+	gocloudMsg, err := r.sub.Receive(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, publishedTime := getMetadata(gocloudMsg)
+	return &message{
+		Message: Message{
+			Body: gocloudMsg.Body,
+			Metadata: Metadata{
+				ID:            id,
+				PublishedTime: publishedTime,
+				Attributes:    gocloudMsg.Metadata,
+			},
+		},
+		msg: gocloudMsg,
+	}, nil
+}
+
+type message struct {
+	Message
+	msg *pubsub.Message
+}
+
+// Nack this msg (if possible).
+func (r *message) Nack() {
+	if r.msg.Nackable() {
+		r.msg.Nack()
+	}
+}
+
+// Ack this msg.
+func (r *message) Ack() {
+	r.msg.Ack()
 }
 
 func getMetadata(msg *pubsub.Message) (string, time.Time) {
@@ -295,10 +323,4 @@ func getMetadata(msg *pubsub.Message) (string, time.Time) {
 		return pbmsg.MessageId, pbmsg.PublishTime.AsTime()
 	}
 	return "", time.Time{}
-}
-
-// Shutdown will shutdown the subscriber, stopping any calls to [MessageSubscription.Serve].
-// The subscription should not be used after this method is called.
-func (r *MessageSubscription) Shutdown(ctx context.Context) error {
-	return r.sub.Shutdown(ctx)
 }
