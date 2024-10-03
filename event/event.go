@@ -23,6 +23,14 @@ type (
 		topic *pubsub.Topic
 	}
 
+	// Event represents the structure of all data that wraps all events, like the [Envelope], but
+	// but with Ack/Nack. After the [Event] is handled [Event.Ack] or [Event.Nack] must be called.
+	// This type is used when receiving individual events with [Subscription.Receive].
+	Event[T any] struct {
+		Envelope[T]
+		msg *message
+	}
+
 	// Envelope represents the structure of all data that wraps all events.
 	Envelope[T any] struct {
 		TraceID string `json:"trace_id"`
@@ -145,6 +153,36 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 		sub:            sub,
 		maxConcurrency: maxConcurrency,
 	}, nil
+}
+
+// Receive will receive a single event.
+// If called concurrently with [Subscription.Serve] it will compete for events.
+// Events returned here must be Ack-ed after the caller is done with them.
+// For simple event handling [Subscription.Serve] will be better. This method is useful
+// when you need more control, like batching N events together.
+func (s *Subscription[T]) Receive(ctx context.Context) (*Event[T], error) {
+	m, err := s.rawsub.receive(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, envelope, err := s.createEvent(m.Message)
+	if err != nil {
+		return nil, err
+	}
+	var res Event[T]
+	res.Envelope = envelope
+	res.msg = m
+	return &res, nil
+}
+
+// Ack this event.
+func (e *Event[T]) Ack() {
+	e.msg.Ack()
+}
+
+// Nack this event.
+func (e *Event[T]) Nack() {
+	e.msg.Nack()
 }
 
 // Serve will start serving all events from the subscription calling handler for each
