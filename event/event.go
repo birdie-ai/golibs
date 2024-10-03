@@ -155,6 +155,28 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 	}, nil
 }
 
+// ReceiveN will receive at most N events.
+// It may return less events if the provided context is canceled/deadline exceeded.
+// If called concurrently with [Subscription.Serve] it will compete for events.
+// Events returned here must be Ack-ed after the caller is done with them.
+// For simple event handling [Subscription.Serve] will be better. This method is useful
+// when you need more control, like batching N events together.
+func (s *Subscription[T]) ReceiveN(ctx context.Context, n int) ([]*Event[T], error) {
+	if n < 0 {
+		panic(fmt.Errorf("N must be >= 0"))
+	}
+	events := []*Event[T]{}
+	for len(events) < n {
+		event, err := s.Receive(ctx)
+		if err != nil {
+			// TODO: improve error handling, not all errors are OK
+			return events, nil
+		}
+		events = append(events, event)
+	}
+	return events, nil
+}
+
 // Receive will receive a single event.
 // If called concurrently with [Subscription.Serve] it will compete for events.
 // Events returned here must be Ack-ed after the caller is done with them.

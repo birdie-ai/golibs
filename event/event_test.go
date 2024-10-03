@@ -278,6 +278,88 @@ func TestSubscriptionServing(t *testing.T) {
 	<-servingDone
 }
 
+func TestSubscriptionReceiveN(t *testing.T) {
+	t.Parallel()
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown(t, topic)
+
+	type Event struct {
+		Value int
+	}
+	const (
+		eventName   = "test"
+		batchSize   = 5
+		totalEvents = 9
+	)
+	subscription, err := event.NewSubscription[Event](eventName, url, 1)
+	if err != nil {
+		t.Fatalf("creating subscription: %v", err)
+	}
+	defer shutdown(t, subscription)
+
+	publisher := event.NewPublisher[Event](eventName, topic)
+	wantEvents := make([]Event, totalEvents)
+	for i := 0; i < 9; i++ {
+		wantEvents[i] = Event{i}
+		if err := publisher.Publish(ctx, Event{i}); err != nil {
+			t.Fatalf("publishing test event: %v", err)
+		}
+	}
+
+	// The first receive N should have a full batch, we can use the background context
+	firstBatch, err := subscription.ReceiveN(ctx, batchSize)
+	if err != nil {
+		t.Fatalf("receiving first batch: %v", err)
+	}
+	if len(firstBatch) != batchSize {
+		t.Fatalf("first batch has size %d; want %d", len(firstBatch), batchSize)
+	}
+
+	// The second receive N should have the rest of the available messages, we need a context with proper timeout.
+	// This tests that the time window for getting a batch of N also works
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	secondBatch, err := subscription.ReceiveN(ctx, batchSize)
+	if err != nil {
+		t.Fatalf("receiving second batch: %v", err)
+	}
+	const secondBatchSize = 4
+	if len(secondBatch) != secondBatchSize {
+		t.Fatalf("second batch has size %d; want %d", len(secondBatch), secondBatchSize)
+	}
+
+	// There are no order guarantees, lets order the results
+	got := append(firstBatch, secondBatch...)
+	gotEvents := make([]Event, len(got))
+
+	for i, v := range got {
+		gotEvents[i] = v.Event
+	}
+
+	sort.SliceStable(gotEvents, func(i, j int) bool {
+		return gotEvents[i].Value < gotEvents[j].Value
+	})
+	assertEqual(t, gotEvents, wantEvents)
+
+	// When there are no messages left we will get empty/no error
+	ctx2, cancel2 := context.WithTimeout(ctx, time.Millisecond)
+	defer cancel2()
+	empty, err := subscription.ReceiveN(ctx2, batchSize)
+	if len(empty) != 0 {
+		t.Fatalf("expected no messages, got: %+v", empty)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSubscriptionRecoversFromPanic(t *testing.T) {
 	t.Parallel()
 
