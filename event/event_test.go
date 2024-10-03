@@ -341,6 +341,7 @@ func TestSubscriptionReceiveN(t *testing.T) {
 
 	for i, v := range got {
 		gotEvents[i] = v.Event
+		v.Ack()
 	}
 
 	sort.SliceStable(gotEvents, func(i, j int) bool {
@@ -357,6 +358,30 @@ func TestSubscriptionReceiveN(t *testing.T) {
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSubscriptionReceiveNError(t *testing.T) {
+	t.Parallel()
+
+	url := newTopicURL(t)
+	ctx := context.Background()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown(t, topic)
+
+	subscription, err := event.NewSubscription[any]("test", url, 1)
+	if err != nil {
+		t.Fatalf("creating subscription: %v", err)
+	}
+	shutdown(t, subscription)
+
+	got, err := subscription.ReceiveN(ctx, 10)
+	if err == nil {
+		t.Fatalf("got no error and %v; want error", got)
 	}
 }
 

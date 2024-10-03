@@ -4,6 +4,7 @@ package event
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"runtime"
 	"time"
@@ -169,8 +170,13 @@ func (s *Subscription[T]) ReceiveN(ctx context.Context, n int) ([]*Event[T], err
 	for len(events) < n {
 		event, err := s.Receive(ctx)
 		if err != nil {
-			// TODO: improve error handling, not all errors are OK
-			return events, nil
+			if errors.Is(err, context.DeadlineExceeded) ||
+				errors.Is(err, context.Canceled) {
+				// Time window reached, returning current batch/N
+				return events, nil
+			}
+			// Some other error happened, normal failure then
+			return nil, err
 		}
 		events = append(events, event)
 	}
