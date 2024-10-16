@@ -125,14 +125,14 @@ func TestRetrierPerRequestTryTimeout(t *testing.T) {
 
 	// make sure that while we cancel created internal contexts we dont accidentally cancel the parent context
 	if ctx.Err() != nil {
-		t.Fatalf("want original context to be valid but got cancelled: %v", ctx.Err())
+		t.Fatalf("want original context to be valid but got canceled: %v", ctx.Err())
 	}
 }
 
 func TestRetrierPerRequestTimeoutCancelPerReqContextOnError(t *testing.T) {
 	t.Parallel()
 
-	// Here we test that when we create contexts to be used on a per request basis they must not be cancelled
+	// Here we test that when we create contexts to be used on a per request basis they must not be canceled
 	// when we return the response. If we cancel the context inside the retry logic (the usual defer cancel())
 	// the response body will fail when we try to read it (sometimes, cancellation is async...).
 	const timeoutPerRequest = time.Hour
@@ -155,20 +155,20 @@ func TestRetrierPerRequestTimeoutCancelPerReqContextOnError(t *testing.T) {
 		t.Fatalf("got %d requests; want 1", len(requests))
 	}
 
-	// Guarantee that the context created for the request was cancelled
+	// Guarantee that the context created for the request was canceled
 	req := requests[0]
 	if req.Context().Err() == nil {
-		t.Fatal("want request context to be cancelled after error response")
+		t.Fatal("want request context to be canceled after error response")
 	}
 	if ctx.Err() != nil {
-		t.Fatal("parent context should not be cancelled after error response")
+		t.Fatal("parent context should not be canceled after error response")
 	}
 }
 
 func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	t.Parallel()
 
-	// Here we test that when we create contexts to be used on a per request basis they must not be cancelled
+	// Here we test that when we create contexts to be used on a per request basis they must not be canceled
 	// when we return the response. If we cancel the context inside the retry logic (the usual defer cancel())
 	// the response body will fail when we try to read it (sometimes, cancellation is async...).
 	fakeClient := xhttptest.NewClient()
@@ -203,14 +203,14 @@ func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 		t.Fatalf("got %d requests; want 1", len(requests))
 	}
 
-	// Why we are using the request to test the context behavior ?
-	// There is no way to get the context on the response, and yet the context used on the request
-	// will control how long you have to read the response body, if the context used on the request
+	// Why we are using the request to test the context behavior?
+	// There is no way to get the context on the response. And yet the context used on the request
+	// will control how long you have to read the response body. If the context used on the request
 	// cancels then reading the response body will fail, so here we introspect into the requests
-	// contexts to guarantee that the request context won't be cancelled before we read/close the response body.
+	// contexts to guarantee that the request context won't be canceled before we read/close the response body.
 	req := requests[0]
 	if req.Context().Err() != nil {
-		t.Fatalf("want request context to not be cancelled before closing response body, got: %v", req.Context().Err())
+		t.Fatalf("want request context to not be canceled before closing response body, got: %v", req.Context().Err())
 	}
 
 	gotBody, err := io.ReadAll(res.Body)
@@ -219,19 +219,19 @@ func TestRetrierPerRequestTimeoutWontCancelContext(t *testing.T) {
 	}
 	assertEqual(t, string(gotBody), wantResponseBody)
 
-	// after the response body is closed then the context created for the specific request should be cancelled
+	// After the response body is closed then the context created for the specific request should be canceled
 	if err := res.Body.Close(); err != nil {
 		t.Fatalf("failed to close response body: %v", err)
 	}
-	// Ensure that on top of cancelling context we also actually call the underlying response body close method
+	// Ensure that on top of canceling context we also actually call the underlying response body close method
 	if resBody.CloseCalls != 1 {
 		t.Fatalf("got %d Close calls; want 1", resBody.CloseCalls)
 	}
 	if req.Context().Err() == nil {
-		t.Fatal("want request context to be cancelled after closing response body")
+		t.Fatal("want request context to be canceled after closing response body")
 	}
 	if ctx.Err() != nil {
-		t.Fatal("parent context should not be cancelled after closing response body")
+		t.Fatal("parent context should not be canceled after closing response body")
 	}
 }
 
@@ -416,7 +416,7 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 	}
 
 	for range 3 {
-		// Interleave HTTP status errors with client errors that are retryable
+		// Interleave HTTP status errors with client errors that can be retried
 		fakeClient.PushResponse(&http.Response{
 			StatusCode: http.StatusServiceUnavailable,
 		})
@@ -453,13 +453,13 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 }
 
 func TestRetrierWontRetryIfParentCtxExceeded(t *testing.T) {
-	// Lets guarantee that we don't sleep at all when the parent context is cancelled using the default sleep implementation
+	// Lets guarantee that we don't sleep at all when the parent context is canceled using the default sleep implementation
 	// This test will hang for an hour if the default behavior is broken.
 	ctx, cancel := context.WithCancel(context.Background())
 	fakeClient := xhttptest.NewClient()
 	fakeClient.OnDo(func(*http.Request) {
-		// When the Do call returns it will try to retry with the min sleep of an hour
-		// but the parent context is cancelled, so it shouldn't sleep.
+		// When the Do call returns it will try to retry with the minimum sleep of an hour
+		// but the parent context is canceled, so it shouldn't sleep.
 		cancel()
 	})
 	client := xhttp.NewRetrierClient(fakeClient, xhttp.RetrierWithMinSleepPeriod(time.Hour))
@@ -541,7 +541,7 @@ func TestRetrierRetryOnFailedResponseRead(t *testing.T) {
 
 func TestRetrierRetrySpecificErrors(t *testing.T) {
 	// This handles errors caught in production related to connection failing and other specific errors
-	// like HTTP2 errors. Sadly we didn't find a more programatic way to detect these errors besides
+	// like HTTP2 errors. Sadly we didn't find a more programmatic way to detect these errors besides
 	// inspecting the error string.
 	retryErrors := []error{
 		errors.New("<specific details> http2: server sent GOAWAY and closed the connection <specific details>"),
@@ -552,6 +552,7 @@ func TestRetrierRetrySpecificErrors(t *testing.T) {
 		errors.New("<specific details>: write: broken pipe"),
 		errors.New("<specific details>: server closed idle connection"),
 		errors.New("<specific details>: cannot assign requested address"),
+		errors.New("<specific details>: use of closed network connection"),
 		context.DeadlineExceeded,
 	}
 	for _, retryError := range retryErrors {

@@ -22,6 +22,7 @@ type (
 	Client interface {
 		Do(req *http.Request) (*http.Response, error)
 	}
+
 	// RetrierOption is used to configure retrier clients created with [NewRetrierClient].
 	RetrierOption func(*retrierClient)
 
@@ -129,17 +130,19 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		// The error type is internal and the http pkg does not provide a way to check it
 		// - https://cs.opensource.google/go/go/+/refs/tags/go1.21.4:src/net/http/h2_bundle.go;l=9250
 		//
-		// For connections reset...same problem:
+		// For connections reset... Same problem:
 		// - https://github.com/golang/go/blob/d0dc93c8e1a5be4e0a44b7f8ecb0cb1417de50ce/src/net/http/transport_test.go#L2207
+		emsg := err.Error()
 		if errors.Is(err, context.DeadlineExceeded) ||
-			strings.Contains(err.Error(), "http2: server sent GOAWAY and closed the connection") ||
-			strings.HasSuffix(err.Error(), "i/o timeout") ||
-			strings.HasSuffix(err.Error(), "connect: connection refused") ||
-			strings.HasSuffix(err.Error(), "EOF") ||
-			strings.HasSuffix(err.Error(), "write: broken pipe") ||
-			strings.HasSuffix(err.Error(), "connection reset by peer") ||
-			strings.HasSuffix(err.Error(), "server closed idle connection") ||
-			strings.HasSuffix(err.Error(), "cannot assign requested address") {
+			strings.Contains(emsg, "http2: server sent GOAWAY and closed the connection") ||
+			strings.HasSuffix(emsg, "i/o timeout") ||
+			strings.HasSuffix(emsg, "connect: connection refused") ||
+			strings.HasSuffix(emsg, "EOF") ||
+			strings.HasSuffix(emsg, "write: broken pipe") ||
+			strings.HasSuffix(emsg, "connection reset by peer") ||
+			strings.HasSuffix(emsg, "server closed idle connection") ||
+			strings.HasSuffix(emsg, "use of closed network connection") ||
+			strings.HasSuffix(emsg, "cannot assign requested address") {
 
 			log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
 			r.onRetry(req, res, err)
