@@ -94,6 +94,11 @@ func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 	}
 }
 
+// Name returns the name of the event.
+func (p *Publisher[T]) Name() string {
+	return p.name
+}
+
 // Publish will publish the given event.
 func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 	return p.PublishWithAttrs(ctx, event, nil)
@@ -154,6 +159,11 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 		sub:            sub,
 		maxConcurrency: maxConcurrency,
 	}, nil
+}
+
+// Name returns the name of the event.
+func (s *Subscription[T]) Name() string {
+	return s.name
 }
 
 // ReceiveN will receive at most N events.
