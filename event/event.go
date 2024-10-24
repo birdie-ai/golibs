@@ -34,7 +34,7 @@ type (
 
 	// Envelope represents the structure of all data that wraps all events.
 	Envelope[T any] struct {
-		TraceID string `json:"trace_id"`
+		TraceID string `json:"trace_id,omitempty"`
 		OrgID   string `json:"organization_id"`
 		Name    string `json:"name"`
 		Event   T      `json:"event"`
@@ -268,8 +268,7 @@ func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) erro
 func (s *Subscription[T]) createEvent(msg Message) (context.Context, Envelope[T], error) {
 	var event Envelope[T]
 
-	ctx := context.Background()
-	log := slog.FromCtx(ctx)
+	log := slog.Default()
 
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
 		log.Error("parsing event body", "name", s.name, "error", err, "body", string(msg.Body))
@@ -281,14 +280,18 @@ func (s *Subscription[T]) createEvent(msg Message) (context.Context, Envelope[T]
 		return nil, event, fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
 	}
 
-	ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
-	ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
+	if event.TraceID == "" {
+		event.TraceID = uuid.NewString()
+	}
 
 	log = log.With("request_id", uuid.NewString())
 	log = log.With("trace_id", event.TraceID)
 	log = log.With("organization_id", event.OrgID)
-	ctx = slog.NewContext(ctx, log)
 
+	ctx := context.Background()
+	ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
+	ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
+	ctx = slog.NewContext(ctx, log)
 	return ctx, event, nil
 }
 
