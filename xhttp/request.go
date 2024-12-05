@@ -26,8 +26,12 @@ func init() {
 	ppath := strings.Split(bf.Path, "/")
 	name := ppath[len(ppath)-1]
 
-	if name != "" && bf.Main.Version != "" {
-		uas = append(uas, name+"/"+bf.Main.Version)
+	if name != "" {
+		version := "no-version"
+		if bf.Main.Version != "" {
+			version = bf.Main.Version
+		}
+		uas = append(uas, name+"/"+version)
 	}
 
 	if len(uas) > 0 {
