@@ -28,8 +28,14 @@ func init() {
 
 	if name != "" {
 		version := "no-version"
-		if bf.Main.Version != "" {
-			version = bf.Main.Version
+		for _, buildSetting := range bf.Settings {
+			if buildSetting.Key == "vcs.revision" {
+				version = buildSetting.Value
+				if len(version) > 7 {
+					// Get a short sha of the version, useful for git
+					version = version[0:7]
+				}
+			}
 		}
 		uas = append(uas, name+"/"+version)
 	}
