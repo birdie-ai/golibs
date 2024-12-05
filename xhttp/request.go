@@ -40,10 +40,10 @@ func init() {
 }
 
 // NewRequestWithContext is a wrapper that will call [http.NewRequestWithContext] and add an User-Agent header according to [RFC 7231].
-// It is a more complete User-Agent than Go's default, including proper Go version and the name of the main package of the binary.
-// The user agent will be on the format: Go/<go version> <main package name>/<commit ID>
+// It is a more complete User-Agent than Go's default, including proper Go version and the name of the main package of the binary with its version.
+// The user agent will be on the format: Go/<go version> <main package name>/<main version>
 // This is intended for internal communication between services since the user agent contains a lot of details about the client.
-// If this seems like too information to send to a public service just use [http.NewRequestWithContext].
+// If this seems like too much information to send to a public service just use [http.NewRequestWithContext].
 //
 // [RFC 7231]: https://datatracker.ietf.org/doc/html/rfc7231#section-5.5.3
 func NewRequestWithContext(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
