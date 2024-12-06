@@ -49,6 +49,10 @@ func SampleBuildInfo() {
 		for _, buildSetting := range goBuildInfo.Settings {
 			if buildSetting.Key == "vcs.revision" {
 				revision = buildSetting.Value
+				if len(revision) > 7 {
+					// Useful for git revisions (short hash)
+					revision = revision[0:7]
+				}
 			}
 		}
 	}
