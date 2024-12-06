@@ -17,11 +17,7 @@ func init() {
 	if !ok {
 		return
 	}
-
 	var uas []string
-	if bf.GoVersion != "" {
-		uas = append(uas, "Go/"+bf.GoVersion)
-	}
 
 	ppath := strings.Split(bf.Path, "/")
 	name := ppath[len(ppath)-1]
@@ -38,6 +34,10 @@ func init() {
 			}
 		}
 		uas = append(uas, name+"/"+version)
+	}
+
+	if bf.GoVersion != "" {
+		uas = append(uas, "Go/"+bf.GoVersion)
 	}
 
 	if len(uas) > 0 {
