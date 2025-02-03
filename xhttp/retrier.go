@@ -142,6 +142,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			strings.HasSuffix(emsg, "connection reset by peer") ||
 			strings.HasSuffix(emsg, "server closed idle connection") ||
 			strings.HasSuffix(emsg, "use of closed network connection") ||
+			strings.HasSuffix(emsg, "Temporary failure in name resolution") ||
 			strings.HasSuffix(emsg, "cannot assign requested address") {
 
 			log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
