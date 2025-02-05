@@ -3,6 +3,7 @@ package xerrgroup_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -135,4 +136,24 @@ func TestReuseGroup(t *testing.T) {
 	testGroup(g, []string{"a", "b", "c"})
 	testGroup(g, []string{"d"})
 	testGroup(g, []string{"e", "f"})
+}
+
+func ExampleGroup() {
+	g := xerrgroup.New[string]()
+
+	g.Go(func() (string, error) {
+		return "a", nil
+	})
+	g.Go(func() (string, error) {
+		return "b", nil
+	})
+	g.Go(func() (string, error) {
+		return "c", nil
+	})
+
+	got, _ := g.Wait()
+	slices.Sort(got)
+	fmt.Println(got)
+
+	// Output: [a b c]
 }
