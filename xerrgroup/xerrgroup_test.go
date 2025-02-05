@@ -1,7 +1,9 @@
 package xerrgroup_test
 
 import (
+	"errors"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/birdie-ai/golibs/xerrgroup"
@@ -53,6 +55,38 @@ func TestCollectN(t *testing.T) {
 	got, err := g.Wait()
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	slices.Sort(got)
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatal(diff)
+	}
+}
+
+func TestPartialFailure(t *testing.T) {
+	want := []string{"a", "b"}
+	wantErr := errors.New("err")
+	w := &sync.WaitGroup{}
+	g := &xerrgroup.Group[string]{}
+
+	w.Add(2)
+	g.Go(func() (string, error) {
+		w.Done()
+		return want[0], nil
+	})
+	g.Go(func() (string, error) {
+		w.Done()
+		return want[1], nil
+	})
+	g.Go(func() (string, error) {
+		// Guarantee that returning error here won't stop other subtasks from returning values
+		w.Wait()
+		return "", wantErr
+	})
+
+	got, err := g.Wait()
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("got err %v; want: %v", err, wantErr)
 	}
 
 	slices.Sort(got)

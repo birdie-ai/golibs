@@ -38,7 +38,9 @@ func (g *Group[T]) Wait() ([]T, error) {
 func (g *Group[T]) Go(f func() (T, error)) {
 	g.group.Go(func() error {
 		v, err := f()
-		// TODO(katcipis): test proper error handling
+		if err != nil {
+			return err
+		}
 		g.mu.Lock()
 		g.vals = append(g.vals, v)
 		g.mu.Unlock()
