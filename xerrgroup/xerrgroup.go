@@ -11,9 +11,9 @@ import (
 // Group behaves like a [errgroup.Group] but collects results from subtasks
 // A [Group] must not be copied after first use.
 type Group[T any] struct {
-	mu   sync.Mutex
-	vals []T
-	g    errgroup.Group
+	mu    sync.Mutex
+	vals  []T
+	group errgroup.Group
 }
 
 // Wait blocks until all function calls from the Go method have returned, then returns the first non-nil error (if any) from them.
@@ -21,7 +21,8 @@ type Group[T any] struct {
 // In case an error happened in one of the subtasks partial results are possible and the slice may not be empty.
 // It is the caller responsibility to decide if a partial result is acceptable or just fail the entire task because some subtask failed.
 func (g *Group[T]) Wait() ([]T, error) {
-	return nil, nil
+	err := g.group.Wait()
+	return g.vals, err
 }
 
 // Go calls the given function in a new goroutine. It blocks until the new
@@ -34,5 +35,13 @@ func (g *Group[T]) Wait() ([]T, error) {
 // The first call to return a non-nil error cancels the group's context,
 // if the group was created by calling WithContext. The error will be returned
 // by Wait.
-func (g *Group[T]) Go(func() (T, error)) {
+func (g *Group[T]) Go(f func() (T, error)) {
+	g.group.Go(func() error {
+		v, err := f()
+		// TODO(katcipis): test proper error handling
+		g.mu.Lock()
+		g.vals = append(g.vals, v)
+		g.mu.Unlock()
+		return err
+	})
 }
