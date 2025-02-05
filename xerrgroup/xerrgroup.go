@@ -31,10 +31,6 @@ func (g *Group[T]) Wait() ([]T, error) {
 //
 // If the function returns a nil error the returned value will be collected and returned on the [Group.Wait] call.
 // If the function returns an error the returned value won't be collected.
-//
-// The first call to return a non-nil error cancels the group's context,
-// if the group was created by calling WithContext. The error will be returned
-// by Wait.
 func (g *Group[T]) Go(f func() (T, error)) {
 	g.group.Go(func() error {
 		v, err := f()

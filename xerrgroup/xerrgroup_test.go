@@ -79,7 +79,7 @@ func TestPartialFailure(t *testing.T) {
 		return want[1], nil
 	})
 	g.Go(func() (string, error) {
-		// Guarantee that returning error here won't stop other subtasks from returning values
+		// Guarantee that previous subtasks have started already
 		w.Wait()
 		return "", wantErr
 	})
