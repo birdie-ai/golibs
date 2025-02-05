@@ -1,6 +1,7 @@
 package xerrgroup_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"sync"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestCollectEmpty(t *testing.T) {
-	g := &xerrgroup.Group[string]{}
+	g := xerrgroup.New[string]()
 	got, err := g.Wait()
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +24,7 @@ func TestCollectEmpty(t *testing.T) {
 
 func TestCollectOne(t *testing.T) {
 	want := t.Name()
-	g := &xerrgroup.Group[string]{}
+	g := xerrgroup.New[string]()
 
 	g.Go(func() (string, error) {
 		return want, nil
@@ -40,7 +41,7 @@ func TestCollectOne(t *testing.T) {
 
 func TestCollectN(t *testing.T) {
 	want := []string{"a", "b", "c"}
-	g := &xerrgroup.Group[string]{}
+	g := xerrgroup.New[string]()
 
 	g.Go(func() (string, error) {
 		return want[0], nil
@@ -67,7 +68,7 @@ func TestPartialFailure(t *testing.T) {
 	want := []string{"a", "b"}
 	wantErr := errors.New("err")
 	w := &sync.WaitGroup{}
-	g := &xerrgroup.Group[string]{}
+	g := xerrgroup.New[string]()
 
 	w.Add(2)
 	g.Go(func() (string, error) {
@@ -92,5 +93,21 @@ func TestPartialFailure(t *testing.T) {
 	slices.Sort(got)
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Fatal(diff)
+	}
+}
+
+func TestWithContext(t *testing.T) {
+	causeErr := errors.New("fail")
+	g, ctx := xerrgroup.WithContext[string](context.Background())
+
+	g.Go(func() (string, error) {
+		return "", causeErr
+	})
+
+	// Since we are not calling Wait yet this can only work if cancellation worked properly
+	<-ctx.Done()
+	gotErr := context.Cause(ctx)
+	if !errors.Is(gotErr, causeErr) {
+		t.Fatalf("got err %v; want %v", gotErr, causeErr)
 	}
 }

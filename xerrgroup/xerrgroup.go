@@ -3,17 +3,35 @@
 package xerrgroup
 
 import (
+	"context"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
 )
 
 // Group behaves like a [errgroup.Group] but collects results from subtasks
-// A [Group] must not be copied after first use.
+// Use [New] or [WithContext] to create a [Group] (zero value is invalid).
 type Group[T any] struct {
-	mu    sync.Mutex
+	mu    *sync.Mutex
+	group *errgroup.Group
 	vals  []T
-	group errgroup.Group
+}
+
+// New creates a new [Group].
+func New[T any]() *Group[T] {
+	return &Group[T]{
+		mu:    &sync.Mutex{},
+		group: &errgroup.Group{},
+	}
+}
+
+// WithContext behaves like [errgroup.WithContext].
+func WithContext[T any](ctx context.Context) (*Group[T], context.Context) {
+	g, ctx := errgroup.WithContext(ctx)
+	return &Group[T]{
+		mu:    &sync.Mutex{},
+		group: g,
+	}, ctx
 }
 
 // Wait blocks until all function calls from the Go method have returned, then returns the first non-nil error (if any) from them.
