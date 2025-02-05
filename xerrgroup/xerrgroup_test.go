@@ -111,3 +111,28 @@ func TestWithContext(t *testing.T) {
 		t.Fatalf("got err %v; want %v", gotErr, causeErr)
 	}
 }
+
+func TestReuseGroup(t *testing.T) {
+	testGroup := func(g *xerrgroup.Group[string], want []string) {
+		for _, w := range want {
+			g.Go(func() (string, error) {
+				return w, nil
+			})
+		}
+
+		got, err := g.Wait()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		slices.Sort(got)
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Fatal(diff)
+		}
+	}
+	g := xerrgroup.New[string]()
+
+	testGroup(g, []string{"a", "b", "c"})
+	testGroup(g, []string{"d"})
+	testGroup(g, []string{"e", "f"})
+}

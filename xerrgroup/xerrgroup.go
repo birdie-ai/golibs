@@ -40,7 +40,20 @@ func WithContext[T any](ctx context.Context) (*Group[T], context.Context) {
 // It is the caller responsibility to decide if a partial result is acceptable or just fail the entire task because some subtask failed.
 func (g *Group[T]) Wait() ([]T, error) {
 	err := g.group.Wait()
-	return g.vals, err
+	v := g.vals
+	g.vals = nil
+	return v, err
+}
+
+// SetLimit limits the number of active goroutines in this group to at most n.
+// A negative value indicates no limit.
+//
+// Any subsequent call to the Go method will block until it can add an active
+// goroutine without exceeding the configured limit.
+//
+// The limit must not be modified while any goroutines in the group are active.
+func (g *Group[T]) SetLimit(n int) {
+	g.group.SetLimit(n)
 }
 
 // Go calls the given function in a new goroutine. It blocks until the new
