@@ -9,6 +9,7 @@ require (
 	github.com/prometheus/client_golang v1.19.1
 	github.com/sourcegraph/conc v0.3.0
 	gocloud.dev v0.37.0
+	golang.org/x/sync v0.10.0
 )
 
 require (
@@ -25,10 +26,9 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.51.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.51.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
-	golang.org/x/text v0.15.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/api v0.181.0 // indirect
 	google.golang.org/genproto v0.0.0-20240515191416-fc5f0ca64291 // indirect
