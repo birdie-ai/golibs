@@ -24,7 +24,7 @@ type (
 		err error
 	}
 
-	// UnmarshalError might be returned by [Unmarshal] when an unmarshalling error happens.
+	// UnmarshalError is returned by [Unmarshal] when an unmarshalling error happens.
 	UnmarshalError struct {
 		// Err is the unmarshalling error (returned by [json.Unmarshal].
 		Err error
