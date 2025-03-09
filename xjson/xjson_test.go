@@ -109,11 +109,17 @@ func TestDecoderFailureInterruptStream(t *testing.T) {
 		t.Fatalf("got %d iterations; want 1", i)
 	}
 
-	if dec.Error() == nil {
+	firstErr := dec.Error()
+	if firstErr == nil {
 		t.Fatal("want iteration error but got none")
 	}
 
 	for v := range dec.All() {
 		t.Fatalf("unexpected re-iteration with val: %v", v)
+	}
+
+	secondErr := dec.Error()
+	if firstErr != secondErr {
+		t.Fatalf("second iteration should not change error: got %v != want %v", secondErr, firstErr)
 	}
 }
