@@ -19,7 +19,7 @@ func TestRequestUserAgent(t *testing.T) {
 		t.Fatal("test supposed to have build information")
 	}
 	// The test only has the Go version, no main build info available
-	want := "Go/" + bf.GoVersion
+	want := "xhttp.test/no-version Go/" + bf.GoVersion
 
 	if want != v.UserAgent() {
 		t.Fatalf("got user agent %q; want %q", v.UserAgent(), want)

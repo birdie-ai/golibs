@@ -34,10 +34,10 @@ func (r Range) Duration() time.Duration {
 }
 
 // Split returns a list of time ranges of at most [max] length that together make up [r].
-func (r Range) Split(max time.Duration) []Range {
+func (r Range) Split(maxDuration time.Duration) []Range {
 	var result []Range
-	for max != 0 && r.end.Sub(r.start) > max {
-		next := r.start.Add(max)
+	for maxDuration != 0 && r.end.Sub(r.start) > maxDuration {
+		next := r.start.Add(maxDuration)
 		result = append(result, Range{
 			start: r.start,
 			end:   next,
