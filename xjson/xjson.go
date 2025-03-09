@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"os"
 	"strings"
 )
 
@@ -32,6 +33,26 @@ type (
 		Data string
 	}
 )
+
+// UnmarshalFile calls [Unmarshal] with the opened file (closing it afterwards) and returns the unmarshalled value.
+// If you need more details, like the data that was read when an unmarshalling error happened,
+// you can:
+//
+//	var errDetails UnmarshalError
+//	if errors.As(err, &errDetails) {
+//	    fmt.Println(errDetails.Data)
+//	}
+func UnmarshalFile[T any](path string) (T, error) {
+	var z T
+	f, err := os.Open(path)
+	if err != nil {
+		return z, fmt.Errorf("opening file: %w", err)
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+	return Unmarshal[T](f)
+}
 
 // Unmarshal calls [json.Unmarshal] after reading the given reader into memory
 // and returns the unmarshalled value.

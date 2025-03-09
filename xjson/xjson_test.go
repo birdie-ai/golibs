@@ -3,6 +3,8 @@ package xjson_test
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -84,6 +86,26 @@ func TestObj(t *testing.T) {
 	v, ok, err := xjson.DynGet[string](obj, "nested")
 	if err == nil {
 		t.Fatalf("want error but got %v,%v", v, ok)
+	}
+}
+
+func TestUnmarshalFile(t *testing.T) {
+	type obj struct {
+		Name string
+	}
+	const example = `{"name": "test"}`
+
+	path := filepath.Join(t.TempDir(), "file.json")
+	if err := os.WriteFile(path, []byte(example), 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := xjson.UnmarshalFile[obj](path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Name != "test" {
+		t.Fatalf("got wrong name %q", v.Name)
 	}
 }
 
