@@ -7,7 +7,85 @@ import (
 	"testing"
 
 	"github.com/birdie-ai/golibs/xjson"
+	"github.com/google/go-cmp/cmp"
 )
+
+func TestObj(t *testing.T) {
+	const example = `
+	{
+		"number" : 666,
+		"string" : "test",
+		"bool"   : true,
+		"list"   : [6,6,6],
+		"nested" : {
+			"number" : 777,
+			"string" : "test2",
+			"bool"   : false,
+			"list"   : [7,7,7],
+			"nested2" : {
+				"number" : 888,
+				"string" : "test3",
+				"bool"   : true,
+				"list"   : [8,8,8],
+				"list_objs" : [
+					{ "test": "a"},
+					{ "test": "b"},
+					{ "test": "c"}
+				]
+			}
+		}
+	}
+	`
+
+	obj, err := xjson.Unmarshal[xjson.Obj](strings.NewReader(example))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(obj["number"])
+
+	assertEqual(t, dynGet[float64](t, obj, "number"), 666)
+	assertEqual(t, dynGet[string](t, obj, "string"), "test")
+	assertEqual(t, dynGet[bool](t, obj, "bool"), true)
+	assertEqual(t, dynGet[[]any](t, obj, "list"), []any{float64(6), float64(6), float64(6)})
+
+	// level 1 nesting
+	assertEqual(t, dynGet[float64](t, obj, "nested.number"), 777)
+	assertEqual(t, dynGet[string](t, obj, "nested.string"), "test2")
+	assertEqual(t, dynGet[bool](t, obj, "nested.bool"), false)
+	assertEqual(t, dynGet[[]any](t, obj, "nested.list"), []any{float64(7), float64(7), float64(7)})
+
+	// level 2 nesting
+	assertEqual(t, dynGet[float64](t, obj, "nested.nested2.number"), 888)
+	assertEqual(t, dynGet[string](t, obj, "nested.nested2.string"), "test3")
+	assertEqual(t, dynGet[bool](t, obj, "nested.nested2.bool"), true)
+	assertEqual(t, dynGet[[]any](t, obj, "nested.nested2.list"), []any{float64(8), float64(8), float64(8)})
+
+	assertEqual(t, dynGet[[]any](t, obj, "nested.nested2.list_objs"), []any{
+		xjson.Obj{"test": "a"}, xjson.Obj{"test": "b"}, xjson.Obj{"test": "c"},
+	})
+
+	assertNotFound := func(path string) {
+		t.Helper()
+		v, ok, err := xjson.DynGet[string](obj, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok {
+			t.Fatalf("expected not found; got value: %v", v)
+		}
+	}
+
+	assertNotFound("")
+	assertNotFound("notfound")
+	assertNotFound("nested.notfound")
+	assertNotFound("nested.nested2.notfound")
+
+	v, ok, err := xjson.DynGet[string](obj, "nested")
+	if err == nil {
+		t.Fatalf("want error but got %v,%v", v, ok)
+	}
+}
 
 func TestUnmarshal(t *testing.T) {
 	type obj struct {
@@ -121,5 +199,25 @@ func TestDecoderFailureInterruptStream(t *testing.T) {
 	secondErr := dec.Error()
 	if firstErr != secondErr {
 		t.Fatalf("second iteration should not change error: got %v != want %v", secondErr, firstErr)
+	}
+}
+
+func dynGet[T any](t *testing.T, o xjson.Obj, path string) T {
+	t.Helper()
+
+	v, ok, err := xjson.DynGet[T](o, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("expected path to exist in object: %v", o)
+	}
+	return v
+}
+
+func assertEqual[T any](t *testing.T, got, want T) {
+	t.Helper()
+	if d := cmp.Diff(got, want); d != "" {
+		t.Fatalf("got(-) want(+):\n%s", d)
 	}
 }
