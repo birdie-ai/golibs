@@ -12,7 +12,7 @@ import (
 
 type (
 	// Obj represents a dynamic JSON object.
-	// Use [DynGet] and [DynSet] to manipulate it more easily.
+	// Use [DynGet] to manipulate it more easily.
 	Obj = map[string]any
 
 	// Decoder specializes the [json.Decoder] for streams of objects of the same type
