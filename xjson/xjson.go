@@ -17,7 +17,7 @@ type (
 	Obj = map[string]any
 
 	// Decoder specializes the [json.Decoder] for streams of objects of the same type
-	// (although you can create a [Decoder] with type [Object], then it is dynamic),
+	// (although you can create a [Decoder] with type [Obj], then it is dynamic),
 	// leveraging parametric types and iterators to make things easier.
 	// It won't cover all possible scenarios by design, for that you can use Go's [json.Decoder].
 	Decoder[T any] struct {
