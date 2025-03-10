@@ -1,6 +1,6 @@
 module github.com/birdie-ai/golibs
 
-go 1.22
+go 1.23
 
 require (
 	cloud.google.com/go/pubsub v1.38.0
