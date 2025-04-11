@@ -452,6 +452,124 @@ func TestRetrierExponentialBackoff(t *testing.T) {
 	}
 }
 
+func TestRetrierRetryAfterCantBeBiggerThanMaxSleep(t *testing.T) {
+	fakeClient := xhttptest.NewClient()
+	gotSleepPeriods := []time.Duration{}
+	gotContexts := []context.Context{}
+	sleep := func(ctx context.Context, period time.Duration) {
+		gotContexts = append(gotContexts, ctx)
+		gotSleepPeriods = append(gotSleepPeriods, period)
+	}
+
+	client := xhttp.NewRetrierClient(fakeClient,
+		xhttp.RetrierWithMinSleepPeriod(time.Second),
+		xhttp.RetrierWithMaxSleepPeriod(2*time.Second),
+		xhttp.RetrierWithSleep(sleep),
+	)
+
+	wantSleepPeriods := []time.Duration{
+		2 * time.Second,
+		2 * time.Second,
+		2 * time.Second,
+	}
+
+	for range 3 {
+		fakeClient.PushResponse(&http.Response{
+			StatusCode: http.StatusServiceUnavailable,
+			Header: http.Header{
+				"Retry-After": []string{"5"},
+			},
+		})
+	}
+	fakeClient.PushResponse(&http.Response{
+		StatusCode: http.StatusOK,
+	})
+
+	request := newRequest(t, http.MethodGet, "/test", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request = request.Clone(ctx)
+	res, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("client.Do(%v) failed: %v", request, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+	}
+
+	requestsMade := len(fakeClient.Requests())
+	if requestsMade != 4 {
+		t.Fatalf("got %d requests; want 4", requestsMade)
+	}
+
+	assertEqual(t, gotSleepPeriods, wantSleepPeriods)
+	for i, gotContext := range gotContexts {
+		if gotContext != ctx {
+			t.Errorf("got ctx[%d] %v != want %v", i, gotContext, ctx)
+		}
+	}
+}
+
+func TestRetrierNoExponentialBackoffWhenRetryAfterPresent(t *testing.T) {
+	fakeClient := xhttptest.NewClient()
+	gotSleepPeriods := []time.Duration{}
+	gotContexts := []context.Context{}
+	sleep := func(ctx context.Context, period time.Duration) {
+		gotContexts = append(gotContexts, ctx)
+		gotSleepPeriods = append(gotSleepPeriods, period)
+	}
+
+	client := xhttp.NewRetrierClient(fakeClient,
+		xhttp.RetrierWithMinSleepPeriod(time.Second),
+		xhttp.RetrierWithMaxSleepPeriod(10*time.Second),
+		xhttp.RetrierWithSleep(sleep),
+	)
+
+	wantSleepPeriods := []time.Duration{
+		5 * time.Second,
+		5 * time.Second,
+		5 * time.Second,
+	}
+
+	for range 3 {
+		fakeClient.PushResponse(&http.Response{
+			StatusCode: http.StatusServiceUnavailable,
+			Header: http.Header{
+				"Retry-After": []string{"5"},
+			},
+		})
+	}
+	fakeClient.PushResponse(&http.Response{
+		StatusCode: http.StatusOK,
+	})
+
+	request := newRequest(t, http.MethodGet, "/test", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request = request.Clone(ctx)
+	res, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("client.Do(%v) failed: %v", request, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("got status %v; want %v", res.StatusCode, http.StatusOK)
+	}
+
+	requestsMade := len(fakeClient.Requests())
+	if requestsMade != 4 {
+		t.Fatalf("got %d requests; want 4", requestsMade)
+	}
+
+	assertEqual(t, gotSleepPeriods, wantSleepPeriods)
+	for i, gotContext := range gotContexts {
+		if gotContext != ctx {
+			t.Errorf("got ctx[%d] %v != want %v", i, gotContext, ctx)
+		}
+	}
+}
+
 func TestRetrierWontRetryIfParentCtxExceeded(t *testing.T) {
 	// Lets guarantee that we don't sleep at all when the parent context is canceled using the default sleep implementation
 	// This test will hang for an hour if the default behavior is broken.
