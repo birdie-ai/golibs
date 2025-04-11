@@ -71,6 +71,20 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 	return r
 }
 
+// ParseRetryAfter parses the Retry-After header in the response.
+func ParseRetryAfter(value string) (time.Duration, time.Time, error) {
+	if value == "" {
+		return 0, time.Time{}, nil
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		return time.Duration(seconds) * time.Second, time.Time{}, nil
+	}
+	if t, err := http.ParseTime(value); err == nil {
+		return 0, t, nil
+	}
+	return 0, time.Time{}, fmt.Errorf("invalid Retry-After header in http response: %s", value)
+}
+
 type (
 	retrierClient struct {
 		client           Client
@@ -112,101 +126,109 @@ func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody []byte, sleepPeriod time.Duration) (*http.Response, error) {
-	if ctx.Err() != nil {
-		slog.FromCtx(ctx).Debug("xhttp.Client: stopping retry: parent context canceled", "error", ctx.Err())
-		return nil, ctx.Err()
-	}
-	req, cancel := r.newRequest(ctx, req, requestBody)
+	for ctx.Err() == nil {
+		req, cancel := r.newRequest(ctx, req, requestBody)
+		log := slog.FromCtx(ctx).With("request_url", req.URL)
+		start := time.Now()
 
-	log := slog.FromCtx(ctx).With("request_url", req.URL)
-
-	start := time.Now()
-	res, err := r.client.Do(req)
-	r.onRequestDone(req, res, err, time.Since(start))
-	if err != nil {
-		cancel()
-
-		// Sadly there is no other way to detect this error other than using the opaque string message
-		// The error type is internal and the http pkg does not provide a way to check it
-		// - https://cs.opensource.google/go/go/+/refs/tags/go1.21.4:src/net/http/h2_bundle.go;l=9250
-		//
-		// For connections reset... Same problem:
-		// - https://github.com/golang/go/blob/d0dc93c8e1a5be4e0a44b7f8ecb0cb1417de50ce/src/net/http/transport_test.go#L2207
-		emsg := err.Error()
-		if errors.Is(err, context.DeadlineExceeded) ||
-			strings.Contains(emsg, "http2: server sent GOAWAY and closed the connection") ||
-			strings.HasSuffix(emsg, "i/o timeout") ||
-			strings.HasSuffix(emsg, "connect: connection refused") ||
-			strings.HasSuffix(emsg, "EOF") ||
-			strings.HasSuffix(emsg, "write: broken pipe") ||
-			strings.HasSuffix(emsg, "connection reset by peer") ||
-			strings.HasSuffix(emsg, "server closed idle connection") ||
-			strings.HasSuffix(emsg, "use of closed network connection") ||
-			strings.HasSuffix(emsg, "Temporary failure in name resolution") ||
-			strings.HasSuffix(emsg, "cannot assign requested address") {
-
-			log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
-			r.onRetry(req, res, err)
-			r.sleep(ctx, sleepPeriod)
-			return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
-		}
-
-		log.Debug("xhttp.Client: non recoverable error", "error", err)
-		return nil, err
-	}
-
-	res.Body = &readerCloserCanceller{res.Body, cancel}
-
-	_, isRetryCode := r.retryStatusCodes[res.StatusCode]
-	if isRetryCode {
-		log := slog.FromCtx(ctx).With("status_code", res.StatusCode, "sleep_period", sleepPeriod.String())
-		if err := res.Body.Close(); err != nil {
-			log.Debug("xhttp.Client: unable to close response body while retrying", "error", err)
-		}
-		log.Debug("xhttp.Client: retrying request with error status code")
-		r.onRetry(req, res, err)
-
-		// handle Retry-After header
-		const minRetryAfterDuration = time.Second
-		retryAfter := res.Header.Get("Retry-After")
-		requestedDuration, requestedTime, err := ParseRetryAfter(retryAfter)
-		switch {
-		case err != nil:
-			log.Warn(fmt.Sprintf("xhttp.Client: %v", err))
-		case requestedDuration >= minRetryAfterDuration:
-			log.Debug("xhttp.Client: following Retry-After header", "duration", requestedDuration)
-			sleepPeriod = requestedDuration
-		case !requestedTime.IsZero():
-			calculatedDuration := time.Until(requestedTime)
-			if calculatedDuration >= minRetryAfterDuration {
-				log.Debug("xhttp.Client: following Retry-After header", "time", requestedTime,
-					"calculated_duration", calculatedDuration)
-				sleepPeriod = calculatedDuration
-			}
-		}
-
-		r.sleep(ctx, sleepPeriod)
-		return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
-	}
-
-	if r.checkResponse {
-		// assuming that res.Body is never nil (from http.Do docs):
-		// "If the returned error is nil, the Response will contain a non-nil Body which the user is expected to close."
-		log.Debug("xhttp.Client: checking response body")
-		respBodyBytes, err := io.ReadAll(res.Body)
-		if cerr := res.Body.Close(); cerr != nil {
-			log.Debug("xhttp.Client: error closing response body", "error", cerr)
-		}
+		res, err := r.client.Do(req)
+		r.onRequestDone(req, res, err, time.Since(start))
 		if err != nil {
-			log.Debug("xhttp.Client: retrying request with error reading response body", "error", err)
-			r.sleep(ctx, sleepPeriod)
-			return r.do(ctx, req, requestBody, min(sleepPeriod*2, r.maxPeriod))
+			cancel()
+
+			// Sadly there is no other way to detect this error other than using the opaque string message
+			// The error type is internal and the http pkg does not provide a way to check it
+			// - https://cs.opensource.google/go/go/+/refs/tags/go1.21.4:src/net/http/h2_bundle.go;l=9250
+			//
+			// For connections reset... Same problem:
+			// - https://github.com/golang/go/blob/d0dc93c8e1a5be4e0a44b7f8ecb0cb1417de50ce/src/net/http/transport_test.go#L2207
+			emsg := err.Error()
+			if errors.Is(err, context.DeadlineExceeded) ||
+				strings.Contains(emsg, "http2: server sent GOAWAY and closed the connection") ||
+				strings.HasSuffix(emsg, "i/o timeout") ||
+				strings.HasSuffix(emsg, "connect: connection refused") ||
+				strings.HasSuffix(emsg, "EOF") ||
+				strings.HasSuffix(emsg, "write: broken pipe") ||
+				strings.HasSuffix(emsg, "connection reset by peer") ||
+				strings.HasSuffix(emsg, "server closed idle connection") ||
+				strings.HasSuffix(emsg, "use of closed network connection") ||
+				strings.HasSuffix(emsg, "Temporary failure in name resolution") ||
+				strings.HasSuffix(emsg, "cannot assign requested address") {
+
+				log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
+				r.onRetry(req, res, err)
+				r.sleep(ctx, sleepPeriod)
+				sleepPeriod = min(sleepPeriod*2, r.maxPeriod)
+				continue
+			}
+
+			log.Debug("xhttp.Client: non recoverable error", "error", err)
+			return nil, err
 		}
-		log.Debug("xhttp.Client: response body read with success")
-		res.Body = io.NopCloser(bytes.NewReader(respBodyBytes))
+
+		res.Body = &readerCloserCanceller{res.Body, cancel}
+
+		_, isRetryCode := r.retryStatusCodes[res.StatusCode]
+		if isRetryCode {
+			log := slog.FromCtx(ctx).With("status_code", res.StatusCode, "sleep_period", sleepPeriod.String())
+			if err := res.Body.Close(); err != nil {
+				log.Debug("xhttp.Client: unable to close response body while retrying", "error", err)
+			}
+
+			log.Debug("xhttp.Client: retrying request with error status code")
+
+			r.onRetry(req, res, err)
+
+			// handle Retry-After header
+			const minRetryAfterDuration = time.Second
+			retryAfter := res.Header.Get("Retry-After")
+			requestedDuration, requestedTime, err := ParseRetryAfter(retryAfter)
+			switch {
+			case err != nil:
+				log.Warn("xhttp.Client: parsing Retry-After header", "error", err)
+
+			case requestedDuration >= minRetryAfterDuration:
+				log.Debug("xhttp.Client: following Retry-After header", "duration", requestedDuration)
+				sleepPeriod = min(requestedDuration, r.maxPeriod)
+
+			case !requestedTime.IsZero():
+				calculatedDuration := time.Until(requestedTime)
+				if calculatedDuration >= minRetryAfterDuration {
+					log.Debug("xhttp.Client: following Retry-After header", "time", requestedTime,
+						"calculated_duration", calculatedDuration)
+					sleepPeriod = min(calculatedDuration, r.maxPeriod)
+				}
+			}
+
+			r.sleep(ctx, sleepPeriod)
+			sleepPeriod = min(sleepPeriod*2, r.maxPeriod)
+			continue
+		}
+
+		if r.checkResponse {
+			// assuming that res.Body is never nil (from http.Do docs):
+			// "If the returned error is nil, the Response will contain a non-nil Body which the user is expected to close."
+			log.Debug("xhttp.Client: checking response body")
+			respBodyBytes, err := io.ReadAll(res.Body)
+			if cerr := res.Body.Close(); cerr != nil {
+				log.Debug("xhttp.Client: error closing response body", "error", cerr)
+			}
+			if err != nil {
+				log.Debug("xhttp.Client: retrying request with error reading response body", "error", err)
+				r.sleep(ctx, sleepPeriod)
+
+				// TODO: handle sleep period increment
+				continue
+			}
+			log.Debug("xhttp.Client: response body read with success")
+			res.Body = io.NopCloser(bytes.NewReader(respBodyBytes))
+		}
+
+		return res, nil
 	}
 
-	return res, nil
+	slog.FromCtx(ctx).Debug("xhttp.Client: stopping retry: parent context canceled", "error", ctx.Err())
+	return nil, ctx.Err()
 }
 
 func (r *retrierClient) newRequest(ctx context.Context, req *http.Request, requestBody []byte) (*http.Request, context.CancelFunc) {
@@ -231,18 +253,4 @@ func defaultOnRequestDone(*http.Request, *http.Response, error, time.Duration) {
 }
 
 func defaultOnRetry(*http.Request, *http.Response, error) {
-}
-
-// ParseRetryAfter parses the Retry-After header in the response.
-func ParseRetryAfter(value string) (time.Duration, time.Time, error) {
-	if value == "" {
-		return 0, time.Time{}, nil
-	}
-	if seconds, err := strconv.Atoi(value); err == nil {
-		return time.Duration(seconds) * time.Second, time.Time{}, nil
-	}
-	if t, err := http.ParseTime(value); err == nil {
-		return 0, t, nil
-	}
-	return 0, time.Time{}, fmt.Errorf("invalid Retry-After header in http response: %s", value)
 }
