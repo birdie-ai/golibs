@@ -1,7 +1,9 @@
 package xhttp
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"runtime/debug"
@@ -59,4 +61,14 @@ func NewRequestWithContext(ctx context.Context, method, url string, body io.Read
 	}
 	req.Header.Set("User-Agent", defaultUserAgent)
 	return req, nil
+}
+
+// NewJSONRequest is a wrapper that will marshall the given data as a JSON and call [NewRequestWithContext].
+// It makes it practical to create HTTP requests that send JSON bodies with detailed user agents (what we want most of the time).
+func NewJSONRequest(ctx context.Context, method, url string, data any) (*http.Request, error) {
+	body, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	return NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 }
