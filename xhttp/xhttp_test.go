@@ -2,6 +2,7 @@ package xhttp_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,5 +70,32 @@ func TestDo(t *testing.T) {
 	}
 	if res.Obj != wantErr {
 		t.Fatalf("got response %v; want %v", res.Obj, wantErr)
+	}
+}
+
+func TestDoInvalidJSON(t *testing.T) {
+	const body = "}definitely no JSON{"
+	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
+		if _, err := res.Write([]byte(body)); err != nil {
+			t.Error(err)
+		}
+	}))
+
+	c := &http.Client{}
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type Response struct {
+		Result string
+	}
+	_, err = xhttp.Do[Response](c, req)
+	var rerr xhttp.ResponseErr
+	if !errors.As(err, &rerr) {
+		t.Fatalf("got err %v type %[1]T; want http.ResponseErr", err)
+	}
+	if string(rerr.Body) != body {
+		t.Fatalf("got err body %q; want %q", string(rerr.Body), body)
 	}
 }
