@@ -1,6 +1,3 @@
-# tool versions
-golangci_lint_version := "v1.64.6"
-
 # test and lint the code
 default: test lint
 
@@ -20,7 +17,7 @@ test-coverage-show: test-coverage
 
 # lint the whole project
 lint:
-    go run github.com/golangci/golangci-lint/cmd/golangci-lint@{{golangci_lint_version}} run ./...
+    golangci-lint run ./...
 
 # format Go code
 fmt:
