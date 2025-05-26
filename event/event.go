@@ -174,7 +174,7 @@ func (s *Subscription[T]) Name() string {
 // when you need more control, like batching N events together.
 func (s *Subscription[T]) ReceiveN(ctx context.Context, n int) ([]*Event[T], error) {
 	if n < 0 {
-		panic(fmt.Errorf("N must be >= 0"))
+		panic(fmt.Errorf("n must be >= 0"))
 	}
 	events := []*Event[T]{}
 	for len(events) < n {

@@ -122,7 +122,7 @@ func TestRangeSplit(t *testing.T) {
 		r := newRange(c.from, c.to)
 		got := r.Split(c.max)
 		comparer := cmp.Comparer(func(a xtime.Range, b xtime.Range) bool {
-			return (a.Start() == b.Start()) && (a.End() == b.End())
+			return (a.Start().Equal(b.Start())) && (a.End().Equal(b.End()))
 		})
 
 		if diff := cmp.Diff(c.want, got, comparer); diff != "" {

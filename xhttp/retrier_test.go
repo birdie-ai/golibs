@@ -1028,23 +1028,24 @@ func retryableError() error {
 
 func TestParseRetryAfter(t *testing.T) {
 	cases := []struct {
-		value string
-		d     time.Duration
-		tm    time.Time
+		value        string
+		wantDuration time.Duration
+		wantTime     time.Time
 	}{
 		{value: ""},
-		{value: "123", d: 123 * time.Second},
-		{value: "Wed, 21 Oct 2015 07:28:00 GMT", tm: time.Date(2015, 10, 21, 7, 28, 0, 0, time.UTC)},
+		{value: "123", wantDuration: 123 * time.Second},
+		{value: "Wed, 21 Oct 2015 07:28:00 GMT", wantTime: time.Date(2015, 10, 21, 7, 28, 0, 0, time.UTC)},
 	}
 	for _, c := range cases {
-		d, tm, err := xhttp.ParseRetryAfter(c.value)
+		gotDuration, gotTime, err := xhttp.ParseRetryAfter(c.value)
 		if err != nil {
-			t.Errorf("ParseRetryAfter(%q) returned error: %v", c.value, err)
-		} else if !(d == c.d && tm.Equal(c.tm)) {
-			t.Errorf("ParseRetryAfter(%q) == (%v, %v, nil), want (%v, %v, nil)",
-				c.value,
-				d, tm,
-				c.d, c.tm)
+			t.Fatalf("ParseRetryAfter(%q) returned error: %v", c.value, err)
+		}
+		if gotDuration != c.wantDuration {
+			t.Errorf("ParseRetryAfter(%q) = %v; want %v", c.value, gotDuration, c.wantDuration)
+		}
+		if !gotTime.Equal(c.wantTime) {
+			t.Errorf("ParseRetryAfter(%q) = %v; want %v", c.value, gotTime, c.wantTime)
 		}
 	}
 }

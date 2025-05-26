@@ -1,11 +1,23 @@
+version: "2"
 linters:
   enable:
-    - revive
     - misspell
+    - revive
+  exclusions:
+    generated: lax
+    rules:
+      - path: (.+)\.go$
+        text: EXC0012
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
     - gofmt
-issues:
-  # So we can detect exported/undocumented symbols
-  # https://github.com/golangci/golangci-lint/issues/2114
-  exclude:
-    - EXC0012
-  exclude-use-default: false
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
