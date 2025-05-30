@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sourcegraph/conc/pool"
+	"golang.org/x/sync/errgroup"
 )
 
 // Shutdowner represents a service that can shutdown.
@@ -40,17 +40,19 @@ func (s *ShutdownHandler) Add(service Shutdowner) {
 func (s *ShutdownHandler) Wait(ctx context.Context) error {
 	<-ctx.Done()
 
-	p := pool.NewWithResults[error]()
+	errs := make([]error, len(s.services))
+	g := &errgroup.Group{}
 
-	for _, v := range s.services {
-		service := v
-
-		p.Go(func() error {
+	for i, service := range s.services {
+		g.Go(func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), s.waitPeriod)
 			defer cancel()
-			return service.Shutdown(ctx)
+			errs[i] = service.Shutdown(ctx)
+			return nil
 		})
 	}
+	// We never fail the task, we accumulate all errors on errs.
+	_ = g.Wait()
 
-	return errors.Join(p.Wait()...)
+	return errors.Join(errs...)
 }
