@@ -13,6 +13,9 @@ type (
 	// instead of a response body.
 	Response[T any] struct {
 		*http.Response
+		// RawObj is the raw response from where Obj was parsed (useful mostly for debugging).
+		RawObj []byte
+		// Obj is the parsed JSON response.
 		Obj T
 	}
 	// ResponseErr is the error returned by [Do] if parsing the response body fails.
@@ -49,7 +52,7 @@ func Do[T any](c Client, req *http.Request) (*Response[T], error) {
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, ResponseErr{err, body}
 	}
-	return &Response[T]{v, parsed}, nil
+	return &Response[T]{Response: v, RawObj: body, Obj: parsed}, nil
 }
 
 func (r ResponseErr) Error() string {

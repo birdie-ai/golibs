@@ -24,21 +24,36 @@ func TestDo(t *testing.T) {
 		}
 	)
 
-	wantOK := Response{OK: OK{Success: "success !!!"}}
-	wantErr := Response{Error: Error{Message: "such error !!!"}}
-	var sendErr bool
+	var (
+		wantRawObj []byte
+		sendErr    bool
+		wantOK     = Response{OK: OK{Success: "success !!!"}}
+		wantErr    = Response{Error: Error{Message: "such error !!!"}}
+	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
 		if sendErr {
 			res.WriteHeader(http.StatusInternalServerError)
-			e := json.NewEncoder(res)
-			if err := e.Encode(wantErr); err != nil {
+			s, err := json.Marshal(wantErr)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			wantRawObj = s
+
+			if _, err = res.Write(wantRawObj); err != nil {
 				t.Error(err)
 			}
 			return
 		}
-		e := json.NewEncoder(res)
-		if err := e.Encode(wantOK); err != nil {
+		s, err := json.Marshal(wantOK)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		wantRawObj = s
+
+		if _, err = res.Write(wantRawObj); err != nil {
 			t.Error(err)
 		}
 	}))
@@ -59,6 +74,9 @@ func TestDo(t *testing.T) {
 	if res.Obj != wantOK {
 		t.Fatalf("got response %v; want %v", res.Obj, wantOK)
 	}
+	if string(res.RawObj) != string(wantRawObj) {
+		t.Fatalf("got raw response %q; want %q", string(res.RawObj), string(wantRawObj))
+	}
 
 	sendErr = true
 	res, err = xhttp.Do[Response](c, req)
@@ -70,6 +88,9 @@ func TestDo(t *testing.T) {
 	}
 	if res.Obj != wantErr {
 		t.Fatalf("got response %v; want %v", res.Obj, wantErr)
+	}
+	if string(res.RawObj) != string(wantRawObj) {
+		t.Fatalf("got raw response %q; want %q", string(res.RawObj), string(wantRawObj))
 	}
 }
 
