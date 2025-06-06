@@ -24,21 +24,36 @@ func TestDo(t *testing.T) {
 		}
 	)
 
-	wantOK := Response{OK: OK{Success: "success !!!"}}
-	wantErr := Response{Error: Error{Message: "such error !!!"}}
-	var sendErr bool
+	var (
+		wantRawObj []byte
+		sendErr    bool
+		wantOK     = Response{OK: OK{Success: "success !!!"}}
+		wantErr    = Response{Error: Error{Message: "such error !!!"}}
+	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
 		if sendErr {
 			res.WriteHeader(http.StatusInternalServerError)
-			e := json.NewEncoder(res)
-			if err := e.Encode(wantErr); err != nil {
+			s, err := json.Marshal(wantErr)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			wantRawObj = s
+
+			if _, err = res.Write(wantRawObj); err != nil {
 				t.Error(err)
 			}
 			return
 		}
-		e := json.NewEncoder(res)
-		if err := e.Encode(wantOK); err != nil {
+		s, err := json.Marshal(wantOK)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		wantRawObj = s
+
+		if _, err = res.Write(wantRawObj); err != nil {
 			t.Error(err)
 		}
 	}))
@@ -56,8 +71,11 @@ func TestDo(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("got status code %d; want %d", res.StatusCode, http.StatusOK)
 	}
-	if res.Obj != wantOK {
-		t.Fatalf("got response %v; want %v", res.Obj, wantOK)
+	if res.Value != wantOK {
+		t.Fatalf("got response %v; want %v", res.Value, wantOK)
+	}
+	if string(res.RawBody) != string(wantRawObj) {
+		t.Fatalf("got raw response %q; want %q", string(res.RawBody), string(wantRawObj))
 	}
 
 	sendErr = true
@@ -68,8 +86,11 @@ func TestDo(t *testing.T) {
 	if res.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("got status code %d; want %d", res.StatusCode, http.StatusInternalServerError)
 	}
-	if res.Obj != wantErr {
-		t.Fatalf("got response %v; want %v", res.Obj, wantErr)
+	if res.Value != wantErr {
+		t.Fatalf("got response %v; want %v", res.Value, wantErr)
+	}
+	if string(res.RawBody) != string(wantRawObj) {
+		t.Fatalf("got raw response %q; want %q", string(res.RawBody), string(wantRawObj))
 	}
 }
 
