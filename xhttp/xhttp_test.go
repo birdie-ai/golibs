@@ -64,22 +64,28 @@ func TestDo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := xhttp.Do[Response](c, req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("got status code %d; want %d", res.StatusCode, http.StatusOK)
-	}
-	if res.Value != wantOK {
-		t.Fatalf("got response %v; want %v", res.Value, wantOK)
-	}
-	if string(res.RawBody) != string(wantRawObj) {
-		t.Fatalf("got raw response %q; want %q", string(res.RawBody), string(wantRawObj))
+	assertSuccess := func(res *xhttp.Response[Response], err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("got status code %d; want %d", res.StatusCode, http.StatusOK)
+		}
+		if res.Value != wantOK {
+			t.Fatalf("got response %v; want %v", res.Value, wantOK)
+		}
+		if string(res.RawBody) != string(wantRawObj) {
+			t.Fatalf("got raw response %q; want %q", string(res.RawBody), string(wantRawObj))
+		}
 	}
 
+	assertSuccess(xhttp.Do[Response](c, req))
+	// piggyback on tests to also check our xhttp.Get helper
+	assertSuccess(xhttp.Get[Response](t.Context(), c, server.URL))
+
 	sendErr = true
-	res, err = xhttp.Do[Response](c, req)
+	res, err := xhttp.Do[Response](c, req)
 	if err != nil {
 		t.Fatal(err)
 	}
