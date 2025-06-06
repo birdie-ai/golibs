@@ -71,11 +71,11 @@ func TestDo(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("got status code %d; want %d", res.StatusCode, http.StatusOK)
 	}
-	if res.Obj != wantOK {
-		t.Fatalf("got response %v; want %v", res.Obj, wantOK)
+	if res.Value != wantOK {
+		t.Fatalf("got response %v; want %v", res.Value, wantOK)
 	}
-	if string(res.RawObj) != string(wantRawObj) {
-		t.Fatalf("got raw response %q; want %q", string(res.RawObj), string(wantRawObj))
+	if string(res.RawBody) != string(wantRawObj) {
+		t.Fatalf("got raw response %q; want %q", string(res.RawBody), string(wantRawObj))
 	}
 
 	sendErr = true
@@ -86,11 +86,11 @@ func TestDo(t *testing.T) {
 	if res.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("got status code %d; want %d", res.StatusCode, http.StatusInternalServerError)
 	}
-	if res.Obj != wantErr {
-		t.Fatalf("got response %v; want %v", res.Obj, wantErr)
+	if res.Value != wantErr {
+		t.Fatalf("got response %v; want %v", res.Value, wantErr)
 	}
-	if string(res.RawObj) != string(wantRawObj) {
-		t.Fatalf("got raw response %q; want %q", string(res.RawObj), string(wantRawObj))
+	if string(res.RawBody) != string(wantRawObj) {
+		t.Fatalf("got raw response %q; want %q", string(res.RawBody), string(wantRawObj))
 	}
 }
 
