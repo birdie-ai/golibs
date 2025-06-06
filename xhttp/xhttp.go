@@ -1,6 +1,7 @@
 package xhttp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,6 +54,16 @@ func Do[T any](c Client, req *http.Request) (*Response[T], error) {
 		return nil, ResponseErr{err, body}
 	}
 	return &Response[T]{Response: v, RawBody: body, Value: parsed}, nil
+}
+
+// Get is a helper that creates a HTTP request with a GET method and no request body and calls [Do].
+// It will behave exactly as documented on [Do].
+func Get[T any](ctx context.Context, c Client, url string) (*Response[T], error) {
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return Do[T](c, r)
 }
 
 func (r ResponseErr) Error() string {
