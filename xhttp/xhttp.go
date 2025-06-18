@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 type (
@@ -18,12 +19,16 @@ type (
 		RawBody []byte
 		// Value is the parsed JSON response.
 		Value T
+		// Elapsed is how long it took for the request to be answered.
+		Elapsed time.Duration
 	}
 	// ResponseParseErr is the error returned by [Do] if parsing the response body fails.
 	ResponseParseErr struct {
 		Err        error
 		Body       []byte
 		StatusCode int
+		// Elapsed is how long it took for the request to be answered.
+		Elapsed time.Duration
 	}
 )
 
@@ -37,7 +42,9 @@ type (
 //
 // If the response is not valid JSON an error of type [ResponseParseErr] is returned.
 func Do[T any](c Client, req *http.Request) (*Response[T], error) {
+	start := time.Now()
 	v, err := c.Do(req)
+	elapsed := time.Since(start)
 	if err != nil {
 		return nil, err
 	}
@@ -52,9 +59,9 @@ func Do[T any](c Client, req *http.Request) (*Response[T], error) {
 
 	var parsed T
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return nil, ResponseParseErr{err, body, v.StatusCode}
+		return nil, ResponseParseErr{err, body, v.StatusCode, elapsed}
 	}
-	return &Response[T]{Response: v, RawBody: body, Value: parsed}, nil
+	return &Response[T]{v, body, parsed, elapsed}, nil
 }
 
 // Get is a helper that creates a HTTP request with a GET method and no request body and calls [Do].
