@@ -59,9 +59,9 @@ func Do[T any](c Client, req *http.Request) (*Response[T], error) {
 
 	var parsed T
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return nil, ResponseParseErr{err, body, v.StatusCode, elapsed}
+		return nil, ResponseParseErr{Err: err, Body: body, StatusCode: v.StatusCode, Elapsed: elapsed}
 	}
-	return &Response[T]{v, body, parsed, elapsed}, nil
+	return &Response[T]{Response: v, RawBody: body, Value: parsed, Elapsed: elapsed}, nil
 }
 
 // Get is a helper that creates a HTTP request with a GET method and no request body and calls [Do].
