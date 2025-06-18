@@ -19,10 +19,11 @@ type (
 		// Value is the parsed JSON response.
 		Value T
 	}
-	// ResponseErr is the error returned by [Do] if parsing the response body fails.
-	ResponseErr struct {
-		Err  error
-		Body []byte
+	// ResponseParseErr is the error returned by [Do] if parsing the response body fails.
+	ResponseParseErr struct {
+		Err        error
+		Body       []byte
+		StatusCode int
 	}
 )
 
@@ -34,7 +35,7 @@ type (
 // this field and use [Response.Obj] to access the parsed response or use errors.As
 // to check details in the case of an error (eg. debugging malformed JSON).
 //
-// If the response is not valid JSON an error of type [ResponseErr] is returned.
+// If the response is not valid JSON an error of type [ResponseParseErr] is returned.
 func Do[T any](c Client, req *http.Request) (*Response[T], error) {
 	v, err := c.Do(req)
 	if err != nil {
@@ -51,7 +52,7 @@ func Do[T any](c Client, req *http.Request) (*Response[T], error) {
 
 	var parsed T
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return nil, ResponseErr{err, body}
+		return nil, ResponseParseErr{err, body, v.StatusCode}
 	}
 	return &Response[T]{Response: v, RawBody: body, Value: parsed}, nil
 }
@@ -66,6 +67,6 @@ func Get[T any](ctx context.Context, c Client, url string) (*Response[T], error)
 	return Do[T](c, r)
 }
 
-func (r ResponseErr) Error() string {
+func (r ResponseParseErr) Error() string {
 	return r.Err.Error()
 }

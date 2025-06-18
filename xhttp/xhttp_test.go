@@ -101,8 +101,12 @@ func TestDo(t *testing.T) {
 }
 
 func TestDoInvalidJSON(t *testing.T) {
-	const body = "}definitely no JSON{"
+	const (
+		wantStatusCode = 266
+		body           = "}definitely no JSON{"
+	)
 	server := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
+		res.WriteHeader(wantStatusCode)
 		if _, err := res.Write([]byte(body)); err != nil {
 			t.Error(err)
 		}
@@ -118,11 +122,14 @@ func TestDoInvalidJSON(t *testing.T) {
 		Result string
 	}
 	_, err = xhttp.Do[Response](c, req)
-	var rerr xhttp.ResponseErr
+	var rerr xhttp.ResponseParseErr
 	if !errors.As(err, &rerr) {
 		t.Fatalf("got err %v type %[1]T; want http.ResponseErr", err)
 	}
 	if string(rerr.Body) != body {
 		t.Fatalf("got err body %q; want %q", string(rerr.Body), body)
+	}
+	if rerr.StatusCode != wantStatusCode {
+		t.Fatalf("got err status %d; want %d", rerr.StatusCode, wantStatusCode)
 	}
 }
