@@ -78,6 +78,9 @@ func TestDo(t *testing.T) {
 		if string(res.RawBody) != string(wantRawObj) {
 			t.Fatalf("got raw response %q; want %q", string(res.RawBody), string(wantRawObj))
 		}
+		if res.Elapsed == 0 {
+			t.Fatal("missing elapsed on response")
+		}
 	}
 
 	assertSuccess(xhttp.Do[Response](c, req))
@@ -97,6 +100,9 @@ func TestDo(t *testing.T) {
 	}
 	if string(res.RawBody) != string(wantRawObj) {
 		t.Fatalf("got raw response %q; want %q", string(res.RawBody), string(wantRawObj))
+	}
+	if res.Elapsed == 0 {
+		t.Fatal("missing elapsed on response")
 	}
 }
 
@@ -131,5 +137,8 @@ func TestDoInvalidJSON(t *testing.T) {
 	}
 	if rerr.StatusCode != wantStatusCode {
 		t.Fatalf("got err status %d; want %d", rerr.StatusCode, wantStatusCode)
+	}
+	if rerr.Elapsed == 0 {
+		t.Fatal("missing elapsed on response parse error")
 	}
 }
