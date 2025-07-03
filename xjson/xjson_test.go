@@ -69,12 +69,9 @@ func TestObj(t *testing.T) {
 
 	assertNotFound := func(path string) {
 		t.Helper()
-		v, ok, err := xjson.DynGet[string](obj, path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if ok {
-			t.Fatalf("expected not found; got value: %v", v)
+		_, err := xjson.DynGet[string](obj, path)
+		if !errors.Is(err, xjson.ErrNotFound) {
+			t.Fatalf("got %v; want %v", err, xjson.ErrNotFound)
 		}
 	}
 
@@ -83,9 +80,9 @@ func TestObj(t *testing.T) {
 	assertNotFound("nested.notfound")
 	assertNotFound("nested.nested2.notfound")
 
-	v, ok, err := xjson.DynGet[string](obj, "nested")
+	v, err := xjson.DynGet[string](obj, "nested")
 	if err == nil {
-		t.Fatalf("want error but got %v,%v", v, ok)
+		t.Fatalf("want error but got %v", v)
 	}
 }
 
@@ -227,12 +224,9 @@ func TestDecoderFailureInterruptStream(t *testing.T) {
 func dynGet[T any](t *testing.T, o xjson.Obj, path string) T {
 	t.Helper()
 
-	v, ok, err := xjson.DynGet[T](o, path)
+	v, err := xjson.DynGet[T](o, path)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if !ok {
-		t.Fatalf("expected path to exist in object: %v", o)
 	}
 	return v
 }

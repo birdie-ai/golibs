@@ -4,6 +4,7 @@ package xjson
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -33,6 +34,9 @@ type (
 		Data string
 	}
 )
+
+// ErrNotFound indicates that an object was not found while traversing a [Obj].
+var ErrNotFound = errors.New("traversing JSON: key not found")
 
 // UnmarshalFile calls [Unmarshal] with the opened file (closing it afterwards) and returns the unmarshalled value.
 // If you need more details, like the data that was read when an unmarshalling error happened, you can:
@@ -109,27 +113,26 @@ func (e UnmarshalError) Error() string {
 //
 // Path is defined using '.' as delimiter like: "key.nested1.nested2.nested3".
 // For the aforementioned path "key", "nested1" and "nested2" MUST be objects, or else traversal will fail
-// and an error is returned. If any of them are objects but traversal can't go on
-// because a key is absent, no error is returned, just false indicating that the data is not there.
+// and an error is returned. If the entire path is valid but the last key is not found an [ErrNotFound] is returned.
 // Once traversal is finished, then "nested3" must match the given type [T].
-func DynGet[T any](o Obj, path string) (T, bool, error) {
+func DynGet[T any](o Obj, path string) (T, error) {
 	var z T
 	key, leaf, err := traverse(o, path)
 	if err != nil {
-		return z, false, err
+		return z, err
 	}
 
 	anyV, ok := leaf[key]
 	if !ok {
-		return z, false, nil
+		return z, ErrNotFound
 	}
 
 	v, ok := anyV.(T)
 	if !ok {
-		return z, false, fmt.Errorf("value at path %q: expected to have type %T but has %T", path, z, anyV)
+		return z, fmt.Errorf("value at path %q: expected to have type %T but has %T", path, z, anyV)
 	}
 
-	return v, true, nil
+	return v, nil
 }
 
 func traverse(o Obj, path string) (string, Obj, error) {
