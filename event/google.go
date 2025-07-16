@@ -16,7 +16,7 @@ type GooglePublisher[T any] struct {
 
 // NewGooglePublisher creates a new ordered Google Cloud event publisher for the given project/topic/event name.
 // We need a specific Google publisher because ordering doesn't generalize well.
-// All ordered publishers should implement [OrderedPublisher].
+// All ordered publishers should implement the same interface.
 func NewGooglePublisher[T any](ctx context.Context, project, topicName, eventName string) (*GooglePublisher[T], error) {
 	client, err := pubsub.NewClient(ctx, project)
 	if err != nil {
