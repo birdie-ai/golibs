@@ -107,26 +107,17 @@ func (p *Publisher[T]) Publish(ctx context.Context, event T) error {
 // PublishWithAttrs will publish the given event with the provided attributes.
 // The attributes will be available when receiving the events as [Metadata.Attributes].
 func (p *Publisher[T]) PublishWithAttrs(ctx context.Context, event T, attributes map[string]string) error {
-	body := Envelope[T]{
-		TraceID: tracing.CtxGetTraceID(ctx),
-		OrgID:   tracing.CtxGetOrgID(ctx),
-		Name:    p.name,
-		Event:   event,
-	}
-
-	encBody, err := json.Marshal(body)
+	encBody, err := serializeEvent(ctx, p.name, event)
 	if err != nil {
 		return err
 	}
 
-	start := time.Now()
+	sample := publishSampler()
 	err = p.topic.Send(ctx, &pubsub.Message{
 		Body:     encBody,
 		Metadata: attributes,
 	})
-	elapsed := time.Since(start)
-
-	samplePublish(p.name, elapsed, len(encBody), err)
+	sample(p.name, len(encBody), err)
 
 	return err
 }
@@ -402,4 +393,13 @@ func getMetadata(msg *pubsub.Message) (string, time.Time) {
 		return pbmsg.MessageId, pbmsg.PublishTime.AsTime()
 	}
 	return "", time.Time{}
+}
+
+func serializeEvent[T any](ctx context.Context, eventName string, event T) ([]byte, error) {
+	return json.Marshal(Envelope[T]{
+		TraceID: tracing.CtxGetTraceID(ctx),
+		OrgID:   tracing.CtxGetOrgID(ctx),
+		Name:    eventName,
+		Event:   event,
+	})
 }

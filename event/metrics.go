@@ -26,18 +26,22 @@ func SampledMessageHandler(eventName string, handler MessageHandler) MessageHand
 	}
 }
 
-func samplePublish(name string, elapsed time.Duration, bodySize int, err error) {
-	status := "ok"
-	if err != nil {
-		status = "error"
+func publishSampler() func(string, int, error) {
+	start := time.Now()
+	return func(name string, bodySize int, err error) {
+		elapsed := time.Since(start)
+		status := "ok"
+		if err != nil {
+			status = "error"
+		}
+		labels := prometheus.Labels{
+			"status": status,
+			"name":   name,
+		}
+		publishMsgBodySize.With(labels).Observe(float64(bodySize))
+		publishDuration.With(labels).Observe(elapsed.Seconds())
+		publishCounter.With(labels).Inc()
 	}
-	labels := prometheus.Labels{
-		"status": status,
-		"name":   name,
-	}
-	publishMsgBodySize.With(labels).Observe(float64(bodySize))
-	publishDuration.With(labels).Observe(elapsed.Seconds())
-	publishCounter.With(labels).Inc()
 }
 
 func sampleProcess(msg Message, name string, elapsed time.Duration, err error) {
