@@ -13,5 +13,5 @@ type orderedPublisher[T any] interface {
 
 // Contains all our ordered publishers, ensure they implement the same interface.
 var (
-	_ orderedPublisher[any] = &event.GooglePublisher[any]{}
+	_ orderedPublisher[any] = &event.OrderedGooglePublisher[any]{}
 )
