@@ -16,6 +16,9 @@ import "errors"
 // Calls to [errors.As] and [errors.Is] will be dispatched to the tag first
 // and then fallback to the original error if they don't match the tag.
 func Tag(err, tag error) error {
+	if err == nil {
+		return nil
+	}
 	return tagged{err, tag}
 }
 

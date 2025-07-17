@@ -7,6 +7,13 @@ import (
 	"github.com/birdie-ai/golibs/xerrors"
 )
 
+func TestTagNilErrReturnsNil(t *testing.T) {
+	taggedErr := xerrors.Tag(nil, errors.New("tag"))
+	if taggedErr != nil {
+		t.Fatalf("want tagged err to be nil; got %v", taggedErr)
+	}
+}
+
 func TestTagIs(t *testing.T) {
 	errTag := errors.New("error tag")
 	origErr := errors.New("original error")
