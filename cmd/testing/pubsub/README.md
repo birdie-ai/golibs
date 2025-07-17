@@ -4,7 +4,7 @@ Very simple tooling to check ordered event delivery.
 Export variables:
 
 ```sh
-export GCP_PROJECT=<project>
+export GOOGLE_PROJECT=<project>
 export TOPIC_NAME=<topic>
 ```
 
@@ -24,4 +24,4 @@ And then:
 go run . publisher
 ```
 
-Resources won't be automatically deleted (except subscription that have an expiration policy of an hour), remember to delete them.
+Resources won't be automatically deleted (except subscription that have an expiration policy of one day), remember to delete them.
