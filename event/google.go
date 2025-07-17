@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/birdie-ai/golibs/xerrors"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -38,6 +39,10 @@ func NewOrderedGooglePublisher[T any](ctx context.Context, project, topicName, e
 }
 
 // Publish will publish the given event with the given ordering key.
+// If an unrecoverable error happens an [ErrUnrecoverable] will be returned, when that happens if
+// [OrderedGooglePublisher.Resume] is not called all [Publish] calls will fail.
+// This allows clients to control the ordering behavior when something went wrong, resuming will
+// discard the failed publish and will result in an out of order stream.
 func (p *OrderedGooglePublisher[T]) Publish(ctx context.Context, event T, orderingKey string) error {
 	encBody, err := serializeEvent(ctx, p.eventName, event)
 	if err != nil {
@@ -52,7 +57,7 @@ func (p *OrderedGooglePublisher[T]) Publish(ctx context.Context, event T, orderi
 	_, err = res.Get(ctx)
 	sample(p.eventName, len(encBody), err)
 
-	return err
+	return xerrors.Tag(err, ErrUnrecoverable)
 }
 
 // Shutdown will send all pending publish messages and stop all goroutines.

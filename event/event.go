@@ -86,6 +86,9 @@ type (
 	MessageHandler func(Message) error
 )
 
+// ErrUnrecoverable represents unrecoverable errors, used to deal with ordered publishing errors.
+var ErrUnrecoverable = errors.New("unrecoverable")
+
 // NewPublisher creates a new event publisher for the given event name and topic.
 func NewPublisher[T any](name string, t *pubsub.Topic) *Publisher[T] {
 	return &Publisher[T]{
