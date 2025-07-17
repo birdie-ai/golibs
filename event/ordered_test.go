@@ -6,13 +6,22 @@ import (
 	"github.com/birdie-ai/golibs/event"
 )
 
-// orderedPublisher is used to test that our ordered publisher implement the same interface.
-type orderedPublisher[T any] interface {
-	Publish(context.Context, T, string) error
-	Shutdown(context.Context) error
-}
+type (
+	// orderedPublisher is used to test that our ordered publisher implement the same interface.
+	orderedPublisher[T any] interface {
+		Publish(context.Context, T, string) error
+		Shutdown(context.Context) error
+	}
+
+	// orderedSub is used to test that our ordered subscriptions implement the same interface.
+	orderedSub[T any] interface {
+		Serve(handler event.Handler[T]) error
+		Shutdown(context.Context) error
+	}
+)
 
 // Contains all our ordered publishers, ensure they implement the same interface.
 var (
 	_ orderedPublisher[any] = &event.OrderedGooglePublisher[any]{}
+	_ orderedSub[any]       = &event.OrderedGoogleSub[any]{}
 )

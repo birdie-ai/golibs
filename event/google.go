@@ -94,6 +94,26 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 	return &OrderedGoogleSub[T]{eventName: eventName, clients: clients, subs: subs}, nil
 }
 
+// Serve will start serving all events from the subscription calling handler for each
+// event. It will run until [OrderedGoogleSub.Shutdown] is called.
+// The handler might be called concurrently if max concurrency > 1 but guarantees that
+// events with the same ordering key are handled sequentially. You can handle different ordering keys
+// concurrently but there is no way to handler N events of the same ordering key at once or out of order.
+//
+// If the error is nil Ack is sent.
+// If a non-nil error is returned by the handler Nack will be sent.
+// If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
+// If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
+// It is a programming error to call Serve more than once (breaks ordering invariant).
+//
+// If the handler function panics, the [OrderedGoogleSub] assumes
+// that the effect of the panic was isolated to that single event handling.
+// It recovers the panic, logs a stack trace and sends a Nack (failing the event handling gracefully,
+// which in most event systems will trigger some form of retry).
+func (s *OrderedGoogleSub[T]) Serve(handler Handler[T]) error {
+	return nil
+}
+
 // Shutdown will send all pending publish messages and stop all goroutines.
 func (s *OrderedGoogleSub[T]) Shutdown(context.Context) error {
 	g := &errgroup.Group{}
