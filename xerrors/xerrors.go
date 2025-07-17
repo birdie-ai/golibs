@@ -15,9 +15,11 @@ import "errors"
 // Calling [errors.As] to retrieve the error tag will also work.
 // Calls to [errors.As] and [errors.Is] will be dispatched to the tag first
 // and then fallback to the original error if they don't match the tag.
+//
+// It is a programming error to call [Tag] with a nil error.
 func Tag(err, tag error) error {
 	if err == nil {
-		return nil
+		panic("tagging nil error")
 	}
 	return tagged{err, tag}
 }

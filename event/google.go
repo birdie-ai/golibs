@@ -65,7 +65,10 @@ func (p *OrderedGooglePublisher[T]) Publish(ctx context.Context, event T, orderi
 	_, err = res.Get(ctx)
 	sample(p.eventName, len(encBody), err)
 
-	return xerrors.Tag(err, ErrUnrecoverable)
+	if err != nil {
+		return xerrors.Tag(err, ErrUnrecoverable)
+	}
+	return nil
 }
 
 // Resume must be called for the given orderingKey after a Publish call with the same
