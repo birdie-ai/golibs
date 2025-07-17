@@ -40,7 +40,8 @@ func NewOrderedGooglePublisher[T any](ctx context.Context, project, topicName, e
 
 // Publish will publish the given event with the given ordering key.
 // If an unrecoverable error happens an [ErrUnrecoverable] will be returned, when that happens if
-// [OrderedGooglePublisher.Resume] is not called all [Publish] calls will fail.
+// [OrderedGooglePublisher.Resume] is not called with the same orderingKey all subsequent
+// [Publish] calls with that orderingKey will fail.
 // This allows clients to control the ordering behavior when something went wrong, resuming will
 // discard the failed publish and will result in an out of order stream.
 func (p *OrderedGooglePublisher[T]) Publish(ctx context.Context, event T, orderingKey string) error {
@@ -58,6 +59,13 @@ func (p *OrderedGooglePublisher[T]) Publish(ctx context.Context, event T, orderi
 	sample(p.eventName, len(encBody), err)
 
 	return xerrors.Tag(err, ErrUnrecoverable)
+}
+
+// Resume must be called for the given orderingKey after a Publish call with the same
+// orderingKey failed and the error is [ErrUnrecoverable].
+func (p *OrderedGooglePublisher[T]) Resume(_ context.Context, orderingKey string) error {
+	p.topic.ResumePublish(orderingKey)
+	return nil
 }
 
 // Shutdown will send all pending publish messages and stop all goroutines.
@@ -115,7 +123,7 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 // that the effect of the panic was isolated to that single event handling.
 // It recovers the panic, logs a stack trace and sends a Nack (failing the event handling gracefully,
 // which in most event systems will trigger some form of retry).
-func (s *OrderedGoogleSub[T]) Serve(handler Handler[T]) error {
+func (s *OrderedGoogleSub[T]) Serve(Handler[T]) error {
 	return nil
 }
 

@@ -10,6 +10,7 @@ type (
 	// orderedPublisher is used to test that our ordered publisher implement the same interface.
 	orderedPublisher[T any] interface {
 		Publish(context.Context, T, string) error
+		Resume(context.Context, string) error
 		Shutdown(context.Context) error
 	}
 
