@@ -5,18 +5,28 @@ import (
 	"fmt"
 
 	"cloud.google.com/go/pubsub"
+	"golang.org/x/sync/errgroup"
 )
 
-// OrderedGooglePublisher is an ordered google publisher.
-type OrderedGooglePublisher[T any] struct {
-	eventName string
-	client    *pubsub.Client
-	topic     *pubsub.Topic
-}
+type (
+	// OrderedGooglePublisher is an ordered google publisher.
+	OrderedGooglePublisher[T any] struct {
+		eventName string
+		client    *pubsub.Client
+		topic     *pubsub.Topic
+	}
+	// OrderedGoogleSub is an ordered google subscription.
+	OrderedGoogleSub[T any] struct {
+		eventName string
+		clients   []*pubsub.Client
+		subs      []*pubsub.Subscription
+	}
+)
 
 // NewOrderedGooglePublisher creates a new ordered Google Cloud event publisher for the given project/topic/event name.
 // We need a specific Google publisher because ordering doesn't generalize well.
 // All ordered publishers should implement the same interface.
+// Call [OrderedGooglePublisher.Shutdown] to stop all goroutines/clean up all resources.
 func NewOrderedGooglePublisher[T any](ctx context.Context, project, topicName, eventName string) (*OrderedGooglePublisher[T], error) {
 	client, err := pubsub.NewClient(ctx, project)
 	if err != nil {
@@ -43,4 +53,54 @@ func (p *OrderedGooglePublisher[T]) Publish(ctx context.Context, event T, orderi
 	sample(p.eventName, len(encBody), err)
 
 	return err
+}
+
+// Shutdown will send all pending publish messages and stop all goroutines.
+func (p *OrderedGooglePublisher[T]) Shutdown(context.Context) error {
+	p.topic.Stop()
+	return p.client.Close()
+}
+
+// NewOrderedGoogleSub creates an ordered subscription on Google Cloud Pubsub that will accept on events of the given type and name,
+// similar to [NewSubscription]. Ordering affects how concurrency is handled. Concurrency is done by handling
+// different ordering keys/partitions, every ordered key will be handled sequentially only different ordering keys will be
+// handled concurrently. This requires a client to be created per go routine, so beware of setting concurrency to a high value (every go routine
+// will create a different client/connection to pubsub).
+// Call [OrderedGoogleSub.Shutdown] to stop all goroutines/clean up all resources.
+func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName string, maxConcurrency int) (*OrderedGoogleSub[T], error) {
+	if maxConcurrency <= 0 {
+		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
+	}
+	clients := make([]*pubsub.Client, maxConcurrency)
+	subs := make([]*pubsub.Subscription, maxConcurrency)
+	g := &errgroup.Group{}
+
+	for i := range maxConcurrency {
+		g.Go(func() error {
+			client, err := pubsub.NewClient(ctx, project)
+			if err != nil {
+				return fmt.Errorf("creating client: %w", err)
+			}
+			clients[i] = client
+			subs[i] = client.Subscription(subName)
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return &OrderedGoogleSub[T]{eventName: eventName, clients: clients, subs: subs}, nil
+}
+
+// Shutdown will send all pending publish messages and stop all goroutines.
+func (s *OrderedGoogleSub[T]) Shutdown(context.Context) error {
+	g := &errgroup.Group{}
+	for _, client := range s.clients {
+		g.Go(func() error {
+			return client.Close()
+		})
+	}
+	return g.Wait()
 }
