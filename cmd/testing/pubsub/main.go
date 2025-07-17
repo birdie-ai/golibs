@@ -73,7 +73,7 @@ func subscriber(ctx context.Context, projectID, topicName string) {
 		log.Fatalf("creating subscription: %v", err)
 	}
 
-	log.Printf("starting handler with concurrent=%d", totalPartitions)
+	log.Printf("starting handler with concurrency=%d", totalPartitions)
 	sub, err := event.NewOrderedGoogleSub[Event](ctx, projectID, topicName, eventName, totalPartitions)
 	panicerr(err)
 
