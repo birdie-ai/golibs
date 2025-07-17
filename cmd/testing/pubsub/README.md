@@ -15,13 +15,13 @@ using the same topic/subscription).
 Now run:
 
 ```sh
-go run . publisher
+go run . subscriber
 ```
 
 And then:
 
 ```sh
-go run . subscriber
+go run . publisher
 ```
 
 Resources won't be automatically deleted (except subscription that have an expiration policy of an hour), remember to delete them.
