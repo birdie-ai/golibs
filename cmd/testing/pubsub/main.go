@@ -49,7 +49,7 @@ func subscriber(ctx context.Context, projectID, topicName string) {
 	// Message ordering can only be set when creating a subscription.
 	_, err = client.CreateSubscription(ctx, topicName, pubsub.SubscriptionConfig{
 		Topic:                 client.Topic(topicName),
-		ExpirationPolicy:      time.Hour,
+		ExpirationPolicy:      24 * time.Hour,
 		EnableMessageOrdering: true,
 	})
 	if err != nil && status.Code(err) != codes.AlreadyExists {
@@ -69,6 +69,7 @@ func publisher(ctx context.Context, projectID, topicName string) {
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		log.Fatalf("creating topic: %v", err)
 	}
+
 	log.Print("created topic")
 }
 
