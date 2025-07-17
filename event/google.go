@@ -109,15 +109,20 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 // that the effect of the panic was isolated to that single event handling.
 // It recovers the panic, logs a stack trace and sends a Nack (failing the event handling gracefully,
 // which in most event systems will trigger some form of retry).
+//
+// If the handler returns an error the error will be logged on the "ERROR" level,
+// only the event name and error will be logged, any other details myst be logged by
+// the handler function if necessary.
 func (s *OrderedGoogleSub[T]) Serve(ctx context.Context, handler Handler[T]) error {
 	return s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 		ctx, event, err := createEvent[T](ctx, s.eventName, msg.Data)
 		if err != nil {
-			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "error", err)
+			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
 			msg.Nack()
 			return
 		}
 		if err := handler(ctx, event.Event); err != nil {
+			slog.FromCtx(ctx).Error("event handling failed", "event_name", s.eventName, "error", err)
 			msg.Nack()
 			return
 		}
