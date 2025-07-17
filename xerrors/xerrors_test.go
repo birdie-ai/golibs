@@ -7,10 +7,20 @@ import (
 	"github.com/birdie-ai/golibs/xerrors"
 )
 
-func TestTagNilErrReturnsNil(t *testing.T) {
-	taggedErr := xerrors.Tag(nil, errors.New("tag"))
-	if taggedErr != nil {
-		t.Fatalf("want tagged err to be nil; got %v", taggedErr)
+func TestTagNilErrPanics(t *testing.T) {
+	var panicked bool
+	test := func() {
+		defer func() {
+			v := recover()
+			if v != nil {
+				panicked = true
+			}
+		}()
+		_ = xerrors.Tag(nil, errors.New("tag"))
+	}
+	test()
+	if !panicked {
+		t.Fatal("expected nil error to cause panic")
 	}
 }
 
