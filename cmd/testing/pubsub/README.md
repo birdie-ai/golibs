@@ -4,7 +4,7 @@ Very simple tooling to check ordered event delivery.
 Export variables:
 
 ```sh
-export GCP_PROJECT=<project>
+export GOOGLE_PROJECT=<project>
 export TOPIC_NAME=<topic>
 ```
 
