@@ -197,7 +197,7 @@ func (s *Subscription[T]) Receive(ctx context.Context) (*Event[T], error) {
 	if err != nil {
 		return nil, err
 	}
-	_, envelope, err := s.createEvent(m.Message)
+	_, envelope, err := createEvent[T](ctx, s.name, m.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (e *Event[T]) Nack() {
 // which in most event systems will trigger some form of retry).
 func (s *Subscription[T]) Serve(handler Handler[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		ctx, event, err := s.createEvent(msg)
+		ctx, event, err := createEvent[T](context.Background(), s.name, msg.Body)
 		if err != nil {
 			return err
 		}
@@ -251,42 +251,12 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 // run up to "maxConcurrency" go-routines.
 func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		ctx, event, err := s.createEvent(msg)
+		ctx, event, err := createEvent[T](context.Background(), s.name, msg.Body)
 		if err != nil {
 			return err
 		}
 		return handler(ctx, event.Event, msg.Metadata)
 	}))
-}
-
-func (s *Subscription[T]) createEvent(msg Message) (context.Context, Envelope[T], error) {
-	var event Envelope[T]
-
-	log := slog.Default()
-
-	if err := json.Unmarshal(msg.Body, &event); err != nil {
-		log.Error("parsing event body", "name", s.name, "error", err, "body", string(msg.Body))
-		return nil, event, fmt.Errorf("parsing event as JSON, event: %v, error: %v", msg, err)
-	}
-
-	if event.Name != s.name {
-		log.Error("event name doesn't match handler", "expected", s.name, "received", event.Name)
-		return nil, event, fmt.Errorf("event name doesn't match %q: event: %v", s.name, msg)
-	}
-
-	if event.TraceID == "" {
-		event.TraceID = uuid.NewString()
-	}
-
-	log = log.With("request_id", uuid.NewString())
-	log = log.With("trace_id", event.TraceID)
-	log = log.With("organization_id", event.OrgID)
-
-	ctx := context.Background()
-	ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
-	ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
-	ctx = slog.NewContext(ctx, log)
-	return ctx, event, nil
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
@@ -405,4 +375,34 @@ func serializeEvent[T any](ctx context.Context, eventName string, event T) ([]by
 		Name:    eventName,
 		Event:   event,
 	})
+}
+
+func createEvent[T any](ctx context.Context, eventName string, data []byte) (context.Context, Envelope[T], error) {
+	var event Envelope[T]
+
+	log := slog.Default()
+
+	if err := json.Unmarshal(data, &event); err != nil {
+		return nil, event, fmt.Errorf("parsing event %q as JSON, event: %q, error: %v", eventName, string(data), err)
+	}
+
+	if event.Name != eventName {
+		return nil, event, fmt.Errorf("event name %q doesn't match event %q", eventName, string(data))
+	}
+
+	if event.TraceID == "" {
+		event.TraceID = uuid.NewString()
+	}
+
+	log = log.With("request_id", uuid.NewString())
+	log = log.With("trace_id", event.TraceID)
+	ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
+
+	if event.OrgID != "" {
+		log = log.With("organization_id", event.OrgID)
+		ctx = tracing.CtxWithOrgID(ctx, event.OrgID)
+	}
+
+	ctx = slog.NewContext(ctx, log)
+	return ctx, event, nil
 }

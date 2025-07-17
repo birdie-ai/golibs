@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/birdie-ai/golibs/slog"
 	"github.com/birdie-ai/golibs/xerrors"
-	"golang.org/x/sync/errgroup"
 )
 
 type (
@@ -19,8 +19,8 @@ type (
 	// OrderedGoogleSub is an ordered google subscription.
 	OrderedGoogleSub[T any] struct {
 		eventName string
-		clients   []*pubsub.Client
-		subs      []*pubsub.Subscription
+		client    *pubsub.Client
+		sub       *pubsub.Subscription
 	}
 )
 
@@ -84,27 +84,13 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 	if maxConcurrency <= 0 {
 		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
 	}
-	clients := make([]*pubsub.Client, maxConcurrency)
-	subs := make([]*pubsub.Subscription, maxConcurrency)
-	g := &errgroup.Group{}
-
-	for i := range maxConcurrency {
-		g.Go(func() error {
-			client, err := pubsub.NewClient(ctx, project)
-			if err != nil {
-				return fmt.Errorf("creating client: %w", err)
-			}
-			clients[i] = client
-			subs[i] = client.Subscription(subName)
-			return nil
-		})
+	client, err := pubsub.NewClient(ctx, project)
+	if err != nil {
+		return nil, fmt.Errorf("creating client: %w", err)
 	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-
-	return &OrderedGoogleSub[T]{eventName: eventName, clients: clients, subs: subs}, nil
+	sub := client.Subscription(subName)
+	sub.ReceiveSettings.NumGoroutines = maxConcurrency
+	return &OrderedGoogleSub[T]{eventName: eventName, client: client, sub: sub}, nil
 }
 
 // Serve will start serving all events from the subscription calling handler for each
@@ -123,17 +109,23 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 // that the effect of the panic was isolated to that single event handling.
 // It recovers the panic, logs a stack trace and sends a Nack (failing the event handling gracefully,
 // which in most event systems will trigger some form of retry).
-func (s *OrderedGoogleSub[T]) Serve(Handler[T]) error {
-	return nil
+func (s *OrderedGoogleSub[T]) Serve(ctx context.Context, handler Handler[T]) error {
+	return s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+		ctx, event, err := createEvent[T](ctx, s.eventName, msg.Data)
+		if err != nil {
+			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "error", err)
+			msg.Nack()
+			return
+		}
+		if err := handler(ctx, event.Event); err != nil {
+			msg.Nack()
+			return
+		}
+		msg.Ack()
+	})
 }
 
 // Shutdown will send all pending publish messages and stop all goroutines.
 func (s *OrderedGoogleSub[T]) Shutdown(context.Context) error {
-	g := &errgroup.Group{}
-	for _, client := range s.clients {
-		g.Go(func() error {
-			return client.Close()
-		})
-	}
-	return g.Wait()
+	return s.client.Close()
 }
