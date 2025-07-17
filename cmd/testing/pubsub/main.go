@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Event is the test event data.
 type Event struct {
 	PartitionID string
 	Count       int
@@ -59,7 +60,9 @@ const (
 func subscriber(ctx context.Context, projectID, topicName string) {
 	client, err := pubsub.NewClient(ctx, projectID)
 	panicerr(err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	_, err = client.CreateSubscription(ctx, topicName, pubsub.SubscriptionConfig{
 		Topic:                 client.Topic(topicName),
@@ -74,7 +77,7 @@ func subscriber(ctx context.Context, projectID, topicName string) {
 	sub, err := event.NewOrderedGoogleSub[Event](ctx, projectID, topicName, eventName, totalPartitions)
 	panicerr(err)
 
-	err = sub.Serve(ctx, func(ctx context.Context, event Event) error {
+	err = sub.Serve(ctx, func(_ context.Context, event Event) error {
 		fmt.Printf("partition %q: count %d\n", event.PartitionID, event.Count)
 		time.Sleep(5 * time.Second)
 		return nil
@@ -87,7 +90,9 @@ func publisher(ctx context.Context, projectID, topicName string) {
 	const region = "us-central1"
 	client, err := pubsub.NewClient(ctx, projectID)
 	panicerr(err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	createTopic(ctx, client, topicName)
 
