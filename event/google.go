@@ -32,6 +32,7 @@ type (
 //
 // Region is required since it is a best practice to publish all messages within the same region:
 //   - https://cloud.google.com/pubsub/docs/publish-best-practices#ordering
+//   - https://cloud.google.com/pubsub/docs/reference/service_apis_overview#pubsub_endpoints
 //
 // It must be a valid Google cloud region, it is used to defined the publish endpoint.
 func NewOrderedGooglePublisher[T any](ctx context.Context, project, region, topicName, eventName string) (*OrderedGooglePublisher[T], error) {
