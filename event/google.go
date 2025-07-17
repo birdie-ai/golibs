@@ -7,6 +7,7 @@ import (
 	"cloud.google.com/go/pubsub"
 	"github.com/birdie-ai/golibs/slog"
 	"github.com/birdie-ai/golibs/xerrors"
+	"google.golang.org/api/option"
 )
 
 type (
@@ -28,8 +29,13 @@ type (
 // We need a specific Google publisher because ordering doesn't generalize well.
 // All ordered publishers should implement the same interface.
 // Call [OrderedGooglePublisher.Shutdown] to stop all goroutines/clean up all resources.
-func NewOrderedGooglePublisher[T any](ctx context.Context, project, topicName, eventName string) (*OrderedGooglePublisher[T], error) {
-	client, err := pubsub.NewClient(ctx, project)
+//
+// Region is required since it is a best practice to publish all messages within the same region:
+//   - https://cloud.google.com/pubsub/docs/publish-best-practices#ordering
+//
+// It must be a valid Google cloud region, it is used to defined the publish endpoint.
+func NewOrderedGooglePublisher[T any](ctx context.Context, project, region, topicName, eventName string) (*OrderedGooglePublisher[T], error) {
+	client, err := pubsub.NewClient(ctx, project, option.WithEndpoint(region+"-pubsub.googleapis.com:443"))
 	if err != nil {
 		return nil, fmt.Errorf("creating pubsub client: %w", err)
 	}
