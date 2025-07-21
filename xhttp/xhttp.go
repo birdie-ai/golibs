@@ -37,7 +37,7 @@ type (
 // of the [Response.Obj] field that holds the parsed response.
 //
 // The original [http.Response.Body] will always be read and closed, the caller should ignore
-// this field and use [Response.Obj] to access the parsed response or use errors.As
+// this field and use [Response.Value] to access the parsed response or use errors.As
 // to check details in the case of an error (eg. debugging malformed JSON).
 //
 // If the response is not valid JSON an error of type [ResponseParseErr] is returned.
