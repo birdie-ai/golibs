@@ -56,10 +56,12 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 		if orgID != "" {
 			ctx = CtxWithOrgID(ctx, orgID)
 		}
+		requestID := uuid.NewString()
+		ctx = CtxWithRequestID(ctx, requestID)
 
 		log := slog.FromCtx(ctx)
 		log = log.With("trace_id", traceID)
-		log = log.With("request_id", uuid.NewString())
+		log = log.With("request_id", requestID)
 		if orgID != "" {
 			log = log.With("organization_id", orgID)
 		}
@@ -96,6 +98,18 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 // Call [CtxGetTraceID] to retrieve the trace ID.
 func CtxWithTraceID(ctx context.Context, traceID string) context.Context {
 	return context.WithValue(ctx, traceIDKey, traceID)
+}
+
+// CtxWithRequestID creates a new [context.Context] with the given request ID associated with it.
+// Call [CtxGetRequestID] to retrieve the request ID.
+func CtxWithRequestID(ctx context.Context, reqID string) context.Context {
+	return context.WithValue(ctx, requestIDKey, reqID)
+}
+
+// CtxGetRequestID gets the request ID associated with this context.
+// Return the request ID and true if there is a request ID, empty and false otherwise.
+func CtxGetRequestID(ctx context.Context) string {
+	return ctxget(ctx, requestIDKey)
 }
 
 // CtxGetTraceID gets the trace ID associated with this context.
@@ -150,10 +164,14 @@ type (
 )
 
 const (
-	traceIDHeader     = "traceparent"
-	orgIDHeader       = "Birdie-Organization-ID"
-	traceIDKey    key = iota
+	traceIDHeader = "traceparent"
+	orgIDHeader   = "Birdie-Organization-ID"
+)
+
+const (
+	traceIDKey key = iota
 	orgIDKey
+	requestIDKey
 )
 
 func newResponseWriter(r http.ResponseWriter) responseWriterObserver {

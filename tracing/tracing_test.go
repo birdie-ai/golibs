@@ -163,14 +163,19 @@ func TestIntrumentedHTTPHandlerNoFlusher(t *testing.T) {
 	}
 }
 
-func TestCtxWithTraceAndOrgID(t *testing.T) {
+func TestCtxWithTraceOrgRequestID(t *testing.T) {
 	const (
-		wantTraceID = "trace-id-value"
-		wantOrgID   = "org-id-value"
+		wantTraceID   = "trace-id-value"
+		wantRequestID = "request-id"
+		wantOrgID     = "org-id-value"
 	)
 	ctx := context.Background()
 
-	got := tracing.CtxGetTraceID(ctx)
+	got := tracing.CtxGetRequestID(ctx)
+	if got != "" {
+		t.Fatalf("unexpected request id: %q", got)
+	}
+	got = tracing.CtxGetTraceID(ctx)
 	if got != "" {
 		t.Fatalf("unexpected trace id: %q", got)
 	}
@@ -179,8 +184,14 @@ func TestCtxWithTraceAndOrgID(t *testing.T) {
 		t.Fatalf("unexpected trace id: %q", got)
 	}
 
+	ctx = tracing.CtxWithRequestID(ctx, wantRequestID)
 	ctx = tracing.CtxWithTraceID(ctx, wantTraceID)
 	ctx = tracing.CtxWithOrgID(ctx, wantOrgID)
+
+	got = tracing.CtxGetRequestID(ctx)
+	if got != wantRequestID {
+		t.Fatalf("got %q != want %q", got, wantRequestID)
+	}
 
 	got = tracing.CtxGetTraceID(ctx)
 	if got != wantTraceID {
