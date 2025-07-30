@@ -3,6 +3,7 @@ package event
 import (
 	"context"
 	"fmt"
+	"runtime"
 
 	"cloud.google.com/go/pubsub"
 	"github.com/birdie-ai/golibs/slog"
@@ -125,6 +126,20 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 // the handler function if necessary.
 func (s *OrderedGoogleSub[T]) Serve(ctx context.Context, handler Handler[T]) error {
 	return s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+		defer func() {
+			if err := recover(); err != nil {
+				// 64KB, if it is good enough for Go's standard lib it is good enough for us :-)
+				const size = 64 << 10
+				buf := make([]byte, size)
+				buf = buf[:runtime.Stack(buf, false)]
+				slog.Error("panic: ordered google subscription: handling message",
+					"error", err,
+					"id", msg.ID,
+					"attributes", msg.Attributes,
+					"stack_trace", string(buf))
+				msg.Nack()
+			}
+		}()
 		ctx, event, err := createEvent[T](ctx, s.eventName, msg.Data)
 		if err != nil {
 			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
