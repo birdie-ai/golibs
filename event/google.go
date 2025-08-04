@@ -156,6 +156,7 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 		metadata := Metadata{
 			ID:            msg.ID,
 			PublishedTime: msg.PublishTime,
+			Attributes:    msg.Attributes,
 		}
 		if err := handler(ctx, event.Event, metadata); err != nil {
 			slog.FromCtx(ctx).Error("event handling failed", "event_name", s.eventName, "error", err)
