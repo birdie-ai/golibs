@@ -104,7 +104,14 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 	return &OrderedGoogleSub[T]{eventName: eventName, client: client, sub: sub}, nil
 }
 
-// Serve will start serving all events from the subscription calling handler for each
+// Serve behaves exactly like [ServeWithMetadata] but omits the metadata.
+func (s *OrderedGoogleSub[T]) Serve(ctx context.Context, handler Handler[T]) error {
+	return s.ServeWithMetadata(ctx, func(ctx context.Context, event T, _ Metadata) error {
+		return handler(ctx, event)
+	})
+}
+
+// ServeWithMetadata will start serving all events from the subscription calling handler for each
 // event. It will run until [OrderedGoogleSub.Shutdown] is called.
 // The handler might be called concurrently if max concurrency > 1 but guarantees that
 // events with the same ordering key are handled sequentially. You can handle different ordering keys
@@ -124,7 +131,7 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 // If the handler returns an error the error will be logged on the "ERROR" level,
 // only the event name and error will be logged, any other details myst be logged by
 // the handler function if necessary.
-func (s *OrderedGoogleSub[T]) Serve(ctx context.Context, handler Handler[T]) error {
+func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler HandlerWithMetadata[T]) error {
 	return s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -146,7 +153,11 @@ func (s *OrderedGoogleSub[T]) Serve(ctx context.Context, handler Handler[T]) err
 			msg.Nack()
 			return
 		}
-		if err := handler(ctx, event.Event); err != nil {
+		metadata := Metadata{
+			ID:            msg.ID,
+			PublishedTime: msg.PublishTime,
+		}
+		if err := handler(ctx, event.Event, metadata); err != nil {
 			slog.FromCtx(ctx).Error("event handling failed", "event_name", s.eventName, "error", err)
 			msg.Nack()
 			return
