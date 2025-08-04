@@ -17,6 +17,7 @@ type (
 	// orderedSub is used to test that our ordered subscriptions implement the same interface.
 	orderedSub[T any] interface {
 		Serve(context.Context, event.Handler[T]) error
+		ServeWithMetadata(context.Context, event.HandlerWithMetadata[T]) error
 		Shutdown(context.Context) error
 	}
 )
