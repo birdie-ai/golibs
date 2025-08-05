@@ -84,9 +84,10 @@ var (
 		prometheus.HistogramOpts{
 			Name: "http_request_duration_seconds",
 			Help: "HTTP request duration distribution",
-			Buckets: []float64{
-				.1, .25, .5, .75, 1, 1.25, 1.5, 1.75, 2, 3, 4, 5, 10, 15, 20, 25, 30,
-			},
+			Buckets: append([]float64{
+				.01, .025, 0.05, 0.075, .1, .150, .2, .250, .3, .350, .4, .450, .5, .6, .7, .8, .9, 1,
+				1.25, 1.5, 1.75, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25, 30,
+			}, prometheus.LinearBuckets(40, 10, 57)...), // This goes on linearly until 10 min, which is our usual hard deadline.
 		},
 		[]string{"code", "method", "handler"},
 	)
