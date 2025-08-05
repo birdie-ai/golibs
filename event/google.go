@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"time"
 
 	"cloud.google.com/go/pubsub"
 	"github.com/birdie-ai/golibs/slog"
@@ -158,11 +159,18 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 			PublishedTime: msg.PublishTime,
 			Attributes:    msg.Attributes,
 		}
-		if err := handler(ctx, event.Event, metadata); err != nil {
+
+		start := time.Now()
+		err = handler(ctx, event.Event, metadata)
+		elapsed := time.Since(start)
+		sampleProcess(s.eventName, elapsed, float64(len(msg.Data)), err)
+
+		if err != nil {
 			slog.FromCtx(ctx).Error("event handling failed", "event_name", s.eventName, "error", err)
 			msg.Nack()
 			return
 		}
+
 		msg.Ack()
 	})
 }
