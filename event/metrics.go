@@ -21,7 +21,7 @@ func SampledMessageHandler(eventName string, handler MessageHandler) MessageHand
 		start := time.Now()
 		err := handler(msg)
 		elapsed := time.Since(start)
-		sampleProcess(msg, eventName, elapsed, err)
+		sampleMsgProcess(msg, eventName, elapsed, err)
 		return err
 	}
 }
@@ -44,7 +44,11 @@ func publishSampler() func(string, int, error) {
 	}
 }
 
-func sampleProcess(msg Message, name string, elapsed time.Duration, err error) {
+func sampleMsgProcess(msg Message, name string, elapsed time.Duration, err error) {
+	sampleProcess(name, elapsed, float64(len(msg.Body)), err)
+}
+
+func sampleProcess(name string, elapsed time.Duration, bodyLen float64, err error) {
 	status := "ok"
 	if err != nil {
 		status = "error"
@@ -53,7 +57,7 @@ func sampleProcess(msg Message, name string, elapsed time.Duration, err error) {
 		"status": status,
 		"name":   name,
 	}
-	processMsgBodySize.With(labels).Observe(float64(len(msg.Body)))
+	processMsgBodySize.With(labels).Observe(bodyLen)
 	processDuration.With(labels).Observe(elapsed.Seconds())
 	processCounter.With(labels).Inc()
 }
