@@ -96,12 +96,12 @@ var (
 		prometheus.HistogramOpts{
 			Name: "event_process_duration_seconds",
 			Help: "Duration of event processing",
-			// processing takes longer and GCP max processing time is 10 minutes
-			Buckets: []float64{
-				.1, .2, .3, .4, .5, .6, .7, .8, .9, 1,
-				2, 3, 4, 5, 10, 15, 20, 30, 60, 90, 120,
-				180, 240, 300, 360, 420, 480, 540, 600,
+			// event handling usually takes longer and we dont need it be as fine grained as HTTP requests.
+			Buckets: append([]float64{
+				.1, .2, .3, .4, .5, .6, .7, .8, .9,
 			},
+				prometheus.LinearBuckets(1, 5, 120)..., // Linearly go until 10min with 5 sec granularity
+			),
 		},
 		[]string{"status", "name"},
 	)
