@@ -122,10 +122,15 @@ func (r *retrierClient) Do(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	return r.do(req.Context(), req, requestBody, r.minPeriod)
+	return r.do(req.Context(), req, requestBody)
 }
 
-func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody []byte, sleepPeriod time.Duration) (*http.Response, error) {
+func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody []byte) (*http.Response, error) {
+	sleepPeriod := r.minPeriod
+	incrementSleepPeriod := func() {
+		sleepPeriod = min(sleepPeriod*2, r.maxPeriod)
+	}
+
 	for ctx.Err() == nil {
 		req, cancel := r.newRequest(ctx, req, requestBody)
 		log := slog.FromCtx(ctx).With("request_url", req.URL)
@@ -146,6 +151,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			if errors.Is(err, context.DeadlineExceeded) ||
 				strings.Contains(emsg, "http2: server sent GOAWAY and closed the connection") ||
 				strings.HasSuffix(emsg, "i/o timeout") ||
+				strings.HasSuffix(emsg, "read: connection timed out") ||
 				strings.HasSuffix(emsg, "connect: connection refused") ||
 				strings.HasSuffix(emsg, "EOF") ||
 				strings.HasSuffix(emsg, "write: broken pipe") ||
@@ -156,9 +162,10 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 				strings.HasSuffix(emsg, "cannot assign requested address") {
 
 				log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
+
 				r.onRetry(req, res, err)
 				r.sleep(ctx, sleepPeriod)
-				sleepPeriod = min(sleepPeriod*2, r.maxPeriod)
+				incrementSleepPeriod()
 				continue
 			}
 
@@ -201,7 +208,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			}
 
 			r.sleep(ctx, sleepPeriod)
-			sleepPeriod = min(sleepPeriod*2, r.maxPeriod)
+			incrementSleepPeriod()
 			continue
 		}
 
@@ -216,8 +223,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			if err != nil {
 				log.Debug("xhttp.Client: retrying request with error reading response body", "error", err)
 				r.sleep(ctx, sleepPeriod)
-
-				// TODO: handle sleep period increment
+				incrementSleepPeriod()
 				continue
 			}
 			log.Debug("xhttp.Client: response body read with success")

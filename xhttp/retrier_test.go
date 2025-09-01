@@ -672,6 +672,7 @@ func TestRetrierRetrySpecificErrors(t *testing.T) {
 		errors.New("<specific details>: cannot assign requested address"),
 		errors.New("<specific details>: use of closed network connection"),
 		errors.New("<specific details>: Temporary failure in name resolution"),
+		errors.New("<specific details>: read: connection timed out"),
 		context.DeadlineExceeded,
 	}
 	for _, retryError := range retryErrors {
