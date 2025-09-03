@@ -63,6 +63,7 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 		retryStatusCodes: map[int]struct{}{
 			http.StatusInternalServerError: {},
 			http.StatusServiceUnavailable:  {},
+			http.StatusGatewayTimeout:      {},
 		},
 	}
 	for _, option := range options {
