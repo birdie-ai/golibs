@@ -63,8 +63,11 @@ func NewRetrierClient(c Client, options ...RetrierOption) Client {
 		onRequestDone: defaultOnRequestDone,
 		onRetry:       defaultOnRetry,
 		retryStatusCodes: map[int]struct{}{
+			http.StatusTooManyRequests:     {},
 			http.StatusInternalServerError: {},
+			http.StatusBadGateway:          {},
 			http.StatusServiceUnavailable:  {},
+			http.StatusGatewayTimeout:      {},
 		},
 	}
 	for _, option := range options {
