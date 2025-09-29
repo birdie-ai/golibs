@@ -38,7 +38,9 @@ type (
 	// The [*http.Request] is the original http request that just finished.
 	// The [*http.Response] is the response returned by the [Client.Do] call.
 	// The [error] is the response error returned by the [Client.Do] call.
-	// This is called every time a request is retried.
+	// This is called every time a request is retried (it failed and retrier decided to retry it).
+	// The callback can read the [http.Response] body if it wants, for debugging for example, but
+	// it doesn't have to close the body, the retries always close the response bodies when retrying.
 	RetrierOnRetryFunc func(req *http.Request, res *http.Response, err error)
 )
 
@@ -180,14 +182,14 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 
 		_, isRetryCode := r.retryStatusCodes[res.StatusCode]
 		if isRetryCode {
+			r.onRetry(req, res, err)
+
 			log := slog.FromCtx(ctx).With("status_code", res.StatusCode, "sleep_period", sleepPeriod.String())
+			// Caller might have read the response body on onRetry, just close the body the now.
 			if err := res.Body.Close(); err != nil {
 				log.Debug("xhttp.Client: unable to close response body while retrying", "error", err)
 			}
-
 			log.Debug("xhttp.Client: retrying request with error status code")
-
-			r.onRetry(req, res, err)
 
 			// handle Retry-After header
 			const minRetryAfterDuration = time.Second
