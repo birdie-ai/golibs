@@ -55,6 +55,11 @@ const (
 	DefaultFormat = FormatGcloud
 )
 
+// Exporting functions from stdlib slog as is
+var (
+	NewLogLogger = slog.NewLogLogger
+)
+
 // Config represents log configuration.
 type Config struct {
 	Level  Level
