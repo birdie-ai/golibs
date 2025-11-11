@@ -5,7 +5,7 @@ import "unique"
 type (
 	// Stmt is a single bdml statement.
 	Stmt struct {
-		Entity string
+		Entity unique.Handle[string]
 		Op     OpKind
 		Assign Assign
 		Where  Clauses
@@ -37,8 +37,8 @@ type (
 
 // As we will process large bulks of statements, this ensures we don't waste memory in redundant information.
 var (
-	SET    = unique.Make(OpKind("SET"))
-	DELETE = unique.Make(OpKind("DELETE"))
-	Eq     = unique.Make(LogicalOperator("="))
-	Neq    = unique.Make(LogicalOperator("!="))
+	SET    = OpKind("SET")
+	DELETE = OpKind("DELETE")
+	Eq     = LogicalOperator("=")
+	Neq    = LogicalOperator("!=")
 )
