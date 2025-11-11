@@ -35,8 +35,8 @@ type (
 	LogicalOperator string
 )
 
+// As we will process large bulks of statements, this ensures we don't waste memory in redundant information.
 var (
-	// As we will process large bulks of statements, this ensures we don't waste memory in redundant information.
 	SET    = unique.Make(OpKind("SET"))
 	DELETE = unique.Make(OpKind("DELETE"))
 	Eq     = unique.Make(LogicalOperator("="))
