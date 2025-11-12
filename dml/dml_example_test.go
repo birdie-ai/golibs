@@ -1,23 +1,23 @@
-package bdml_test
+package dml_test
 
 import (
 	"fmt"
 	"unique"
 
-	"github.com/birdie-ai/golibs/bdml"
+	dml "github.com/birdie-ai/golibs/dml"
 )
 
 func ExampleStmt() {
-	stmt := bdml.Stmt{
-		Op:     bdml.SET,
+	stmt := dml.Stmt{
+		Op:     dml.SET,
 		Entity: unique.Make("mydata"),
-		Assign: bdml.Assign{
+		Assign: dml.Assign{
 			"kind.rating": 10,
 		},
-		Where: bdml.Clauses{
+		Where: dml.Clauses{
 			{
 				Field: "id",
-				Op:    bdml.Eq,
+				Op:    dml.Eq,
 				Value: "test",
 			},
 		},

@@ -1,11 +1,12 @@
-# bdml: Birdie Data Manipulation Language
+# dml: Data Manipulation Language
 
-This package provides the parser and encoder for the Birdie Data Manipulation
-Language (bdml).
+This package provides the parser and encoder for the Data Manipulation Language (dml) used
+as write interface for the search services.
 
-## What is bdml?
+## What is dml?
 
-The `bdml` language exists for three reasons:
+DML stands for [Data Manipulation Language](https://en.wikipedia.org/wiki/Data_manipulation_language) and this `dml` exists
+primarily for three reasons:
 
 1. Having a common language that captures the data change semantics independent of the transport protocol used (REST, PubSub, etc).
 2. The ability to funnel data change events from different sources into a common language that allows for ease de-duplication and other optimizations.
