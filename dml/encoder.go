@@ -17,7 +17,7 @@ type (
 		Entity unique.Handle[string]
 		Op     OpKind
 		Assign Assign
-		Where  Clauses
+		Where  Where
 	}
 
 	// Stmts is a list of statements.
@@ -30,34 +30,23 @@ type (
 	// OpKind is the intended operation kind: SET | DELETE
 	OpKind string
 
-	// Clauses is a AND-based list of clause.
-	Clauses []Clause
-
-	// Clause is a filter predicate.
-	Clause struct {
-		Field string
-		Op    LogicalOperator
-		Value any
-	}
-
-	// LogicalOperator is a logical operator. Eg.: "=", "!="
-	LogicalOperator string
+	// Where clause of the update.
+	Where map[string]any
 )
 
 // As we will process large bulks of statements, this ensures we don't waste memory in redundant information.
 var (
 	SET    = OpKind("SET")
 	DELETE = OpKind("DELETE")
-	Eq     = LogicalOperator("=")
 )
 
 // encoder errors
 var (
-	ErrInvalidOperation    = errors.New("invalid operation")
-	ErrMissingEntity       = errors.New(`entity is not provided`)
-	ErrMissingAssign       = errors.New(`"SET" requires an assign`)
-	ErrMissingWhereClauses = errors.New(`WHERE clause is not given`)
-	ErrNotIdent            = errors.New(`not an identifier`)
+	ErrInvalidOperation   = errors.New("invalid operation")
+	ErrMissingEntity      = errors.New(`entity is not provided`)
+	ErrMissingAssign      = errors.New(`"SET" requires an assign`)
+	ErrMissingWhereClause = errors.New(`WHERE clause is not given`)
+	ErrNotIdent           = errors.New(`not an identifier`)
 )
 
 // Encode validates and encode the statements in its text format.
@@ -94,11 +83,11 @@ func validate(stmt Stmt) error {
 		errs = append(errs, ErrMissingAssign)
 	}
 	if len(stmt.Where) == 0 {
-		errs = append(errs, ErrMissingWhereClauses)
+		errs = append(errs, ErrMissingWhereClause)
 	}
-	for _, c := range stmt.Where {
-		if !isIdent(c.Field) {
-			errs = append(errs, fmt.Errorf("clause with invalid field %s: %w", c.Field, ErrNotIdent))
+	for k := range stmt.Where {
+		if !isIdent(k) {
+			errs = append(errs, fmt.Errorf("clause with invalid field %s: %w", k, ErrNotIdent))
 		}
 	}
 
@@ -158,28 +147,25 @@ func encodeAssign(w io.Writer, assign Assign) error {
 	return nil
 }
 
-func encodeClauses(w io.Writer, clauses Clauses) error {
-	for i, c := range clauses {
-		err := encodeClause(w, c)
-		if err != nil {
-			return err
-		}
-		if i+1 < len(clauses) {
-			err = write(w, " AND ")
+func encodeClauses(w io.Writer, clauses Where) error {
+	if len(clauses) == 1 {
+		for k, v := range clauses {
+			d, err := json.Marshal(v)
+			if err != nil {
+				return err
+			}
+			err = write(w, k+"="+string(d))
 			if err != nil {
 				return err
 			}
 		}
+		return nil
 	}
-	return nil
-}
-
-func encodeClause(w io.Writer, c Clause) error {
-	val, err := json.Marshal(c.Value)
+	d, err := json.Marshal(clauses)
 	if err != nil {
 		return err
 	}
-	return write(w, c.Field+string(c.Op)+string(val))
+	return write(w, string(d))
 }
 
 func write(w io.Writer, s string) error {

@@ -41,7 +41,7 @@ func TestEncode(t *testing.T) {
 			ast: dml.Stmts{
 				{},
 			},
-			err: dml.ErrMissingWhereClauses,
+			err: dml.ErrMissingWhereClause,
 		},
 		{
 			ast: dml.Stmts{
@@ -59,7 +59,7 @@ func TestEncode(t *testing.T) {
 			ast: dml.Stmts{
 				{Op: dml.SET, Entity: u("test"), Assign: dml.Assign{".": map[string]any{}}},
 			},
-			err: dml.ErrMissingWhereClauses,
+			err: dml.ErrMissingWhereClause,
 		},
 		{
 			ast: dml.Stmts{
@@ -67,8 +67,8 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("test"),
 					Assign: dml.Assign{"$a": map[string]any{}},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: "abc"},
+					Where: dml.Where{
+						"id": "abc",
 					},
 				},
 			},
@@ -80,8 +80,8 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("$bleh"),
 					Assign: dml.Assign{"a": map[string]any{}},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: "abc"},
+					Where: dml.Where{
+						"id": "abc",
 					},
 				},
 			},
@@ -93,8 +93,8 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("bleh"),
 					Assign: dml.Assign{"a": map[string]any{}},
-					Where: dml.Clauses{
-						{Field: "$id", Op: dml.Eq, Value: "abc"},
+					Where: dml.Where{
+						"$id": "abc",
 					},
 				},
 			},
@@ -106,8 +106,8 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{"a": 1},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: 1},
+					Where: dml.Where{
+						"id": 1,
 					},
 				},
 			},
@@ -119,8 +119,8 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{"a": false},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: false},
+					Where: dml.Where{
+						"id": false,
 					},
 				},
 			},
@@ -132,8 +132,8 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{"a": map[string]string{"k1": "v1", "k2": "v2"}},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: "abc"},
+					Where: dml.Where{
+						"id": "abc",
 					},
 				},
 			},
@@ -147,8 +147,8 @@ func TestEncode(t *testing.T) {
 					Assign: dml.Assign{
 						"a.b.c": []string{"a", "b", "c"},
 					},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: "abc"},
+					Where: dml.Where{
+						"id": "abc",
 					},
 				},
 			},
@@ -163,8 +163,8 @@ func TestEncode(t *testing.T) {
 						"name":   "some org",
 						"config": map[string]any{},
 					},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: "abc"},
+					Where: dml.Where{
+						"id": "abc",
 					},
 				},
 			},
@@ -181,8 +181,8 @@ func TestEncode(t *testing.T) {
 							"test": "abc",
 						},
 					},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: "abc"},
+					Where: dml.Where{
+						"id": "abc",
 					},
 				},
 			},
@@ -194,21 +194,37 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{"a": 1},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: 1},
+					Where: dml.Where{
+						"id": 1,
 					},
 				},
 				{
 					Op:     dml.SET,
 					Entity: u("organizations"),
 					Assign: dml.Assign{"abc": 1},
-					Where: dml.Clauses{
-						{Field: "id", Op: dml.Eq, Value: "abc"},
+					Where: dml.Where{
+						"id": "abc",
 					},
 				},
 			},
 			// For now there's no "pretty" format support.
 			want: `SET feedbacks a=1 WHERE id=1;SET organizations abc=1 WHERE id="abc";`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b.c": []string{"a", "b", "c"},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `SET feedbacks a.b.c=["a","b","c"] WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 	} {
 		var buf bytes.Buffer

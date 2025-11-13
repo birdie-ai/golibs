@@ -14,12 +14,8 @@ func ExampleStmt() {
 		Assign: dml.Assign{
 			"kind.rating": 10,
 		},
-		Where: dml.Clauses{
-			{
-				Field: "id",
-				Op:    dml.Eq,
-				Value: "test",
-			},
+		Where: dml.Where{
+			"id": "test",
 		},
 	}
 	err := dml.Encode(os.Stdout, dml.Stmts{stmt})
