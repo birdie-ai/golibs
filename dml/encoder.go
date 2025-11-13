@@ -12,7 +12,7 @@ import (
 )
 
 type (
-	// Stmt is a single bdml statement.
+	// Stmt is a single dml statement.
 	Stmt struct {
 		Entity unique.Handle[string]
 		Op     OpKind

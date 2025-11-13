@@ -1,7 +1,7 @@
 package dml_test
 
 import (
-	"fmt"
+	"os"
 	"unique"
 
 	dml "github.com/birdie-ai/golibs/dml"
@@ -22,6 +22,10 @@ func ExampleStmt() {
 			},
 		},
 	}
+	err := dml.Encode(os.Stdout, dml.Stmts{stmt})
+	if err != nil {
+		panic(err)
+	}
 
-	fmt.Println(stmt)
+	// Output: SET mydata kind.rating=10 WHERE id="test";
 }
