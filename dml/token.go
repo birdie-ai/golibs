@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 )
 
+// identifier: \p{L}+[_\p{L}0-9]*
 func isIdent(s string) bool {
 	data := []byte(s)
 	r, size := utf8.DecodeRune(data)
