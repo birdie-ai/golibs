@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestObj(t *testing.T) {
+func TestDynGet(t *testing.T) {
 	const example = `
 	{
 		"number" : 666,
@@ -99,6 +99,21 @@ func TestObj(t *testing.T) {
 		assertEqual(t, dynGet[string](t, obj, `nested."a\".b".string`), "escaping")
 	})
 
+	t.Run("invalid paths", func(t *testing.T) {
+		assertInvalid := func(path string) {
+			t.Helper()
+			_, err := xjson.DynGet[string](obj, path)
+			if !errors.Is(err, xjson.ErrInvalidPath) {
+				t.Fatalf("got %v; want %v", err, xjson.ErrNotFound)
+			}
+		}
+		assertInvalid("")
+		assertInvalid(".")
+		assertInvalid("notfound.")
+		assertInvalid(".notfound")
+		assertInvalid(".notfound.")
+	})
+
 	t.Run("not found", func(t *testing.T) {
 		assertNotFound := func(path string) {
 			t.Helper()
@@ -107,12 +122,6 @@ func TestObj(t *testing.T) {
 				t.Fatalf("got %v; want %v", err, xjson.ErrNotFound)
 			}
 		}
-
-		assertNotFound("")
-		assertNotFound(".")
-		assertNotFound("notfound.")
-		assertNotFound(".notfound")
-		assertNotFound(".notfound.")
 		assertNotFound("notfound")
 		assertNotFound("nested.notfound")
 		assertNotFound(`nested."with.dot".notfound`)
@@ -124,6 +133,115 @@ func TestObj(t *testing.T) {
 			t.Fatalf("want error but got %v", v)
 		}
 	})
+}
+
+func TestDynSet(t *testing.T) {
+	obj := xjson.Obj{}
+	xjson.DynSet(obj, "text", "test")
+	xjson.DynSet(obj, "number", 666)
+	xjson.DynSet(obj, "list", []int{6, 6, 6})
+	xjson.DynSet(obj, "object", xjson.Obj{
+		"a": xjson.Obj{
+			"b": xjson.Obj{
+				"c": "c_value",
+			},
+		},
+	})
+
+	assertEqual(t, obj, xjson.Obj{
+		"text":   "test",
+		"number": 666,
+		"list":   []int{6, 6, 6},
+		"object": xjson.Obj{
+			"a": xjson.Obj{
+				"b": xjson.Obj{
+					"c": "c_value",
+				},
+			},
+		},
+	})
+
+	xjson.DynSet(obj, "object.a.b.c", xjson.Obj{
+		"overwrite": true,
+	})
+
+	assertEqual(t, obj, xjson.Obj{
+		"text":   "test",
+		"number": 666,
+		"list":   []int{6, 6, 6},
+		"object": xjson.Obj{
+			"a": xjson.Obj{
+				"b": xjson.Obj{
+					"c": xjson.Obj{
+						"overwrite": true,
+					},
+				},
+			},
+		},
+	})
+
+	xjson.DynSet(obj, "object.merged", true)
+	assertEqual(t, obj, xjson.Obj{
+		"text":   "test",
+		"number": 666,
+		"list":   []int{6, 6, 6},
+		"object": xjson.Obj{
+			"merged": true,
+			"a": xjson.Obj{
+				"b": xjson.Obj{
+					"c": xjson.Obj{
+						"overwrite": true,
+					},
+				},
+			},
+		},
+	})
+
+	xjson.DynSet(obj, `object."with.dot.again".x`, true)
+	assertEqual(t, obj, xjson.Obj{
+		"text":   "test",
+		"number": 666,
+		"list":   []int{6, 6, 6},
+		"object": xjson.Obj{
+			"merged": true,
+			"with.dot.again": xjson.Obj{
+				"x": true,
+			},
+			"a": xjson.Obj{
+				"b": xjson.Obj{
+					"c": xjson.Obj{
+						"overwrite": true,
+					},
+				},
+			},
+		},
+	})
+
+	xjson.DynSet(obj, "object", "overwritten")
+	assertEqual(t, obj, xjson.Obj{
+		"text":   "test",
+		"number": 666,
+		"list":   []int{6, 6, 6},
+		"object": "overwritten",
+	})
+}
+
+func TestDynSetInvalidPath(t *testing.T) {
+	invalidPaths := []string{
+		"",
+		".",
+		".name",
+		"name.",
+		".name.",
+	}
+	obj := xjson.Obj{}
+
+	for _, invalidPath := range invalidPaths {
+		err := xjson.DynSet(obj, invalidPath, true)
+		if !errors.Is(err, xjson.ErrInvalidPath) {
+			t.Errorf("path %q should be invalid; got %v", invalidPath, err)
+		}
+	}
 }
 
 func TestUnmarshalFile(t *testing.T) {
