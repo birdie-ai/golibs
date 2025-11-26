@@ -176,16 +176,9 @@ func DynSet(o Obj, path string, value any) error {
 func createPath(o Obj, segments []string) Obj {
 	node := o
 	for _, segment := range segments {
-		anyV, ok := node[segment]
-		if !ok {
-			v := Obj{}
-			node[segment] = v
-			node = v
-			continue
-		}
+		anyV := node[segment]
 		v, ok := anyV.(Obj)
 		if !ok {
-			// overwritting
 			v := Obj{}
 			node[segment] = v
 			node = v
