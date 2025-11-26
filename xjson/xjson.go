@@ -186,6 +186,7 @@ func parseSegments(path string) []string {
 			segments = append(segments, string(currentSegment))
 			currentSegment = nil
 		case r == '"' && previous != '\\':
+			// TODO(katcipis): handle things like """.
 			quoted = !quoted
 		case r == '"' && previous == '\\':
 			// When we escape " we need to remove the escape from the key
