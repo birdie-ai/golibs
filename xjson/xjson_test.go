@@ -40,6 +40,10 @@ func TestObj(t *testing.T) {
 				"string" : "testdot",
 				"bool"   : true
 			},
+			"." : {
+				"number" : 911,
+				"string" : "just dot"
+			},
 			"a\".b" : {
 				"number" : 6,
 				"string" : "escaping"
@@ -85,9 +89,14 @@ func TestObj(t *testing.T) {
 		assertEqual(t, dynGet[bool](t, obj, `nested."with.dot".bool`), true)
 	})
 
+	t.Run("key is just dot", func(t *testing.T) {
+		assertEqual(t, dynGet[float64](t, obj, `nested.".".number`), 911)
+		assertEqual(t, dynGet[string](t, obj, `nested.".".string`), "just dot")
+	})
+
 	t.Run("key with dot and double quotes", func(t *testing.T) {
 		assertEqual(t, dynGet[float64](t, obj, `nested."a\".b".number`), 6)
-		assertEqual(t, dynGet[string](t, obj, `nested."a\".b".number`), "escaping")
+		assertEqual(t, dynGet[string](t, obj, `nested."a\".b".string`), "escaping")
 	})
 
 	t.Run("not found", func(t *testing.T) {

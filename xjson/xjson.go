@@ -142,6 +142,9 @@ func DynGet[T any](o Obj, path string) (T, error) {
 
 func traverse(o Obj, path string) (string, Obj, error) {
 	segments := parseSegments(path)
+	if len(segments) == 0 {
+		return "", nil, fmt.Errorf("%w: %q", ErrNotFound, path)
+	}
 	traverseSegments := segments[0 : len(segments)-1]
 	node := o
 
@@ -164,5 +167,37 @@ func traverse(o Obj, path string) (string, Obj, error) {
 }
 
 func parseSegments(path string) []string {
-	return strings.Split(path, ".")
+	var (
+		segments       []string
+		currentSegment []rune
+		quoted         bool
+		previous       rune
+	)
+
+	for _, r := range path {
+		switch {
+		case r == '.' && !quoted:
+			if len(currentSegment) == 0 {
+				// empty key, always not found.
+				// maybe would be better to have an error.
+				// keep current behavior for now.
+				return nil
+			}
+			segments = append(segments, string(currentSegment))
+			currentSegment = nil
+		case r == '"' && previous != '\\':
+			quoted = !quoted
+		case r == '"' && previous == '\\':
+			// When we escape " we need to remove the escape from the key
+			currentSegment = currentSegment[:len(currentSegment)-1]
+			currentSegment = append(currentSegment, r)
+		default:
+			currentSegment = append(currentSegment, r)
+		}
+		previous = r
+	}
+	if len(currentSegment) > 0 {
+		segments = append(segments, string(currentSegment))
+	}
+	return segments
 }
