@@ -137,10 +137,10 @@ func TestDynGet(t *testing.T) {
 
 func TestDynSet(t *testing.T) {
 	obj := xjson.Obj{}
-	xjson.DynSet(obj, "text", "test")
-	xjson.DynSet(obj, "number", 666)
-	xjson.DynSet(obj, "list", []int{6, 6, 6})
-	xjson.DynSet(obj, "object", xjson.Obj{
+	dynSet(t, obj, "text", "test")
+	dynSet(t, obj, "number", 666)
+	dynSet(t, obj, "list", []int{6, 6, 6})
+	dynSet(t, obj, "object", xjson.Obj{
 		"a": xjson.Obj{
 			"b": xjson.Obj{
 				"c": "c_value",
@@ -161,7 +161,7 @@ func TestDynSet(t *testing.T) {
 		},
 	})
 
-	xjson.DynSet(obj, "object.a.b.c", xjson.Obj{
+	dynSet(t, obj, "object.a.b.c", xjson.Obj{
 		"overwrite": true,
 	})
 
@@ -180,7 +180,7 @@ func TestDynSet(t *testing.T) {
 		},
 	})
 
-	xjson.DynSet(obj, "object.merged", true)
+	dynSet(t, obj, "object.merged", true)
 	assertEqual(t, obj, xjson.Obj{
 		"text":   "test",
 		"number": 666,
@@ -197,7 +197,7 @@ func TestDynSet(t *testing.T) {
 		},
 	})
 
-	xjson.DynSet(obj, `object."with.dot.again".x`, true)
+	dynSet(t, obj, `object."with.dot.again".x`, true)
 	assertEqual(t, obj, xjson.Obj{
 		"text":   "test",
 		"number": 666,
@@ -217,7 +217,7 @@ func TestDynSet(t *testing.T) {
 		},
 	})
 
-	xjson.DynSet(obj, "object", "overwritten")
+	dynSet(t, obj, "object", "overwritten")
 	assertEqual(t, obj, xjson.Obj{
 		"text":   "test",
 		"number": 666,
@@ -387,6 +387,15 @@ func dynGet[T any](t *testing.T, o xjson.Obj, path string) T {
 		t.Fatal(err)
 	}
 	return v
+}
+
+func dynSet(t *testing.T, o xjson.Obj, path string, value any) {
+	t.Helper()
+
+	err := xjson.DynSet(o, path, value)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func assertEqual[T any](t *testing.T, got, want T) {
