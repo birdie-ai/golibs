@@ -94,7 +94,7 @@ func TestObj(t *testing.T) {
 		assertEqual(t, dynGet[string](t, obj, `nested.".".string`), "just dot")
 	})
 
-	t.Run("key with dot and double quotes", func(t *testing.T) {
+	t.Run("key with dot and escaped double quotes", func(t *testing.T) {
 		assertEqual(t, dynGet[float64](t, obj, `nested."a\".b".number`), 6)
 		assertEqual(t, dynGet[string](t, obj, `nested."a\".b".string`), "escaping")
 	})
