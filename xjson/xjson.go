@@ -115,6 +115,11 @@ func (e UnmarshalError) Error() string {
 // For the aforementioned path "key", "nested1" and "nested2" MUST be objects, or else traversal will fail
 // and an error is returned. If the entire path is valid but the last key is not found an [ErrNotFound] is returned.
 // Once traversal is finished, then "nested3" must match the given type [T].
+//
+// Key names with "." can be traversed by using double quotes like:
+//   - "key."nested.dot".value"
+//
+// It will traverse key -> nested.dot -> value.
 func DynGet[T any](o Obj, path string) (T, error) {
 	var z T
 	key, leaf, err := traverse(o, path)
@@ -124,7 +129,7 @@ func DynGet[T any](o Obj, path string) (T, error) {
 
 	anyV, ok := leaf[key]
 	if !ok {
-		return z, ErrNotFound
+		return z, fmt.Errorf("%w: %q", ErrNotFound, key)
 	}
 
 	v, ok := anyV.(T)
@@ -136,23 +141,64 @@ func DynGet[T any](o Obj, path string) (T, error) {
 }
 
 func traverse(o Obj, path string) (string, Obj, error) {
-	parsedPath := strings.Split(path, ".")
-	traversePath := parsedPath[0 : len(parsedPath)-1]
-	leaf := o
+	segments := parseSegments(path)
+	if len(segments) == 0 {
+		return "", nil, fmt.Errorf("%w: %q", ErrNotFound, path)
+	}
+	traverseSegments := segments[0 : len(segments)-1]
+	node := o
 
-	for i, key := range traversePath {
-		anyV, ok := leaf[key]
+	for i, key := range traverseSegments {
+		anyV, ok := node[key]
 		if !ok {
-			return "", nil, nil
+			traversed := strings.Join(segments[:i+1], ".")
+			return "", nil, fmt.Errorf("%w: %q", ErrNotFound, traversed)
 		}
 		v, ok := anyV.(Obj)
 		if !ok {
-			traversed := strings.Join(parsedPath[:i+1], ".")
+			traversed := strings.Join(segments[:i+1], ".")
 			return "", nil, fmt.Errorf("traversing path %q: at: %q: want object got %T", path, traversed, anyV)
 		}
-		leaf = v
+		node = v
 	}
 
-	key := parsedPath[len(parsedPath)-1]
-	return key, leaf, nil
+	key := segments[len(segments)-1]
+	return key, node, nil
+}
+
+func parseSegments(path string) []string {
+	var (
+		segments       []string
+		currentSegment []rune
+		quoted         bool
+		previous       rune
+	)
+
+	for _, r := range path {
+		switch {
+		case r == '.' && !quoted:
+			if len(currentSegment) == 0 {
+				// empty key, always not found.
+				// maybe would be better to have an error.
+				// keep current behavior for now.
+				return nil
+			}
+			segments = append(segments, string(currentSegment))
+			currentSegment = nil
+		case r == '"' && previous != '\\':
+			// TODO(katcipis): handle things like """.
+			quoted = !quoted
+		case r == '"' && previous == '\\':
+			// When we escape " we need to remove the escape from the key
+			currentSegment = currentSegment[:len(currentSegment)-1]
+			currentSegment = append(currentSegment, r)
+		default:
+			currentSegment = append(currentSegment, r)
+		}
+		previous = r
+	}
+	if len(currentSegment) > 0 {
+		segments = append(segments, string(currentSegment))
+	}
+	return segments
 }
