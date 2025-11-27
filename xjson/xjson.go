@@ -35,8 +35,13 @@ type (
 	}
 )
 
-// ErrNotFound indicates that an object was not found while traversing a [Obj].
-var ErrNotFound = errors.New("traversing JSON: key not found")
+var (
+	// ErrNotFound indicates that an object was not found while traversing a [Obj].
+	ErrNotFound = errors.New("traversing JSON: key not found")
+
+	// ErrInvalidPath indicates that a traversal path is invalid.
+	ErrInvalidPath = errors.New("JSON traversal path is invalid")
+)
 
 // UnmarshalFile calls [Unmarshal] with the opened file (closing it afterwards) and returns the unmarshalled value.
 // If you need more details, like the data that was read when an unmarshalling error happened, you can:
@@ -140,10 +145,54 @@ func DynGet[T any](o Obj, path string) (T, error) {
 	return v, nil
 }
 
+// DynSet traverses the given [Obj] using the given path and sets it to the given value.
+// It will create any necessary intermediate objects as it traverses the path.
+// Any keys on the traversal path that already exist and are not an object will be overwritten with an object.
+//
+// Path is defined using '.' as delimiter like: "key.nested1.nested2.nested3".
+//
+// Key names with "." can be traversed by using double quotes like:
+//   - "key."nested.dot".key2"
+//
+// It will traverse key -> nested.dot -> key2 and set "key2" to be the given value.
+// If the given path is invalid, like "" or "." or the [Obj] is nil an error is returned.
+func DynSet(o Obj, path string, value any) error {
+	if o == nil {
+		return fmt.Errorf("can't set %q on nil object", path)
+	}
+	segments := parseSegments(path)
+	if len(segments) == 0 {
+		return fmt.Errorf("%w: %q", ErrInvalidPath, path)
+	}
+
+	traversalSegments := segments[:len(segments)-1]
+	leafSegment := segments[len(segments)-1]
+
+	leafNode := createPath(o, traversalSegments)
+	leafNode[leafSegment] = value
+	return nil
+}
+
+func createPath(o Obj, segments []string) Obj {
+	node := o
+	for _, segment := range segments {
+		anyV := node[segment]
+		v, ok := anyV.(Obj)
+		if !ok {
+			v := Obj{}
+			node[segment] = v
+			node = v
+			continue
+		}
+		node = v
+	}
+	return node
+}
+
 func traverse(o Obj, path string) (string, Obj, error) {
 	segments := parseSegments(path)
 	if len(segments) == 0 {
-		return "", nil, fmt.Errorf("%w: %q", ErrNotFound, path)
+		return "", nil, fmt.Errorf("%w: %q", ErrInvalidPath, path)
 	}
 	traverseSegments := segments[0 : len(segments)-1]
 	node := o
@@ -178,9 +227,7 @@ func parseSegments(path string) []string {
 		switch {
 		case r == '.' && !quoted:
 			if len(currentSegment) == 0 {
-				// empty key, always not found.
-				// maybe would be better to have an error.
-				// keep current behavior for now.
+				// dot must be preceded by something, this is invalid.
 				return nil
 			}
 			segments = append(segments, string(currentSegment))
@@ -197,8 +244,10 @@ func parseSegments(path string) []string {
 		}
 		previous = r
 	}
-	if len(currentSegment) > 0 {
-		segments = append(segments, string(currentSegment))
+	if len(currentSegment) == 0 {
+		// This means empty or something like "name." which is invalid.
+		return nil
 	}
+	segments = append(segments, string(currentSegment))
 	return segments
 }
