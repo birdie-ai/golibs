@@ -173,6 +173,11 @@ func DynSet(o Obj, path string, value any) error {
 	return nil
 }
 
+// IsValidDynPath returns true if the given path is valid for [DynGet] and [DynSet] operations.
+func IsValidDynPath(path string) bool {
+	return len(parseSegments(path)) > 0
+}
+
 func createPath(o Obj, segments []string) Obj {
 	node := o
 	for _, segment := range segments {

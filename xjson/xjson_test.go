@@ -244,6 +244,22 @@ func TestDynSetInvalidPath(t *testing.T) {
 	}
 }
 
+func TestDynValidatePath(t *testing.T) {
+	invalidPaths := []string{
+		"",
+		".",
+		"..",
+		".name",
+		"name.",
+		".name.",
+	}
+	for _, invalidPath := range invalidPaths {
+		if xjson.IsValidDynPath(invalidPath) {
+			t.Errorf("path %q should be invalid", invalidPath)
+		}
+	}
+}
+
 func TestUnmarshalFile(t *testing.T) {
 	type obj struct {
 		Name string
