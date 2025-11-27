@@ -92,16 +92,16 @@ func (p *OrderedGooglePublisher[T]) Shutdown(context.Context) error {
 // handled concurrently. This requires a client to be created per go routine, so beware of setting concurrency to a high value (every go routine
 // will create a different client/connection to pubsub).
 // Call [OrderedGoogleSub.Shutdown] to stop all goroutines/clean up all resources.
-func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName string, maxConcurrency int) (*OrderedGoogleSub[T], error) {
-	if maxConcurrency <= 0 {
-		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
+func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName string, maxConcurrentEvents int) (*OrderedGoogleSub[T], error) {
+	if maxConcurrentEvents <= 0 {
+		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrentEvents)
 	}
 	client, err := pubsub.NewClient(ctx, project)
 	if err != nil {
 		return nil, fmt.Errorf("creating client: %w", err)
 	}
 	sub := client.Subscription(subName)
-	sub.ReceiveSettings.NumGoroutines = maxConcurrency
+	sub.ReceiveSettings.MaxOutstandingMessages = maxConcurrentEvents
 	return &OrderedGoogleSub[T]{eventName: eventName, client: client, sub: sub}, nil
 }
 
