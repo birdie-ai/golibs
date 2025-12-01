@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,10 +46,10 @@ type (
 )
 
 const (
-	// DefaultMinSleepPeriod is the min sleep period between retries (which is increased exponentially).
+	// DefaultMinSleepPeriod is the default min sleep period between retries (which is increased exponentially).
 	DefaultMinSleepPeriod = 250 * time.Millisecond
 
-	// DefaultMaxSleepPeriod is the max sleep period between retries.
+	// DefaultMaxSleepPeriod is the default max sleep period between retries.
 	DefaultMaxSleepPeriod = 30 * time.Second
 )
 
@@ -96,6 +97,7 @@ type (
 		requestTimeout   time.Duration
 		minPeriod        time.Duration
 		maxPeriod        time.Duration
+		jitter           time.Duration
 		checkResponse    bool
 		sleep            func(context.Context, time.Duration)
 		retryStatusCodes map[int]struct{}
@@ -166,10 +168,11 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 				strings.HasSuffix(emsg, "Temporary failure in name resolution") ||
 				strings.HasSuffix(emsg, "cannot assign requested address") {
 
-				log.Debug("xhttp.Client: retrying request with error", "error", err, "sleep_period", sleepPeriod.String())
+				log.Debug("xhttp.Client: retrying request with error", "error", err,
+					"jitter", r.jitter.String(), "sleep_period", sleepPeriod.String())
 
 				r.onRetry(req, res, err)
-				r.sleep(ctx, sleepPeriod)
+				r.sleep(ctx, r.addJitter(sleepPeriod))
 				incrementSleepPeriod()
 				continue
 			}
@@ -184,7 +187,10 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 		if isRetryCode {
 			r.onRetry(req, res, err)
 
-			log := slog.FromCtx(ctx).With("status_code", res.StatusCode, "sleep_period", sleepPeriod.String())
+			log := slog.FromCtx(ctx).With("status_code", res.StatusCode,
+				"jitter", r.jitter.String(),
+				"sleep_period", sleepPeriod.String())
+
 			// Caller might have read the response body on onRetry, just close the body the now.
 			if err := res.Body.Close(); err != nil {
 				log.Debug("xhttp.Client: unable to close response body while retrying", "error", err)
@@ -212,7 +218,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 				}
 			}
 
-			r.sleep(ctx, sleepPeriod)
+			r.sleep(ctx, r.addJitter(sleepPeriod))
 			incrementSleepPeriod()
 			continue
 		}
@@ -227,7 +233,7 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 			}
 			if err != nil {
 				log.Debug("xhttp.Client: retrying request with error reading response body", "error", err)
-				r.sleep(ctx, sleepPeriod)
+				r.sleep(ctx, r.addJitter(sleepPeriod))
 				incrementSleepPeriod()
 				continue
 			}
@@ -240,6 +246,13 @@ func (r *retrierClient) do(ctx context.Context, req *http.Request, requestBody [
 
 	slog.FromCtx(ctx).Debug("xhttp.Client: stopping retry: parent context canceled", "error", ctx.Err())
 	return nil, ctx.Err()
+}
+
+func (r *retrierClient) addJitter(v time.Duration) time.Duration {
+	if r.jitter == 0 {
+		return v
+	}
+	return v + time.Duration(rand.Int64N(int64(r.jitter)))
 }
 
 func (r *retrierClient) newRequest(ctx context.Context, req *http.Request, requestBody []byte) (*http.Request, context.CancelFunc) {
