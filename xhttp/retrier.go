@@ -45,10 +45,10 @@ type (
 )
 
 const (
-	// DefaultMinSleepPeriod is the min sleep period between retries (which is increased exponentially).
+	// DefaultMinSleepPeriod is the default min sleep period between retries (which is increased exponentially).
 	DefaultMinSleepPeriod = 250 * time.Millisecond
 
-	// DefaultMaxSleepPeriod is the max sleep period between retries.
+	// DefaultMaxSleepPeriod is the default max sleep period between retries.
 	DefaultMaxSleepPeriod = 30 * time.Second
 )
 
@@ -96,6 +96,7 @@ type (
 		requestTimeout   time.Duration
 		minPeriod        time.Duration
 		maxPeriod        time.Duration
+		jitter           time.Duration
 		checkResponse    bool
 		sleep            func(context.Context, time.Duration)
 		retryStatusCodes map[int]struct{}

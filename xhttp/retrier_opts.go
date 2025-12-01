@@ -24,6 +24,17 @@ func RetrierWithOnRequestDone(f RetrierOnRequestDoneFunc) RetrierOption {
 	}
 }
 
+// RetrierWithJitter configures the maximum jitter between retries. When calculating the retry period
+// based on min/max/exponential increase a random jitter will be added on top of
+// the retry period using this jitter duration as the random max.
+// This is useful to avoid bursts of retries, which even as they increase exponentially will
+// be made on a very similar cadence if the initial request happens at the same time.
+func RetrierWithJitter(jitter time.Duration) RetrierOption {
+	return func(r *retrierClient) {
+		r.jitter = jitter
+	}
+}
+
 // RetrierWithMinSleepPeriod configures the min period that the retrier will sleep between retries.
 // The retrier uses an exponential backoff, so this will be only the initial sleep period, that then grows exponentially.
 // If not defined it will default [DefaultMinSleepPeriod].
