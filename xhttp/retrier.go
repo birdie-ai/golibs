@@ -252,8 +252,7 @@ func (r *retrierClient) addJitter(v time.Duration) time.Duration {
 	if r.jitter == 0 {
 		return v
 	}
-	j := rand.Int64N(int64(r.jitter))
-	return v + time.Duration(j)
+	return v + time.Duration(rand.Int64N(int64(r.jitter)))
 }
 
 func (r *retrierClient) newRequest(ctx context.Context, req *http.Request, requestBody []byte) (*http.Request, context.CancelFunc) {
