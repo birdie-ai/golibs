@@ -9,7 +9,7 @@ import (
 func isIdent(s string) bool {
 	// Check for quotes
 	if len(s) >= 3 && s[0] == '"' && s[len(s)-1] == '"' {
-		// when between quotes, any combination of characters is allow
+		// when between quotes, any combination of characters is allowed
 		return true
 	}
 
