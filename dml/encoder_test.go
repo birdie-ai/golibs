@@ -215,6 +215,34 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a.\"some_field\"": 1},
+					Where: dml.Where{
+						"id": 1,
+					},
+				},
+			},
+			// For now there's no "pretty" format support.
+			want: `SET feedbacks a."some_field"=1 WHERE id=1;`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a.\"some-other-field\"": 1},
+					Where: dml.Where{
+						"id": 1,
+					},
+				},
+			},
+			// For now there's no "pretty" format support.
+			want: `SET feedbacks a."some-other-field"=1 WHERE id=1;`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
 					Assign: dml.Assign{
 						"a.b.c": []string{"a", "b", "c"},
 					},
