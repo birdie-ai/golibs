@@ -12,23 +12,7 @@ primarily for three reasons:
 2. The ability to funnel data change events from different sources into a common language that allows for ease de-duplication and other optimizations.
 3. Separate higher level business logic (mostly data transformation) from lower level storage modifications.
 
-## Syntax
-
-Simplified eBNF:
-```
-PROGRAM = STMT+
-STMT = OP IDENT [ASSIGNLIST] 'WHERE' CLAUSE ';'
-OP = 'SET' | 'DELETE'
-ASSIGNLIST = ASSIGN [',' ASSIGNLIST ]
-ASSIGN = NAME '=' VALUE
-CLAUSE = ASSIGN | JSON
-NAME = '.' | IDENT ['.' IDENT]
-VALUE = JSON
-IDENT = #'\w+'
-JSON = '"' IDENT '"'
-```
-
-Examples:
+## Examples
 
 Updating individual fields:
 ```
@@ -79,4 +63,134 @@ SET feedbacks
     "entity": "feedback"
   }
 WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
+```
+
+## Syntax
+
+The language grammar is defined below using [ohm](https://ohmjs.org/docs/syntax-reference).
+You can paste the code below in the [online editor](https://ohmjs.org/editor/) to
+validate the syntax definition by providing good/bad examples.
+
+```
+dml {
+  Stmts = 
+    Stmt*
+
+  Stmt =
+    SetStmt   -- setstmt
+    | DelStmt -- delstmt
+
+  SetStmt = 
+    Set ident AssignList Where Clause ";"
+
+  DelStmt =
+    Delete ident Where Clause ";"
+
+  Set = 
+    caseInsensitive<"SET">
+
+  Delete = 
+   caseInsensitive<"DELETE">
+  
+  Where = 
+    caseInsensitive<"WHERE">
+
+  AssignList = 
+    Assign ("," AssignList)?
+
+  Assign = 
+    LFS "=" RFS
+
+  LFS = 
+  	"." | Traversal | ident
+
+  RFS = 
+  	JSONValue
+
+  Clause = 
+  	ident "=" Scalar
+
+  Traversal  = 
+  	ident "." (ident | String)+
+
+  ident = 
+  	letter+ (letter | "_" | "-")*
+
+  JSONValue =
+    Object
+    | Array
+    | String
+    | Number
+    | True
+    | False
+    | Null
+    
+    Scalar =
+		String | Number | True | False
+
+  Object =
+    "{" "}" -- empty
+    | "{" Pair ("," Pair)* "}" -- nonEmpty
+
+  Pair =
+    String ":" JSONValue
+
+  Array =
+    "[" "]" -- empty
+    | "[" JSONValue ("," JSONValue)* "]" -- nonEmpty
+
+  String (String) =
+    stringLit
+
+  stringLit =
+    "\"" doubleStringCharacter* "\""
+
+  doubleStringCharacter (character) =
+    ~("\"" | "\\") any -- nonEscaped
+    | "\\" escapeSequence -- escaped
+
+  escapeSequence =
+    "\"" -- doubleQuote
+    | "\\" -- reverseSolidus
+    | "/" -- solidus
+    | "b" -- backspace
+    | "f" -- formfeed
+    | "n" -- newline
+    | "r" -- carriageReturn
+    | "t" -- horizontalTab
+    | "u" fourHexDigits -- codePoint
+
+  fourHexDigits = hexDigit hexDigit hexDigit hexDigit
+
+  Number (Number) =
+    numberLit
+
+  numberLit =
+    decimal exponent -- withExponent
+    | decimal -- withoutExponent
+
+  decimal =
+    wholeNumber "." digit+ -- withFract
+    | wholeNumber -- withoutFract
+
+  wholeNumber =
+    "-" unsignedWholeNumber -- negative
+    | unsignedWholeNumber -- nonNegative
+
+  unsignedWholeNumber =
+    "0" -- zero
+    | nonZeroDigit digit* -- nonZero
+
+  nonZeroDigit = "1".."9"
+
+  exponent =
+    exponentMark ("+"|"-") digit+ -- signed
+    | exponentMark digit+ -- unsigned
+
+  exponentMark = "e" | "E"
+
+  True = "true"
+  False = "false"
+  Null = "null"
+}
 ```

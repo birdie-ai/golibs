@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -173,7 +174,38 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 		err      error
 	)
 
-	for len(in) > 0 {
+	ident, in, err = lexIdent(in)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+	}
+
+	dotident = append(dotident, []byte(ident)...)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+
+	for len(in) > 0 && in[0] == '.' {
+		dotident = append(dotident, '.')
+		in = skipblank(in[1:])
+		if len(in) == 0 {
+			return "", nil, nil, errUnexpectedEOF()
+		}
+		if in[0] == '"' {
+			// parse the string as a JSON string.
+			// This means we support all of its escape sequences!
+			dec := json.NewDecoder(bytes.NewReader(in))
+			tok, err := dec.Token()
+			if err != nil {
+				return "", nil, nil, fmt.Errorf("%w: parsing quote string literal: %v", ErrSyntax, err)
+			}
+			str, ok := tok.(string)
+			if !ok {
+				return "", nil, nil, fmt.Errorf("%w: unexpected %v", ErrSyntax, tok)
+			}
+			dotident = append(dotident, []byte(strconv.Quote(str))...)
+			in = skipblank(in[dec.InputOffset():])
+			continue
+		}
 		ident, in, err = lexIdent(in)
 		if err != nil {
 			return "", nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
@@ -182,15 +214,6 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 			return "", nil, nil, errUnexpectedEOF()
 		}
 		dotident = append(dotident, []byte(ident)...)
-		if in[0] == '.' {
-			dotident = append(dotident, '.')
-			in = skipblank(in[1:])
-			if len(in) == 0 {
-				return "", nil, nil, errUnexpectedEOF()
-			}
-			continue
-		}
-		break
 	}
 	in = skipblank(in)
 	if len(in) == 0 {
@@ -281,11 +304,15 @@ func lexIdent(in []byte) (string, []byte, error) {
 		if r == utf8.RuneError || size == 0 {
 			return "", nil, fmt.Errorf("invalid rune: %c", r)
 		}
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' {
 			break
 		}
 		ident = append(ident, r)
 		pos += size
+	}
+	if ident[len(ident)-1] == '-' {
+		ident = ident[:len(ident)-1]
+		pos--
 	}
 	return string(ident), in[pos:], nil
 }
