@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"unique"
 )
@@ -45,6 +46,7 @@ var (
 	ErrInvalidOperation   = errors.New("invalid operation")
 	ErrMissingEntity      = errors.New(`entity is not provided`)
 	ErrMissingAssign      = errors.New(`"SET" requires an assign`)
+	ErrInvalidAssignKey   = errors.New(`invalid assign key`)
 	ErrMissingWhereClause = errors.New(`WHERE clause is not given`)
 	ErrNotIdent           = errors.New(`not an identifier`)
 )
@@ -122,9 +124,12 @@ func encodePreamble(w io.Writer, stmt Stmt) error {
 func encodeAssign(w io.Writer, assign Assign) error {
 	for i, key := range slices.Sorted(maps.Keys(assign)) {
 		if key != "." {
-			for s := range strings.SplitSeq(key, ".") {
+			for i, s := range strings.Split(key, ".") {
+				if _, err := strconv.Unquote(s); i > 0 && len(s) > 2 && s[0] == '"' && err == nil {
+					continue
+				}
 				if !isIdent(s) {
-					return fmt.Errorf("%w: %s", ErrNotIdent, s)
+					return fmt.Errorf("%w: expected an ident or a quoted string but found %s", ErrInvalidAssignKey, s)
 				}
 			}
 		}

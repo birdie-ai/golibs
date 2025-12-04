@@ -72,7 +72,7 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			err: dml.ErrNotIdent,
+			err: dml.ErrInvalidAssignKey,
 		},
 		{
 			ast: dml.Stmts{
@@ -99,6 +99,97 @@ func TestEncode(t *testing.T) {
 				},
 			},
 			err: dml.ErrNotIdent,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("bleh"),
+					Assign: dml.Assign{`a."incomplete`: 1},
+					Where: dml.Where{
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidAssignKey,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("bleh"),
+					Assign: dml.Assign{`a.""`: 1},
+					Where: dml.Where{
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidAssignKey,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("bleh"),
+					Assign: dml.Assign{`a.'test'`: 1},
+					Where: dml.Where{
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidAssignKey,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("bleh"),
+					Assign: dml.Assign{`"test"`: 1},
+					Where: dml.Where{
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidAssignKey,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("bleh"),
+					Assign: dml.Assign{`-test`: 1},
+					Where: dml.Where{
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidAssignKey,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("bleh"),
+					Assign: dml.Assign{`..`: 1},
+					Where: dml.Where{
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidAssignKey,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("bleh"),
+					Assign: dml.Assign{`test-`: 1},
+					Where: dml.Where{
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidAssignKey,
 		},
 		{
 			ast: dml.Stmts{
@@ -215,13 +306,51 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{"a.\"some_field\"": 1},
+					Assign: dml.Assign{"some-field": 1},
 					Where: dml.Where{
 						"id": 1,
 					},
 				},
 			},
-			// For now there's no "pretty" format support.
+			want: "SET feedbacks some-field=1 WHERE id=1;",
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"abc.some-field": 1},
+					Where: dml.Where{
+						"id": 1,
+					},
+				},
+			},
+			want: "SET feedbacks abc.some-field=1 WHERE id=1;",
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"some-field.some-other-field": 1},
+					Where: dml.Where{
+						"id": 1,
+					},
+				},
+			},
+			want: "SET feedbacks some-field.some-other-field=1 WHERE id=1;",
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{`a."some_field"`: 1},
+					Where: dml.Where{
+						"id": 1,
+					},
+				},
+			},
 			want: `SET feedbacks a."some_field"=1 WHERE id=1;`,
 		},
 		{
@@ -235,8 +364,20 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			// For now there's no "pretty" format support.
 			want: `SET feedbacks a."some-other-field"=1 WHERE id=1;`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{`a."some field".test."other field"`: 1},
+					Where: dml.Where{
+						"id": 1,
+					},
+				},
+			},
+			want: `SET feedbacks a."some field".test."other field"=1 WHERE id=1;`,
 		},
 		{
 			ast: dml.Stmts{

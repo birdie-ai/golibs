@@ -89,6 +89,30 @@ func TestParser(t *testing.T) {
 			err:  dml.ErrSyntax,
 		},
 		{
+			text: `SET feedbacks -abc={} WHERE id=1;`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks abc-={} WHERE id=1;`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks custom_fields.abc- ={} WHERE id=1;`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks - ={} WHERE id=1;`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks .. ={} WHERE id=1;`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a..b ={} WHERE id=1;`,
+			err:  dml.ErrSyntax,
+		},
+		{
 			text: `SET feedbacks .={} WHERE {"id": 1};`,
 			want: dml.Stmts{
 				{
@@ -149,12 +173,55 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			text: `SET feedbacks some-field=1 WHERE id = 1;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"some-field": 1.0,
+					},
+					Where: dml.Where{
+						"id": 1.0,
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks-2025-01-01 my-field=1 WHERE my-id = 1;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks-2025-01-01"),
+					Assign: dml.Assign{
+						"my-field": 1.0,
+					},
+					Where: dml.Where{
+						"my-id": 1.0,
+					},
+				},
+			},
+		},
+		{
 			text: `SET feedbacks custom_fields={} WHERE id    =   1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{"custom_fields": map[string]any{}},
+					Where: dml.Where{
+						"id": 1.0,
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks custom-fields={} WHERE id = 1;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"custom-fields": map[string]any{}},
 					Where: dml.Where{
 						"id": 1.0,
 					},
@@ -199,7 +266,26 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b=1,b.test_test.c.d="b",c.d.eee.e={},d.e.f.ggg.h=["a","b"],e.f.g.h.i.j.k=false WHERE id = "test";`,
+			text: `SET feedbacks a."  "=1, a.b."c"=1,a."this is a test"=1,a."╚(•⌂•)╝".shout=1,a."b".ident."c"."d".test=1 WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						`a."  "`:                   1.0,
+						`a.b."c"`:                  1.0,
+						`a."this is a test"`:       1.0,
+						`a."╚(•⌂•)╝".shout`:        1.0,
+						`a."b".ident."c"."d".test`: 1.0,
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b=1,b.test_test.c.d="b",c.d.eee.e={},x."something"="test",d.e.f.ggg.h=["a","b"],e.f.g.h.i.j.k=false WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -210,6 +296,7 @@ func TestParser(t *testing.T) {
 						"c.d.eee.e":       map[string]any{},
 						"d.e.f.ggg.h":     []any{"a", "b"},
 						"e.f.g.h.i.j.k":   false,
+						`x."something"`:   "test",
 					},
 					Where: dml.Where{
 						"id": "test",
