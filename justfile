@@ -22,7 +22,3 @@ lint:
 # format Go code
 fmt:
     go fmt ./...
-
-# run vulncheck
-vulncheck:
-    go run golang.org/x/vuln/cmd/govulncheck@latest ./...
