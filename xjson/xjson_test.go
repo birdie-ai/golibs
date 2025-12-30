@@ -226,6 +226,51 @@ func TestDynSet(t *testing.T) {
 	})
 }
 
+func TestDynDel(t *testing.T) {
+	dynDel(t, nil, "does.not.exist")
+
+	obj := xjson.Obj{}
+	dynDel(t, obj, "does.not.exist")
+
+	dynSet(t, obj, "text", "test")
+	dynSet(t, obj, "number", 666)
+	dynSet(t, obj, "list", []int{6, 6, 6})
+	dynSet(t, obj, "object", xjson.Obj{
+		"a": xjson.Obj{
+			"b": xjson.Obj{
+				"c": "c_value",
+			},
+		},
+	})
+
+	dynDel(t, obj, "number")
+	assertEqual(t, obj, xjson.Obj{
+		"text": "test",
+		"list": []int{6, 6, 6},
+		"object": xjson.Obj{
+			"a": xjson.Obj{
+				"b": xjson.Obj{
+					"c": "c_value",
+				},
+			},
+		},
+	})
+
+	dynDel(t, obj, "object.a.b")
+	assertEqual(t, obj, xjson.Obj{
+		"text": "test",
+		"list": []int{6, 6, 6},
+		"object": xjson.Obj{
+			"a": xjson.Obj{},
+		},
+	})
+
+	dynDel(t, obj, "object")
+	dynDel(t, obj, "text")
+	dynDel(t, obj, "list")
+	assertEqual(t, obj, xjson.Obj{})
+}
+
 func TestDynSetInvalidPath(t *testing.T) {
 	invalidPaths := []string{
 		"",
@@ -409,6 +454,15 @@ func dynSet(t *testing.T, o xjson.Obj, path string, value any) {
 	t.Helper()
 
 	err := xjson.DynSet(o, path, value)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func dynDel(t *testing.T, o xjson.Obj, path string) {
+	t.Helper()
+
+	err := xjson.DynDel(o, path)
 	if err != nil {
 		t.Fatal(err)
 	}

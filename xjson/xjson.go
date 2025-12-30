@@ -173,6 +173,27 @@ func DynSet(o Obj, path string, value any) error {
 	return nil
 }
 
+// DynDel traverses the given [Obj] using the given path and deletes the target key.
+// Path is defined in the same way as [DynGet] and [DynSet].
+// DynDel is tolerant if obj is nil, empty or if the path does not exist, and in such
+// cases it does nothing.
+func DynDel(o Obj, path string) error {
+	if o == nil {
+		// no-op if obj does not exist.
+		return nil
+	}
+	key, leaf, err := traverse(o, path)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// no-op if target does not exist.
+			return nil
+		}
+		return err
+	}
+	delete(leaf, key)
+	return nil
+}
+
 // IsValidDynPath returns true if the given path is valid for [DynGet] and [DynSet] operations.
 func IsValidDynPath(path string) bool {
 	return len(parseSegments(path)) > 0
