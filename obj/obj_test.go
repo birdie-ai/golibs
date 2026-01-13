@@ -59,43 +59,43 @@ func TestGet(t *testing.T) {
 	fmt.Println(o["number"])
 
 	t.Run("basic", func(t *testing.T) {
-		assertEqual(t, oget[float64](t, o, "number"), 666)
-		assertEqual(t, oget[string](t, o, "string"), "test")
-		assertEqual(t, oget[bool](t, o, "bool"), true)
-		assertEqual(t, oget[[]any](t, o, "list"), []any{float64(6), float64(6), float64(6)})
+		assertEqual(t, mustget[float64](t, o, "number"), 666)
+		assertEqual(t, mustget[string](t, o, "string"), "test")
+		assertEqual(t, mustget[bool](t, o, "bool"), true)
+		assertEqual(t, mustget[[]any](t, o, "list"), []any{float64(6), float64(6), float64(6)})
 	})
 
 	t.Run("level 1 nesting", func(t *testing.T) {
-		assertEqual(t, oget[float64](t, o, "nested.number"), 777)
-		assertEqual(t, oget[string](t, o, "nested.string"), "test2")
-		assertEqual(t, oget[bool](t, o, "nested.bool"), false)
-		assertEqual(t, oget[[]any](t, o, "nested.list"), []any{float64(7), float64(7), float64(7)})
+		assertEqual(t, mustget[float64](t, o, "nested.number"), 777)
+		assertEqual(t, mustget[string](t, o, "nested.string"), "test2")
+		assertEqual(t, mustget[bool](t, o, "nested.bool"), false)
+		assertEqual(t, mustget[[]any](t, o, "nested.list"), []any{float64(7), float64(7), float64(7)})
 	})
 
 	t.Run("level 2 nesting", func(t *testing.T) {
-		assertEqual(t, oget[float64](t, o, "nested.nested2.number"), 888)
-		assertEqual(t, oget[string](t, o, "nested.nested2.string"), "test3")
-		assertEqual(t, oget[bool](t, o, "nested.nested2.bool"), true)
-		assertEqual(t, oget[[]any](t, o, "nested.nested2.list"), []any{float64(8), float64(8), float64(8)})
-		assertEqual(t, oget[[]any](t, o, "nested.nested2.list_objs"), []any{
+		assertEqual(t, mustget[float64](t, o, "nested.nested2.number"), 888)
+		assertEqual(t, mustget[string](t, o, "nested.nested2.string"), "test3")
+		assertEqual(t, mustget[bool](t, o, "nested.nested2.bool"), true)
+		assertEqual(t, mustget[[]any](t, o, "nested.nested2.list"), []any{float64(8), float64(8), float64(8)})
+		assertEqual(t, mustget[[]any](t, o, "nested.nested2.list_objs"), []any{
 			obj.O{"test": "a"}, obj.O{"test": "b"}, obj.O{"test": "c"},
 		})
 	})
 
 	t.Run("key with dot", func(t *testing.T) {
-		assertEqual(t, oget[float64](t, o, `nested."with.dot".number`), 112)
-		assertEqual(t, oget[string](t, o, `nested."with.dot".string`), "testdot")
-		assertEqual(t, oget[bool](t, o, `nested."with.dot".bool`), true)
+		assertEqual(t, mustget[float64](t, o, `nested."with.dot".number`), 112)
+		assertEqual(t, mustget[string](t, o, `nested."with.dot".string`), "testdot")
+		assertEqual(t, mustget[bool](t, o, `nested."with.dot".bool`), true)
 	})
 
 	t.Run("key is just dot", func(t *testing.T) {
-		assertEqual(t, oget[float64](t, o, `nested.".".number`), 911)
-		assertEqual(t, oget[string](t, o, `nested.".".string`), "just dot")
+		assertEqual(t, mustget[float64](t, o, `nested.".".number`), 911)
+		assertEqual(t, mustget[string](t, o, `nested.".".string`), "just dot")
 	})
 
 	t.Run("key with dot and escaped double quotes", func(t *testing.T) {
-		assertEqual(t, oget[float64](t, o, `nested."a\".b".number`), 6)
-		assertEqual(t, oget[string](t, o, `nested."a\".b".string`), "escaping")
+		assertEqual(t, mustget[float64](t, o, `nested."a\".b".number`), 6)
+		assertEqual(t, mustget[string](t, o, `nested."a\".b".string`), "escaping")
 	})
 
 	t.Run("invalid paths", func(t *testing.T) {
@@ -136,10 +136,10 @@ func TestGet(t *testing.T) {
 
 func TestSet(t *testing.T) {
 	o := obj.O{}
-	oset(t, o, "text", "test")
-	oset(t, o, "number", 666)
-	oset(t, o, "list", []int{6, 6, 6})
-	oset(t, o, "object", obj.O{
+	mustset(t, o, "text", "test")
+	mustset(t, o, "number", 666)
+	mustset(t, o, "list", []int{6, 6, 6})
+	mustset(t, o, "object", obj.O{
 		"a": obj.O{
 			"b": obj.O{
 				"c": "c_value",
@@ -160,7 +160,7 @@ func TestSet(t *testing.T) {
 		},
 	})
 
-	oset(t, o, "object.a.b.c", obj.O{
+	mustset(t, o, "object.a.b.c", obj.O{
 		"overwrite": true,
 	})
 
@@ -179,7 +179,7 @@ func TestSet(t *testing.T) {
 		},
 	})
 
-	oset(t, o, "object.merged", true)
+	mustset(t, o, "object.merged", true)
 	assertEqual(t, o, obj.O{
 		"text":   "test",
 		"number": 666,
@@ -196,7 +196,7 @@ func TestSet(t *testing.T) {
 		},
 	})
 
-	oset(t, o, `object."with.dot.again".x`, true)
+	mustset(t, o, `object."with.dot.again".x`, true)
 	assertEqual(t, o, obj.O{
 		"text":   "test",
 		"number": 666,
@@ -216,7 +216,7 @@ func TestSet(t *testing.T) {
 		},
 	})
 
-	oset(t, o, "object", "overwritten")
+	mustset(t, o, "object", "overwritten")
 	assertEqual(t, o, obj.O{
 		"text":   "test",
 		"number": 666,
@@ -226,15 +226,15 @@ func TestSet(t *testing.T) {
 }
 
 func TestDel(t *testing.T) {
-	odel(t, nil, "does.not.exist")
+	mustdel(t, nil, "does.not.exist")
 
 	o := obj.O{}
-	odel(t, o, "does.not.exist")
+	mustdel(t, o, "does.not.exist")
 
-	oset(t, o, "text", "test")
-	oset(t, o, "number", 666)
-	oset(t, o, "list", []int{6, 6, 6})
-	oset(t, o, "object", obj.O{
+	mustset(t, o, "text", "test")
+	mustset(t, o, "number", 666)
+	mustset(t, o, "list", []int{6, 6, 6})
+	mustset(t, o, "object", obj.O{
 		"a": obj.O{
 			"b": obj.O{
 				"c": "c_value",
@@ -242,7 +242,7 @@ func TestDel(t *testing.T) {
 		},
 	})
 
-	odel(t, o, "number")
+	mustdel(t, o, "number")
 	assertEqual(t, o, obj.O{
 		"text": "test",
 		"list": []int{6, 6, 6},
@@ -255,7 +255,7 @@ func TestDel(t *testing.T) {
 		},
 	})
 
-	odel(t, o, "object.a.b")
+	mustdel(t, o, "object.a.b")
 	assertEqual(t, o, obj.O{
 		"text": "test",
 		"list": []int{6, 6, 6},
@@ -264,9 +264,9 @@ func TestDel(t *testing.T) {
 		},
 	})
 
-	odel(t, o, "object")
-	odel(t, o, "text")
-	odel(t, o, "list")
+	mustdel(t, o, "object")
+	mustdel(t, o, "text")
+	mustdel(t, o, "list")
 	assertEqual(t, o, obj.O{})
 }
 
@@ -304,7 +304,7 @@ func TestValidatePath(t *testing.T) {
 	}
 }
 
-func oget[T any](t *testing.T, o obj.O, path string) T {
+func mustget[T any](t *testing.T, o obj.O, path string) T {
 	t.Helper()
 
 	v, err := obj.Get[T](o, path)
@@ -314,7 +314,7 @@ func oget[T any](t *testing.T, o obj.O, path string) T {
 	return v
 }
 
-func oset(t *testing.T, o obj.O, path string, value any) {
+func mustset(t *testing.T, o obj.O, path string, value any) {
 	t.Helper()
 
 	err := obj.Set(o, path, value)
@@ -323,7 +323,7 @@ func oset(t *testing.T, o obj.O, path string, value any) {
 	}
 }
 
-func odel(t *testing.T, o obj.O, path string) {
+func mustdel(t *testing.T, o obj.O, path string) {
 	t.Helper()
 
 	err := obj.Del(o, path)
