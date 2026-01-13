@@ -4,18 +4,18 @@ package xjson
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"iter"
 	"os"
-	"strings"
+
+	"github.com/birdie-ai/golibs/obj"
 )
 
 type (
 	// Obj represents a dynamic JSON object.
 	// Use [DynGet] to manipulate it more easily.
-	Obj = map[string]any
+	Obj = obj.O
 
 	// Decoder specializes the [json.Decoder] for streams of objects of the same type
 	// (although you can create a [Decoder] with type [Obj], then it is dynamic),
@@ -37,10 +37,10 @@ type (
 
 var (
 	// ErrNotFound indicates that an object was not found while traversing a [Obj].
-	ErrNotFound = errors.New("traversing JSON: key not found")
+	ErrNotFound = obj.ErrNotFound
 
 	// ErrInvalidPath indicates that a traversal path is invalid.
-	ErrInvalidPath = errors.New("JSON traversal path is invalid")
+	ErrInvalidPath = obj.ErrInvalidPath
 )
 
 // UnmarshalFile calls [Unmarshal] with the opened file (closing it afterwards) and returns the unmarshalled value.
@@ -126,23 +126,7 @@ func (e UnmarshalError) Error() string {
 //
 // It will traverse key -> nested.dot -> value.
 func DynGet[T any](o Obj, path string) (T, error) {
-	var z T
-	key, leaf, err := traverse(o, path)
-	if err != nil {
-		return z, err
-	}
-
-	anyV, ok := leaf[key]
-	if !ok {
-		return z, fmt.Errorf("%w: %q", ErrNotFound, key)
-	}
-
-	v, ok := anyV.(T)
-	if !ok {
-		return z, fmt.Errorf("value at path %q: expected to have type %T but has %T", path, z, anyV)
-	}
-
-	return v, nil
+	return obj.Get[T](o, path)
 }
 
 // DynSet traverses the given [Obj] using the given path and sets it to the given value.
@@ -157,20 +141,7 @@ func DynGet[T any](o Obj, path string) (T, error) {
 // It will traverse key -> nested.dot -> key2 and set "key2" to be the given value.
 // If the given path is invalid, like "" or "." or the [Obj] is nil an error is returned.
 func DynSet(o Obj, path string, value any) error {
-	if o == nil {
-		return fmt.Errorf("can't set %q on nil object", path)
-	}
-	segments := parseSegments(path)
-	if len(segments) == 0 {
-		return fmt.Errorf("%w: %q", ErrInvalidPath, path)
-	}
-
-	traversalSegments := segments[:len(segments)-1]
-	leafSegment := segments[len(segments)-1]
-
-	leafNode := createPath(o, traversalSegments)
-	leafNode[leafSegment] = value
-	return nil
+	return obj.Set(o, path, value)
 }
 
 // DynDel traverses the given [Obj] using the given path and deletes the target key.
@@ -178,102 +149,10 @@ func DynSet(o Obj, path string, value any) error {
 // DynDel is tolerant if obj is nil, empty or if the path does not exist, and in such
 // cases it does nothing.
 func DynDel(o Obj, path string) error {
-	if o == nil {
-		// no-op if obj does not exist.
-		return nil
-	}
-	key, leaf, err := traverse(o, path)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			// no-op if target does not exist.
-			return nil
-		}
-		return err
-	}
-	delete(leaf, key)
-	return nil
+	return obj.Del(o, path)
 }
 
 // IsValidDynPath returns true if the given path is valid for [DynGet] and [DynSet] operations.
 func IsValidDynPath(path string) bool {
-	return len(parseSegments(path)) > 0
-}
-
-func createPath(o Obj, segments []string) Obj {
-	node := o
-	for _, segment := range segments {
-		anyV := node[segment]
-		v, ok := anyV.(Obj)
-		if !ok {
-			v := Obj{}
-			node[segment] = v
-			node = v
-			continue
-		}
-		node = v
-	}
-	return node
-}
-
-func traverse(o Obj, path string) (string, Obj, error) {
-	segments := parseSegments(path)
-	if len(segments) == 0 {
-		return "", nil, fmt.Errorf("%w: %q", ErrInvalidPath, path)
-	}
-	traverseSegments := segments[0 : len(segments)-1]
-	node := o
-
-	for i, key := range traverseSegments {
-		anyV, ok := node[key]
-		if !ok {
-			traversed := strings.Join(segments[:i+1], ".")
-			return "", nil, fmt.Errorf("%w: %q", ErrNotFound, traversed)
-		}
-		v, ok := anyV.(Obj)
-		if !ok {
-			traversed := strings.Join(segments[:i+1], ".")
-			return "", nil, fmt.Errorf("traversing path %q: at: %q: want object got %T", path, traversed, anyV)
-		}
-		node = v
-	}
-
-	key := segments[len(segments)-1]
-	return key, node, nil
-}
-
-func parseSegments(path string) []string {
-	var (
-		segments       []string
-		currentSegment []rune
-		quoted         bool
-		previous       rune
-	)
-
-	for _, r := range path {
-		switch {
-		case r == '.' && !quoted:
-			if len(currentSegment) == 0 {
-				// dot must be preceded by something, this is invalid.
-				return nil
-			}
-			segments = append(segments, string(currentSegment))
-			currentSegment = nil
-		case r == '"' && previous != '\\':
-			// TODO(katcipis): handle things like """.
-			quoted = !quoted
-		case r == '"' && previous == '\\':
-			// When we escape " we need to remove the escape from the key
-			currentSegment = currentSegment[:len(currentSegment)-1]
-			currentSegment = append(currentSegment, r)
-		default:
-			currentSegment = append(currentSegment, r)
-		}
-		previous = r
-	}
-	if len(currentSegment) == 0 {
-		// This means empty or something like "name." which is invalid.
-		return nil
-	}
-	segments = append(segments, string(currentSegment))
-	return segments
+	return obj.IsValidPath(path)
 }
