@@ -33,6 +33,11 @@ type (
 
 	// Where clause of the update.
 	Where map[string]any
+
+	// Append is a assign operation to append values.
+	Append struct {
+		Values []any
+	}
 )
 
 // As we will process large bulks of statements, this ensures we don't waste memory in redundant information.
