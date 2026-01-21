@@ -116,7 +116,7 @@ dml {
   	"." | Traversal | ident
 
   RFS = 
-    JSONValue | ArrayAppend | ArrayPrepend
+    ArrayAppend | ArrayPrepend | JSONValue
 
   Clause = 
   	ident "=" Scalar
@@ -127,11 +127,14 @@ dml {
   ident = 
   	letter+ (letter | "_" | "-")*
 
+  dotdotdot =
+	"..."
+
   ArrayAppend =
-    "[" dotdotdot "," JSONValue ("," JSONValue)* "]"
+    dotdotdot Array
 
   ArrayPrepend =
-    "[" JSONValue ("," JSONValue)* "," dotdotdot "]"
+    Array dotdotdot
 
   JSONValue =
     Object
