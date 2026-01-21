@@ -426,10 +426,7 @@ func lexIdent(in []byte) (string, []byte, error) {
 }
 
 func lexdotdotdot(in []byte) error {
-	if len(in) < 3 {
-		return fmt.Errorf("%w: unexpected bytes: %s", ErrSyntax, in)
-	}
-	if !bytes.HasPrefix(in, []byte(dotdotdot)) {
+	if len(in) < 3 || !bytes.HasPrefix(in, []byte(dotdotdot)) {
 		return fmt.Errorf("%w: unexpected bytes: %s", ErrSyntax, in)
 	}
 	return nil
