@@ -304,10 +304,173 @@ func TestParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			text: `SET feedbacks a.b = ... ["some", "thing"] WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Append[string]{
+							Values: []string{"some", "thing"},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b = ... [1, 2, 3] WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Append[float64]{
+							Values: []float64{1, 2, 3},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b = ... [1, "string"] WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Append[any]{
+							Values: []any{1.0, "string"},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b = ... [] WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Append[any]{
+							Values: []any{},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b = ["some", "thing"] ... WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Prepend[string]{
+							Values: []string{"some", "thing"},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b = [1, 2] ... WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Prepend[float64]{
+							Values: []float64{1, 2},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b = [1, "string"] ... WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Prepend[any]{
+							Values: []any{1.0, "string"},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `
+			SET feedbacks
+				a = ["a"] ...,
+				b = ... [1, 2],
+				c = ["a", "b"]
+		 	WHERE id = "test";
+		`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a": dml.Prepend[string]{
+							Values: []string{"a"},
+						},
+						"b": dml.Append[float64]{
+							Values: []float64{1, 2},
+						},
+						"c": []any{"a", "b"},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b = [] ... WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Prepend[any]{
+							Values: []any{},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {
-			t.Fatal(err)
+			t.Fatalf("%v: while parsing %s", err, tc.text)
 		}
 		if err != nil {
 			continue

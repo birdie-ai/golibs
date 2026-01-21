@@ -5,6 +5,8 @@ import (
 	"unicode/utf8"
 )
 
+const dotdotdot = "..."
+
 // identifier: ^\p{L}(?:[\p{L}0-9_-]*[\p{L}0-9])?$
 func isIdent(s string) bool {
 	data := []byte(s)

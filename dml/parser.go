@@ -226,10 +226,39 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 	if len(in) == 0 {
 		return "", nil, nil, errUnexpectedEOF()
 	}
+	if in[0] == '.' {
+		if err := lexdotdotdot(in); err != nil {
+			return "", nil, nil, err
+		}
+		in = skipblank(in[3:])
+		if len(in) == 0 {
+			return "", nil, nil, errUnexpectedEOF()
+		}
+		if in[0] != '[' {
+			return "", nil, nil, fmt.Errorf("%w: dotdotdot (...) requires a subsequent array: %s", ErrSyntax, in)
+		}
+		var val any
+		in, err = parseJSON(in, &val)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("%w: failed to parse array value: %v", ErrSyntax, err)
+		}
+		return string(dotident), appendval(val), in, nil
+	}
+	isarray := in[0] == '['
 	var val any
 	in, err = parseJSON(in, &val)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("%w: failed to parse value as JSON: %v", ErrSyntax, err)
+	}
+	if isarray {
+		in = skipblank(in)
+		if len(in) > 0 && in[0] == '.' {
+			if err := lexdotdotdot(in); err != nil {
+				return "", nil, nil, err
+			}
+			in = in[3:]
+			return string(dotident), prependval(val), in, nil
+		}
 	}
 	return string(dotident), val, in, nil
 }
@@ -287,6 +316,85 @@ func parseJSON[T any](in []byte, val *T) ([]byte, error) {
 	return in[dec.InputOffset():], nil
 }
 
+type kind int
+
+const (
+	tany kind = iota
+	tstr
+	tfloat
+)
+
+type arrayvalues struct {
+	kind  kind
+	svals []string
+	fvals []float64
+	avals []any
+}
+
+func arrayvals(val any) arrayvalues {
+	anyvals, ok := val.([]any)
+	if !ok {
+		// parser must ensure: dotdotdot LBracket
+		panic("unreachable")
+	}
+	var array arrayvalues
+	array.avals = anyvals
+	c := map[string]struct{}{}
+	for _, v := range anyvals {
+		switch vv := v.(type) {
+		case string:
+			c["string"] = struct{}{}
+			array.svals = append(array.svals, vv)
+		case float64:
+			c["float"] = struct{}{}
+			array.fvals = append(array.fvals, vv)
+		default:
+			c["any"] = struct{}{}
+		}
+	}
+	if len(c) != 1 {
+		array.kind = tany
+		return array
+	}
+	for k := range c {
+		switch k {
+		case "string":
+			array.kind = tstr
+			return array
+		case "float":
+			array.kind = tfloat
+			return array
+		}
+	}
+	panic("unreachable")
+}
+
+func appendval(val any) any {
+	array := arrayvals(val)
+	switch array.kind {
+	case tany:
+		return Append[any]{Values: array.avals}
+	case tstr:
+		return Append[string]{Values: array.svals}
+	case tfloat:
+		return Append[float64]{Values: array.fvals}
+	}
+	panic("unreachable")
+}
+
+func prependval(val any) any {
+	array := arrayvals(val)
+	switch array.kind {
+	case tany:
+		return Prepend[any]{Values: array.avals}
+	case tstr:
+		return Prepend[string]{Values: array.svals}
+	case tfloat:
+		return Prepend[float64]{Values: array.fvals}
+	}
+	panic("unreachable")
+}
+
 func errUnexpectedEOF() error {
 	return fmt.Errorf("%w: unexpected eof", ErrSyntax)
 }
@@ -315,6 +423,16 @@ func lexIdent(in []byte) (string, []byte, error) {
 		pos--
 	}
 	return string(ident), in[pos:], nil
+}
+
+func lexdotdotdot(in []byte) error {
+	if len(in) < 3 {
+		return fmt.Errorf("%w: unexpected bytes: %s", ErrSyntax, in)
+	}
+	if !bytes.HasPrefix(in, []byte(dotdotdot)) {
+		return fmt.Errorf("%w: unexpected bytes: %s", ErrSyntax, in)
+	}
+	return nil
 }
 
 func skipblank(in []byte) []byte {

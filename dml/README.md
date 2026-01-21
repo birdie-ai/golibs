@@ -64,7 +64,7 @@ Append entries in an existent list:
 
 ```
 SET feedbacks
-  labels = [..., "new-label"]
+  labels = ... ["new-label"]
 WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
 ```
 
@@ -72,7 +72,7 @@ Prepend entries in an existing list:
 
 ```
 SET feedbacks
-  labels = ["new-label", ...]
+  labels = ["new-label"] ...
 WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
 ```
 
