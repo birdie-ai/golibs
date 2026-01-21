@@ -75,3 +75,8 @@ func (a Prepend[T]) op() arrayOp { return prependOp }
 
 func (a Append[T]) vals() any  { return a.Values }
 func (a Prepend[T]) vals() any { return a.Values }
+
+var (
+	_ array = Append[any]{}
+	_ array = Prepend[any]{}
+)
