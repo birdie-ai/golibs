@@ -43,3 +43,35 @@ var (
 	SET    = OpKind("SET")
 	DELETE = OpKind("DELETE")
 )
+
+type arrayOp int
+
+const (
+	invalid arrayOp = iota
+	appendOp
+	prependOp
+)
+
+// array interface is only needed to bypass a Go type system limitation.
+// The builtin len(v) is a special kind of generic that works on generic collections seamless
+// but us mere mortals lack such powerfulness. If you have an `a any` variable at hand, you cannot
+// type assert/check for an specific struct shape and you cannot also have a generic function using
+// pattern matching:
+//
+//	func oplen[T ~struct { Values []_ }](v T) int { return len(v.Values) }
+//
+// Note the _ above, the slice item type is irrelevant.
+type array interface {
+	len() int
+	op() arrayOp
+	vals() any
+}
+
+func (a Append[T]) len() int  { return len(a.Values) }
+func (a Prepend[T]) len() int { return len(a.Values) }
+
+func (a Append[T]) op() arrayOp  { return appendOp }
+func (a Prepend[T]) op() arrayOp { return prependOp }
+
+func (a Append[T]) vals() any  { return a.Values }
+func (a Prepend[T]) vals() any { return a.Values }

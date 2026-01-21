@@ -395,6 +395,88 @@ func TestEncode(t *testing.T) {
 			},
 			want: `SET feedbacks a.b.c=["a","b","c"] WHERE {"id":"abc","org_id":"xyz"};`,
 		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b.c": dml.Append[string]{Values: []string{"a", "b", "c"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `SET feedbacks a.b.c=...["a","b","c"] WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b.c": dml.Prepend[string]{Values: []string{"a", "b", "c"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `SET feedbacks a.b.c=["a","b","c"]... WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"d":       1,
+						"i.j.k":   dml.Append[float64]{Values: []float64{1, 2, 3}},
+						"s.t.r.a": dml.Prepend[string]{Values: []string{"a", "b", "c"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `SET feedbacks d=1,i.j.k=...[1,2,3],s.t.r.a=["a","b","c"]... WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b.c": dml.Append[float64]{Values: []float64{}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			err: dml.ErrMissingArrayValues,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b.c": dml.Prepend[float64]{Values: []float64{}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			err: dml.ErrMissingArrayValues,
+		},
 	} {
 		var buf bytes.Buffer
 		err := dml.Encode(&buf, tc.ast)
