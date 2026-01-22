@@ -47,6 +47,7 @@ var (
 	DELETE = OpKind("DELETE")
 )
 
+// dml errors.
 var (
 	ErrInvalidOperation   = errors.New("invalid operation")
 	ErrMissingEntity      = errors.New(`entity is not provided`)

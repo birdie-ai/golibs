@@ -339,7 +339,6 @@ type arrayvalues struct {
 	bvals []bool
 	fvals []float64
 	svals []string
-	nulls []any
 }
 
 func arrayvals(val any) (arrayvalues, error) {
