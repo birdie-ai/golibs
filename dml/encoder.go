@@ -12,17 +12,6 @@ import (
 	"unique"
 )
 
-// encoder errors
-var (
-	ErrInvalidOperation   = errors.New("invalid operation")
-	ErrMissingEntity      = errors.New(`entity is not provided`)
-	ErrMissingAssign      = errors.New(`"SET" requires an assign`)
-	ErrMissingArrayValues = errors.New(`...: missing array values`)
-	ErrInvalidAssignKey   = errors.New(`invalid assign key`)
-	ErrMissingWhereClause = errors.New(`WHERE clause is not given`)
-	ErrNotIdent           = errors.New(`not an identifier`)
-)
-
 // Encode validates and encode the statements in its text format.
 // TODO(i4k): support prettify output.
 func Encode(w io.Writer, stmts Stmts) error {

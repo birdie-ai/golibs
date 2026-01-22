@@ -242,7 +242,11 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 		if err != nil {
 			return "", nil, nil, fmt.Errorf("%w: failed to parse array value: %v", ErrSyntax, err)
 		}
-		return string(dotident), appendval(val), in, nil
+		opval, err := appendval(val)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		return string(dotident), opval, in, nil
 	}
 	isarray := in[0] == '['
 	var val any
@@ -257,7 +261,11 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 				return "", nil, nil, err
 			}
 			in = in[3:]
-			return string(dotident), prependval(val), in, nil
+			opval, err := prependval(val)
+			if err != nil {
+				return "", nil, nil, err
+			}
+			return string(dotident), opval, in, nil
 		}
 	}
 	return string(dotident), val, in, nil
@@ -322,75 +330,112 @@ const (
 	tany kind = iota
 	tstr
 	tfloat
+	tbool
 )
 
 type arrayvalues struct {
 	kind  kind
-	svals []string
-	fvals []float64
 	avals []any
+	bvals []bool
+	fvals []float64
+	svals []string
+	nulls []any
 }
 
-func arrayvals(val any) arrayvalues {
+func arrayvals(val any) (arrayvalues, error) {
 	anyvals, ok := val.([]any)
 	if !ok {
 		// parser must ensure: dotdotdot LBracket
 		panic("unreachable")
 	}
 	var array arrayvalues
-	array.avals = anyvals
-	c := map[string]struct{}{}
+	var length int
+	kinds := map[string]struct{}{}
 	for _, v := range anyvals {
+		if v != nil {
+			// nulls are ignored because there's no use case for that and it complicates
+			// implementation in the target storage system.
+			length++
+			array.avals = append(array.avals, v)
+		}
 		switch vv := v.(type) {
 		case string:
-			c["string"] = struct{}{}
+			kinds["string"] = struct{}{}
 			array.svals = append(array.svals, vv)
 		case float64:
-			c["float"] = struct{}{}
+			kinds["float"] = struct{}{}
 			array.fvals = append(array.fvals, vv)
+		case bool:
+			kinds["bool"] = struct{}{}
+			array.bvals = append(array.bvals, vv)
+		case nil:
+			// skip
 		default:
-			c["any"] = struct{}{}
+			kinds["any"] = struct{}{}
 		}
 	}
-	if len(c) != 1 {
+	if length == 0 {
+		return arrayvalues{}, ErrMissingArrayValues
+	}
+
+	// kinds is supposed to have a single key if all entries are of same type.
+	// In case there are multiple keys, there are mixed types in the array and then
+	// we map into an `any` type.
+
+	var kind string
+	for k := range kinds {
+		kind = k
+		break
+	}
+	if len(kinds) > 1 || kind == "any" {
 		array.kind = tany
-		return array
+		return array, nil
 	}
-	for k := range c {
-		switch k {
-		case "string":
-			array.kind = tstr
-			return array
-		case "float":
-			array.kind = tfloat
-			return array
-		}
+	switch kind {
+	case "bool":
+		array.kind = tbool
+	case "string":
+		array.kind = tstr
+	case "float":
+		array.kind = tfloat
+	default:
+		panic("unreachable")
+	}
+	return array, nil
+}
+
+func appendval(val any) (any, error) {
+	array, err := arrayvals(val)
+	if err != nil {
+		return nil, err
+	}
+	switch array.kind {
+	case tany:
+		return Append[any]{Values: array.avals}, nil
+	case tbool:
+		return Append[bool]{Values: array.bvals}, nil
+	case tstr:
+		return Append[string]{Values: array.svals}, nil
+	case tfloat:
+		return Append[float64]{Values: array.fvals}, nil
 	}
 	panic("unreachable")
 }
 
-func appendval(val any) any {
-	array := arrayvals(val)
-	switch array.kind {
-	case tany:
-		return Append[any]{Values: array.avals}
-	case tstr:
-		return Append[string]{Values: array.svals}
-	case tfloat:
-		return Append[float64]{Values: array.fvals}
+func prependval(val any) (any, error) {
+	array, err := arrayvals(val)
+	if err != nil {
+		return nil, err
 	}
-	panic("unreachable")
-}
-
-func prependval(val any) any {
-	array := arrayvals(val)
 	switch array.kind {
 	case tany:
-		return Prepend[any]{Values: array.avals}
+		return Prepend[any]{Values: array.avals}, nil
+	case tbool:
+		return Prepend[bool]{Values: array.bvals}, nil
 	case tstr:
-		return Prepend[string]{Values: array.svals}
+		return Prepend[string]{Values: array.svals}, nil
 	case tfloat:
-		return Prepend[float64]{Values: array.fvals}
+		return Prepend[float64]{Values: array.fvals}, nil
 	}
 	panic("unreachable")
 }

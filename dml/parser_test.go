@@ -357,20 +357,7 @@ func TestParser(t *testing.T) {
 		},
 		{
 			text: `SET feedbacks a.b = ... [] WHERE id = "test";`,
-			want: dml.Stmts{
-				{
-					Op:     dml.SET,
-					Entity: u("feedbacks"),
-					Assign: dml.Assign{
-						"a.b": dml.Append[any]{
-							Values: []any{},
-						},
-					},
-					Where: dml.Where{
-						"id": "test",
-					},
-				},
-			},
+			err:  dml.ErrMissingArrayValues,
 		},
 		{
 			text: `SET feedbacks a.b = ["some", "thing"] ... WHERE id = "test";`,
@@ -452,13 +439,38 @@ func TestParser(t *testing.T) {
 		},
 		{
 			text: `SET feedbacks a.b = [] ... WHERE id = "test";`,
+			err:  dml.ErrMissingArrayValues,
+		},
+		{
+			text: `SET feedbacks a.b = [null, null, null] ... WHERE id = "test";`,
+			err:  dml.ErrMissingArrayValues,
+		},
+		{
+			text: `SET feedbacks a.b = ["test", null, "string"] ... WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{
-						"a.b": dml.Prepend[any]{
-							Values: []any{},
+						"a.b": dml.Prepend[string]{
+							Values: []string{"test", "string"},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a.b = ... ["test", null, "string"] WHERE id = "test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Append[string]{
+							Values: []string{"test", "string"},
 						},
 					},
 					Where: dml.Where{

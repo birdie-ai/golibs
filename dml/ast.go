@@ -1,11 +1,14 @@
 package dml
 
-import "unique"
+import (
+	"errors"
+	"unique"
+)
 
 type (
 	// Stmt is a single dml statement.
 	// A statement manipulates fields of a single entity row.
-	// The [Stmt.Assign] assigns manipulation
+	// The [Stmt.Assign] assigns data manipulation operations to individual fields.
 	Stmt struct {
 		Entity unique.Handle[string]
 		Op     OpKind
@@ -44,6 +47,16 @@ var (
 	DELETE = OpKind("DELETE")
 )
 
+var (
+	ErrInvalidOperation   = errors.New("invalid operation")
+	ErrMissingEntity      = errors.New(`entity is not provided`)
+	ErrMissingAssign      = errors.New(`"SET" requires an assign`)
+	ErrMissingArrayValues = errors.New(`...: missing array values`)
+	ErrInvalidAssignKey   = errors.New(`invalid assign key`)
+	ErrMissingWhereClause = errors.New(`WHERE clause is not given`)
+	ErrNotIdent           = errors.New(`not an identifier`)
+)
+
 type arrayOp int
 
 const (
@@ -53,14 +66,9 @@ const (
 )
 
 // array interface is only needed to bypass a Go type system limitation.
-// The builtin len(v) is a special kind of generic that works on generic collections seamless
-// but us mere mortals lack such powerfulness. If you have an `a any` variable at hand, you cannot
-// type assert/check for an specific struct shape and you cannot also have a generic function using
-// pattern matching:
-//
-//	func oplen[T ~struct { Values []_ }](v T) int { return len(v.Values) }
-//
-// Note the _ above, the slice item type is irrelevant.
+// If you have an `a any` variable at hand, you cannot type assert/check for an specific struct
+// shape.
+// At the moment this is used by array operations like append/prepend.
 type array interface {
 	len() int
 	op() arrayOp
@@ -76,6 +84,7 @@ func (a Prepend[T]) op() arrayOp { return prependOp }
 func (a Append[T]) vals() any  { return a.Values }
 func (a Prepend[T]) vals() any { return a.Values }
 
+// ensure Append/Prepend implements array.
 var (
 	_ array = Append[any]{}
 	_ array = Prepend[any]{}
