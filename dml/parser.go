@@ -226,10 +226,47 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 	if len(in) == 0 {
 		return "", nil, nil, errUnexpectedEOF()
 	}
+	if in[0] == '.' {
+		if err := lexdotdotdot(in); err != nil {
+			return "", nil, nil, err
+		}
+		in = skipblank(in[3:])
+		if len(in) == 0 {
+			return "", nil, nil, errUnexpectedEOF()
+		}
+		if in[0] != '[' {
+			return "", nil, nil, fmt.Errorf("%w: dotdotdot (...) requires a subsequent array: %s", ErrSyntax, in)
+		}
+		var val any
+		in, err = parseJSON(in, &val)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("%w: failed to parse array value: %v", ErrSyntax, err)
+		}
+		opval, err := appendval(val)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		return string(dotident), opval, in, nil
+	}
+	isarray := in[0] == '['
 	var val any
 	in, err = parseJSON(in, &val)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("%w: failed to parse value as JSON: %v", ErrSyntax, err)
+	}
+	if isarray {
+		in = skipblank(in)
+		if len(in) > 0 && in[0] == '.' {
+			if err := lexdotdotdot(in); err != nil {
+				return "", nil, nil, err
+			}
+			in = in[3:]
+			opval, err := prependval(val)
+			if err != nil {
+				return "", nil, nil, err
+			}
+			return string(dotident), opval, in, nil
+		}
 	}
 	return string(dotident), val, in, nil
 }
@@ -287,6 +324,121 @@ func parseJSON[T any](in []byte, val *T) ([]byte, error) {
 	return in[dec.InputOffset():], nil
 }
 
+type kind int
+
+const (
+	tany kind = iota
+	tstr
+	tfloat
+	tbool
+)
+
+type arrayvalues struct {
+	kind  kind
+	avals []any
+	bvals []bool
+	fvals []float64
+	svals []string
+}
+
+func arrayvals(val any) (arrayvalues, error) {
+	anyvals, ok := val.([]any)
+	if !ok {
+		// parser must ensure: dotdotdot LBracket
+		panic("unreachable")
+	}
+	var array arrayvalues
+	var length int
+	kinds := map[string]struct{}{}
+	for _, v := range anyvals {
+		if v != nil {
+			// nulls are ignored because there's no use case for that and it complicates
+			// implementation in the target storage system.
+			length++
+			array.avals = append(array.avals, v)
+		}
+		switch vv := v.(type) {
+		case string:
+			kinds["string"] = struct{}{}
+			array.svals = append(array.svals, vv)
+		case float64:
+			kinds["float"] = struct{}{}
+			array.fvals = append(array.fvals, vv)
+		case bool:
+			kinds["bool"] = struct{}{}
+			array.bvals = append(array.bvals, vv)
+		case nil:
+			// skip
+		default:
+			kinds["any"] = struct{}{}
+		}
+	}
+	if length == 0 {
+		return arrayvalues{}, ErrMissingArrayValues
+	}
+
+	// kinds is supposed to have a single key if all entries are of same type.
+	// In case there are multiple keys, there are mixed types in the array and then
+	// we map into an `any` type.
+
+	var kind string
+	for k := range kinds {
+		kind = k
+		break
+	}
+	if len(kinds) > 1 || kind == "any" {
+		array.kind = tany
+		return array, nil
+	}
+	switch kind {
+	case "bool":
+		array.kind = tbool
+	case "string":
+		array.kind = tstr
+	case "float":
+		array.kind = tfloat
+	default:
+		panic("unreachable")
+	}
+	return array, nil
+}
+
+func appendval(val any) (any, error) {
+	array, err := arrayvals(val)
+	if err != nil {
+		return nil, err
+	}
+	switch array.kind {
+	case tany:
+		return Append[any]{Values: array.avals}, nil
+	case tbool:
+		return Append[bool]{Values: array.bvals}, nil
+	case tstr:
+		return Append[string]{Values: array.svals}, nil
+	case tfloat:
+		return Append[float64]{Values: array.fvals}, nil
+	}
+	panic("unreachable")
+}
+
+func prependval(val any) (any, error) {
+	array, err := arrayvals(val)
+	if err != nil {
+		return nil, err
+	}
+	switch array.kind {
+	case tany:
+		return Prepend[any]{Values: array.avals}, nil
+	case tbool:
+		return Prepend[bool]{Values: array.bvals}, nil
+	case tstr:
+		return Prepend[string]{Values: array.svals}, nil
+	case tfloat:
+		return Prepend[float64]{Values: array.fvals}, nil
+	}
+	panic("unreachable")
+}
+
 func errUnexpectedEOF() error {
 	return fmt.Errorf("%w: unexpected eof", ErrSyntax)
 }
@@ -315,6 +467,13 @@ func lexIdent(in []byte) (string, []byte, error) {
 		pos--
 	}
 	return string(ident), in[pos:], nil
+}
+
+func lexdotdotdot(in []byte) error {
+	if len(in) < 3 || !bytes.HasPrefix(in, []byte(dotdotdot)) {
+		return fmt.Errorf("%w: unexpected bytes: %s", ErrSyntax, in)
+	}
+	return nil
 }
 
 func skipblank(in []byte) []byte {
