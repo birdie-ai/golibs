@@ -344,17 +344,6 @@ type arrayvalues struct {
 	svals []string
 }
 
-func myappend[T any](arr []T, values ...any) ([]T, error) {
-	for _, v := range values {
-		vv, ok := v.(T)
-		if !ok {
-			return nil, ErrArrayWithMixedTypes
-		}
-		arr = append(arr, vv)
-	}
-	return arr, nil
-}
-
 func arrayvals(val any) (arrayvalues, error) {
 	anyvals, ok := val.([]any)
 	if !ok {
@@ -369,19 +358,19 @@ func arrayvals(val any) (arrayvalues, error) {
 	switch anyvals[0].(type) {
 	case string:
 		array.kind = tstr
-		array.svals, err = myappend(array.svals, anyvals...)
+		array.svals, err = appendchk(array.svals, anyvals...)
 	case float64:
 		array.kind = tfloat
-		array.fvals, err = myappend(array.fvals, anyvals...)
+		array.fvals, err = appendchk(array.fvals, anyvals...)
 	case bool:
 		array.kind = tbool
-		array.bvals, err = myappend(array.bvals, anyvals...)
+		array.bvals, err = appendchk(array.bvals, anyvals...)
 	case []any:
 		array.kind = tarray
-		array.avals, err = myappend(array.avals, anyvals...)
+		array.avals, err = appendchk(array.avals, anyvals...)
 	case map[string]any:
 		array.kind = tobj
-		array.ovals, err = myappend(array.ovals, anyvals...)
+		array.ovals, err = appendchk(array.ovals, anyvals...)
 	default:
 		return arrayvalues{}, ErrUnsupportedArrayValue
 	}
@@ -389,6 +378,17 @@ func arrayvals(val any) (arrayvalues, error) {
 		return arrayvalues{}, err
 	}
 	return array, nil
+}
+
+func appendchk[T any](arr []T, values ...any) ([]T, error) {
+	for _, v := range values {
+		vv, ok := v.(T)
+		if !ok {
+			return nil, ErrArrayWithMixedTypes
+		}
+		arr = append(arr, vv)
+	}
+	return arr, nil
 }
 
 func appendval(val any) (any, error) {
