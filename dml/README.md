@@ -76,6 +76,84 @@ SET feedbacks
 WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
 ```
 
+### Delete data
+
+Delete an entity record:
+
+```
+DELETE conversations WHERE id="abc";
+```
+
+Assuming `custom_fields` is an object, then stmt below delete a dynamic field from an
+entity record (the record is not deleted, just the field):
+
+```
+DELETE conversations
+	custom_fields.country
+WHERE id="abc";
+```
+
+The syntax below does the same thing but generalize for advanced filtering cases:
+```
+DELETE conversations
+	k IN custom_fields WHERE k="country"
+WHERE id="abc";
+```
+
+The statement above reads as `FOR EACH k IN custom_fields WHERE k EQUALS "country"`.
+
+Deleting a list of fields:
+
+```
+DELETE conversations
+	key IN custom_fields WHERE key IN ["country", "language", "status"]
+WHERE id="abc";
+```
+
+Assuming `custom_fields` is a map with schema below:
+```
+{
+	(string): ({
+		"type": (string),
+		"value": (any),
+		"description": (string,optional),
+	})
+}
+```
+
+The example below delete custom_fields where `cs.type == "string" && cs.value == "wrong stuff"`:
+
+```
+DELETE conversations
+	_, cs IN custom_fields WHERE cs.type = "string" AND cs.value = "wrong stuff"
+WHERE id="abc";
+```
+
+Note that key is ommited (with `_`) because it's not used in the filter. 
+
+If `labels` has the schema below:
+```
+[ (string) ]
+```
+
+then stmt below delete "label-1" and "label-2" from the conversation:
+
+```
+DELETE conversations
+	_, v IN labels WHERE v IN ["label-1", "label-2"]
+WHERE id="abc";
+```
+
+All examples above can be grouped into a single DELETE stmt:
+
+```
+DELETE conversations
+	custom_fields.abc,
+	k, v IN custom_fields WHERE k="country" AND v="us",
+	_, l IN labels WHERE l="label-1",
+WHERE id="abc";
+```
+
 ## Syntax
 
 The language grammar is defined below using [ohm](https://ohmjs.org/docs/syntax-reference).
@@ -92,10 +170,10 @@ dml {
     | DelStmt -- delstmt
 
   SetStmt = 
-    Set ident AssignList Where Clause ";"
+    Set ident AssignList Where Condition ";"
 
   DelStmt =
-    Delete ident Where Clause ";"
+    Delete ident DeleteFilter? Where Condition ";"
 
   Set = 
     caseInsensitive<"SET">
@@ -105,18 +183,44 @@ dml {
   
   Where = 
     caseInsensitive<"WHERE">
+    
+  In =
+  	caseInsensitive<"IN">
 
   AssignList = 
     Assign ("," AssignList)?
 
   Assign = 
     LFS "=" RFS
+    
+  DeleteFilter =
+  	DeleteKeyFilter | DeleteKeyValueFilter | DeleteKey
+    
+  DeleteKey = 
+  	LFS
+    
+  DeleteKeyFilter = 
+  	(ident | "_")  In LFS Where Clause
+    
+  DeleteKeyValueFilter = 
+  	(ident | "_") "," ident  In LFS Where Condition
 
   LFS = 
   	"." | Traversal | ident
 
   RFS = 
     ArrayAppend | ArrayPrepend | JSONValue
+    
+  Condition =
+  	Clause (LogicalOp Clause)?
+    
+  LogicalOp = AND | OR
+  
+  AND = 
+  	caseInsensitive<"AND">
+    
+  OR =
+  	caseInsensitive<"OR">
 
   Clause = 
   	ident "=" Scalar

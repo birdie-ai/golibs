@@ -477,6 +477,70 @@ func TestEncode(t *testing.T) {
 			},
 			err: dml.ErrMissingArrayValues,
 		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"obj": dml.KeyFilter{Keys: []string{"a"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks obj.a WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"obj": dml.KeyFilter{Keys: []string{"a", "b"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks k IN obj WHERE k IN ["a", "b"] WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"labels": dml.ValueFilter[string]{Values: []string{"label-1"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks v IN labels WHERE v="label-1" WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"custom_fields": dml.KeyValueFilter[string]{Key: "country", Value: []string{"us"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks key,val IN custom_fields WHERE {"key": "country", "val": "us"} WHERE {"id":"abc","org_id":"xyz"};`,
+		},
 	} {
 		var buf bytes.Buffer
 		err := dml.Encode(&buf, tc.ast)

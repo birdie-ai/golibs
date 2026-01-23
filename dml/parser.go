@@ -327,18 +327,32 @@ func parseJSON[T any](in []byte, val *T) ([]byte, error) {
 type kind int
 
 const (
-	tany kind = iota
+	tinvalid = iota
 	tstr
 	tfloat
 	tbool
+	tarray
+	tobj
 )
 
 type arrayvalues struct {
 	kind  kind
-	avals []any
+	avals [][]any
+	ovals []map[string]any
 	bvals []bool
 	fvals []float64
 	svals []string
+}
+
+func myappend[T any](arr []T, values ...any) ([]T, error) {
+	for _, v := range values {
+		vv, ok := v.(T)
+		if !ok {
+			return nil, ErrArrayWithMixedTypes
+		}
+		arr = append(arr, vv)
+	}
+	return arr, nil
 }
 
 func arrayvals(val any) (arrayvalues, error) {
@@ -347,58 +361,32 @@ func arrayvals(val any) (arrayvalues, error) {
 		// parser must ensure: dotdotdot LBracket
 		panic("unreachable")
 	}
-	var array arrayvalues
-	var length int
-	kinds := map[string]struct{}{}
-	for _, v := range anyvals {
-		if v != nil {
-			// nulls are ignored because there's no use case for that and it complicates
-			// implementation in the target storage system.
-			length++
-			array.avals = append(array.avals, v)
-		}
-		switch vv := v.(type) {
-		case string:
-			kinds["string"] = struct{}{}
-			array.svals = append(array.svals, vv)
-		case float64:
-			kinds["float"] = struct{}{}
-			array.fvals = append(array.fvals, vv)
-		case bool:
-			kinds["bool"] = struct{}{}
-			array.bvals = append(array.bvals, vv)
-		case nil:
-			// skip
-		default:
-			kinds["any"] = struct{}{}
-		}
-	}
-	if length == 0 {
+	if len(anyvals) == 0 {
 		return arrayvalues{}, ErrMissingArrayValues
 	}
-
-	// kinds is supposed to have a single key if all entries are of same type.
-	// In case there are multiple keys, there are mixed types in the array and then
-	// we map into an `any` type.
-
-	var kind string
-	for k := range kinds {
-		kind = k
-		break
-	}
-	if len(kinds) > 1 || kind == "any" {
-		array.kind = tany
-		return array, nil
-	}
-	switch kind {
-	case "bool":
-		array.kind = tbool
-	case "string":
+	var err error
+	var array arrayvalues
+	switch anyvals[0].(type) {
+	case string:
 		array.kind = tstr
-	case "float":
+		array.svals, err = myappend(array.svals, anyvals...)
+	case float64:
 		array.kind = tfloat
+		array.fvals, err = myappend(array.fvals, anyvals...)
+	case bool:
+		array.kind = tbool
+		array.bvals, err = myappend(array.bvals, anyvals...)
+	case []any:
+		array.kind = tarray
+		array.avals, err = myappend(array.avals, anyvals...)
+	case map[string]any:
+		array.kind = tobj
+		array.ovals, err = myappend(array.ovals, anyvals...)
 	default:
-		panic("unreachable")
+		return arrayvalues{}, ErrUnsupportedArrayValue
+	}
+	if err != nil {
+		return arrayvalues{}, err
 	}
 	return array, nil
 }
@@ -409,14 +397,16 @@ func appendval(val any) (any, error) {
 		return nil, err
 	}
 	switch array.kind {
-	case tany:
-		return Append[any]{Values: array.avals}, nil
 	case tbool:
 		return Append[bool]{Values: array.bvals}, nil
 	case tstr:
 		return Append[string]{Values: array.svals}, nil
 	case tfloat:
 		return Append[float64]{Values: array.fvals}, nil
+	case tarray:
+		return Append[[]any]{Values: array.avals}, nil
+	case tobj:
+		return Append[map[string]any]{Values: array.ovals}, nil
 	}
 	panic("unreachable")
 }
@@ -427,14 +417,16 @@ func prependval(val any) (any, error) {
 		return nil, err
 	}
 	switch array.kind {
-	case tany:
-		return Prepend[any]{Values: array.avals}, nil
 	case tbool:
 		return Prepend[bool]{Values: array.bvals}, nil
 	case tstr:
 		return Prepend[string]{Values: array.svals}, nil
 	case tfloat:
 		return Prepend[float64]{Values: array.fvals}, nil
+	case tarray:
+		return Prepend[[]any]{Values: array.avals}, nil
+	case tobj:
+		return Prepend[map[string]any]{Values: array.ovals}, nil
 	}
 	panic("unreachable")
 }

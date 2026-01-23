@@ -340,20 +340,7 @@ func TestParser(t *testing.T) {
 		},
 		{
 			text: `SET feedbacks a.b = ... [1, "string"] WHERE id = "test";`,
-			want: dml.Stmts{
-				{
-					Op:     dml.SET,
-					Entity: u("feedbacks"),
-					Assign: dml.Assign{
-						"a.b": dml.Append[any]{
-							Values: []any{1.0, "string"},
-						},
-					},
-					Where: dml.Where{
-						"id": "test",
-					},
-				},
-			},
+			err:  dml.ErrArrayWithMixedTypes,
 		},
 		{
 			text: `SET feedbacks a.b = ... [] WHERE id = "test";`,
@@ -395,20 +382,7 @@ func TestParser(t *testing.T) {
 		},
 		{
 			text: `SET feedbacks a.b = [1, "string"] ... WHERE id = "test";`,
-			want: dml.Stmts{
-				{
-					Op:     dml.SET,
-					Entity: u("feedbacks"),
-					Assign: dml.Assign{
-						"a.b": dml.Prepend[any]{
-							Values: []any{1.0, "string"},
-						},
-					},
-					Where: dml.Where{
-						"id": "test",
-					},
-				},
-			},
+			err:  dml.ErrArrayWithMixedTypes,
 		},
 		{
 			text: `

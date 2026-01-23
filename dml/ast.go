@@ -19,9 +19,27 @@ type (
 	// Stmts is a list of statements.
 	Stmts []Stmt
 
-	// Assign is the field assignments of the operation.
-	// The meaning of the assignment depends on the stmt operation.
+	// Assign assigns field manipulations.
+	// The meaning of the assignment depends on the stmt operation kind.
+
 	// If the key is a dot (".") then it MUST be the only assignment.
+	//
+	// When stmt.Op == "SET", the assignment value can be any of:
+	// - [Primtype]
+	// - [Colltype]
+	// - [Append[Primtype]]
+	// - [Prepend[Primtype]]
+	// and the provided value is used to set the target field (the assign key).
+	//
+	// When stmt.Op == "DELETE", the assignment value can be any of:
+	// - [KeyFilter]
+	// - [ValueFilter[Primtype]]
+	// - [KeyValueFilter[Primtype]]
+	// and the provided value is used to select the records to be deleted.
+	//
+	// Note: we are aware that "assign" name is a bit misleading and it was an
+	// oversight. Now it holds the data manipulations intended for each field,
+	// be it a SET or a DELETE.
 	Assign map[string]any
 
 	// OpKind is the intended operation kind: SET | DELETE
@@ -30,14 +48,40 @@ type (
 	// Where clause of the update.
 	Where map[string]any
 
+	// Primtype is a constraint for the primitive types supported in dml.
+	Primtype interface {
+		~float64 | ~string | ~bool
+	}
+
+	// Colltype is a constraint for the collection types supported in dml.
+	Colltype interface {
+		~[]any | ~map[string]any
+	}
+
 	// Append is an assign operation to append values.
-	Append[T any] struct {
+	Append[T Primtype | Colltype] struct {
 		Values []T
 	}
 
 	// Prepend is an assign operation to prepend values.
-	Prepend[T any] struct {
+	Prepend[T Primtype | Colltype] struct {
 		Values []T
+	}
+
+	// KeyFilter query a hash-map collection by keys.
+	KeyFilter struct {
+		Keys []string
+	}
+
+	// ValueFilter query a collection by value.
+	ValueFilter[T Primtype] struct {
+		Values []T
+	}
+
+	// KeyValueFilter query a collection by key and value.
+	KeyValueFilter[T Primtype] struct {
+		Key   string
+		Value []T
 	}
 )
 
@@ -49,13 +93,15 @@ var (
 
 // dml errors.
 var (
-	ErrInvalidOperation   = errors.New("invalid operation")
-	ErrMissingEntity      = errors.New(`entity is not provided`)
-	ErrMissingAssign      = errors.New(`"SET" requires an assign`)
-	ErrMissingArrayValues = errors.New(`...: missing array values`)
-	ErrInvalidAssignKey   = errors.New(`invalid assign key`)
-	ErrMissingWhereClause = errors.New(`WHERE clause is not given`)
-	ErrNotIdent           = errors.New(`not an identifier`)
+	ErrInvalidOperation      = errors.New("invalid operation")
+	ErrMissingEntity         = errors.New(`entity is not provided`)
+	ErrMissingAssign         = errors.New(`"SET" requires an assign`)
+	ErrMissingArrayValues    = errors.New(`...: missing array values`)
+	ErrUnsupportedArrayValue = errors.New(`unsupported array values`)
+	ErrArrayWithMixedTypes   = errors.New(`array items with mixed types`)
+	ErrInvalidAssignKey      = errors.New(`invalid assign key`)
+	ErrMissingWhereClause    = errors.New(`WHERE clause is not given`)
+	ErrNotIdent              = errors.New(`not an identifier`)
 )
 
 type arrayOp int
@@ -87,6 +133,6 @@ func (a Prepend[T]) vals() any { return a.Values }
 
 // ensure Append/Prepend implements array.
 var (
-	_ array = Append[any]{}
-	_ array = Prepend[any]{}
+	_ array = Append[float64]{}
+	_ array = Prepend[float64]{}
 )
