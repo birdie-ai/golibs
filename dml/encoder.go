@@ -12,50 +12,6 @@ import (
 	"unique"
 )
 
-type (
-	// Stmt is a single dml statement.
-	Stmt struct {
-		Entity unique.Handle[string]
-		Op     OpKind
-		Assign Assign
-		Where  Where
-	}
-
-	// Stmts is a list of statements.
-	Stmts []Stmt
-
-	// Assign is the field assignments of the operation.
-	// If the key is a dot (".") then it MUST be the only assignment.
-	Assign map[string]any
-
-	// OpKind is the intended operation kind: SET | DELETE
-	OpKind string
-
-	// Where clause of the update.
-	Where map[string]any
-
-	// Append is a assign operation to append values.
-	Append struct {
-		Values []any
-	}
-)
-
-// As we will process large bulks of statements, this ensures we don't waste memory in redundant information.
-var (
-	SET    = OpKind("SET")
-	DELETE = OpKind("DELETE")
-)
-
-// encoder errors
-var (
-	ErrInvalidOperation   = errors.New("invalid operation")
-	ErrMissingEntity      = errors.New(`entity is not provided`)
-	ErrMissingAssign      = errors.New(`"SET" requires an assign`)
-	ErrInvalidAssignKey   = errors.New(`invalid assign key`)
-	ErrMissingWhereClause = errors.New(`WHERE clause is not given`)
-	ErrNotIdent           = errors.New(`not an identifier`)
-)
-
 // Encode validates and encode the statements in its text format.
 // TODO(i4k): support prettify output.
 func Encode(w io.Writer, stmts Stmts) error {
@@ -88,6 +44,12 @@ func validate(stmt Stmt) error {
 	}
 	if len(stmt.Assign) == 0 && stmt.Op != DELETE {
 		errs = append(errs, ErrMissingAssign)
+	}
+	for _, k := range slices.Sorted(maps.Keys(stmt.Assign)) {
+		v := stmt.Assign[k]
+		if vv, ok := v.(array); ok && vv.len() == 0 {
+			errs = append(errs, ErrMissingArrayValues)
+		}
 	}
 	if len(stmt.Where) == 0 {
 		errs = append(errs, ErrMissingWhereClause)
@@ -138,14 +100,42 @@ func encodeAssign(w io.Writer, assign Assign) error {
 				}
 			}
 		}
-		val := assign[key]
-		d, err := json.Marshal(val)
+		err := write(w, key+"=")
 		if err != nil {
 			return err
 		}
-		err = write(w, key+"="+string(d))
-		if err != nil {
-			return err
+		val := assign[key]
+		if varr, ok := val.(array); ok {
+			val = varr.vals()
+			d, err := json.Marshal(val)
+			if err != nil {
+				return err
+			}
+			if varr.op() == appendOp {
+				err = write(w, dotdotdot)
+				if err != nil {
+					return err
+				}
+			}
+			err = write(w, string(d))
+			if err != nil {
+				return err
+			}
+			if varr.op() == prependOp {
+				err = write(w, dotdotdot)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			d, err := json.Marshal(val)
+			if err != nil {
+				return err
+			}
+			err = write(w, string(d))
+			if err != nil {
+				return err
+			}
 		}
 		if i+1 < len(assign) {
 			err = write(w, ",")

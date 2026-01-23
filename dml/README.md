@@ -14,7 +14,9 @@ primarily for three reasons:
 
 ## Examples
 
-Updating individual fields:
+### Update data
+
+Set individual fields:
 ```
 SET feedbacks
   custom_fields.connector_id = {
@@ -26,7 +28,7 @@ SET feedbacks
 WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
 ```
 
-Update an entire object field:
+Set an entire object field:
 
 ```
 SET feedbacks
@@ -47,14 +49,7 @@ SET feedbacks
 WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
 ```
 
-```
-SET feedbacks
-  kind.rating=10,
-  text="some feedback text"
-WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
-```
-
-Updating whole object:
+Set all fields with an object:
 ```
 SET feedbacks
   . = {
@@ -62,6 +57,22 @@ SET feedbacks
     "custom_fields": {},
     "entity": "feedback"
   }
+WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
+```
+
+Append entries in an existent list:
+
+```
+SET feedbacks
+  labels = ... ["new-label"]
+WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
+```
+
+Prepend entries in an existing list:
+
+```
+SET feedbacks
+  labels = ["new-label"] ...
 WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
 ```
 
@@ -105,7 +116,7 @@ dml {
   	"." | Traversal | ident
 
   RFS = 
-  	JSONValue
+    ArrayAppend | ArrayPrepend | JSONValue
 
   Clause = 
   	ident "=" Scalar
@@ -115,6 +126,15 @@ dml {
 
   ident = 
   	letter+ (letter | "_" | "-")*
+
+  dotdotdot =
+	"..."
+
+  ArrayAppend =
+    dotdotdot Array
+
+  ArrayPrepend =
+    Array dotdotdot
 
   JSONValue =
     Object
