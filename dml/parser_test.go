@@ -417,10 +417,10 @@ func TestParser(t *testing.T) {
 		},
 		{
 			text: `SET feedbacks a.b = [null, null, null] ... WHERE id = "test";`,
-			err:  dml.ErrMissingArrayValues,
+			err:  dml.ErrUnsupportedArrayValue,
 		},
 		{
-			text: `SET feedbacks a.b = ["test", null, "string"] ... WHERE id = "test";`,
+			text: `SET feedbacks a.b = ["test", "string"] ... WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -437,7 +437,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = ... ["test", null, "string"] WHERE id = "test";`,
+			text: `SET feedbacks a.b = ... ["test", "string"] WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,

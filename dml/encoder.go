@@ -46,9 +46,9 @@ func validate(stmt Stmt) error {
 		errs = append(errs, ErrMissingAssign)
 	}
 	for _, k := range slices.Sorted(maps.Keys(stmt.Assign)) {
-		v := stmt.Assign[k]
-		if vv, ok := v.(array); ok && vv.len() == 0 {
-			errs = append(errs, ErrMissingArrayValues)
+		v, ok := stmt.Assign[k].(validator)
+		if ok {
+			errs = append(errs, v.validate())
 		}
 	}
 	if len(stmt.Where) == 0 {
@@ -69,7 +69,7 @@ func encode(w io.Writer, stmt Stmt) error {
 	if err != nil {
 		return err
 	}
-	err = encodeAssign(w, stmt.Assign)
+	err = encodeAssign(w, stmt.Op, stmt.Assign)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,14 @@ func encodePreamble(w io.Writer, stmt Stmt) error {
 	return write(w, string(stmt.Op)+" "+string(OpKind(stmt.Entity.Value()))+" ")
 }
 
-func encodeAssign(w io.Writer, assign Assign) error {
+func encodeAssign(w io.Writer, op OpKind, assign Assign) error {
+	if op == SET {
+		return encodeSetAssign(w, assign)
+	}
+	return encodeDelAssign(w, assign)
+}
+
+func encodeSetAssign(w io.Writer, assign Assign) error {
 	for i, key := range slices.Sorted(maps.Keys(assign)) {
 		if key != "." {
 			for i, s := range strings.Split(key, ".") {
@@ -138,6 +145,27 @@ func encodeAssign(w io.Writer, assign Assign) error {
 			}
 		}
 		if i+1 < len(assign) {
+			err = write(w, ",")
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func encodeDelAssign(w io.Writer, assign Assign) error {
+	keys := slices.Sorted(maps.Keys(assign))
+	for i, key := range keys {
+		v, ok := assign[key].(assignEncoder)
+		if !ok {
+			return ErrDelInvalidAssign
+		}
+		err := v.encode(w, key)
+		if err != nil {
+			return err
+		}
+		if i+1 < len(keys) {
 			err = write(w, ",")
 			if err != nil {
 				return err
