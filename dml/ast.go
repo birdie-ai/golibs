@@ -125,7 +125,7 @@ const (
 // array interface is only needed to bypass a Go type system limitation.
 // If you have an `a any` variable at hand, you cannot type assert/check for an specific struct
 // shape.
-// At the moment this is used by array-like operations: append/prepend/deleteKeys/deleteValues/etc.
+// At the moment this is used by array-like operations: append/prepend.
 type array interface {
 	len() int
 	op() arrayOp
