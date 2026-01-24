@@ -132,18 +132,14 @@ type array interface {
 	vals() any
 }
 
-func (a Append[T]) len() int      { return len(a.Values) }
-func (a Prepend[T]) len() int     { return len(a.Values) }
-func (a KeyFilter) len() int      { return len(a.Keys) }
-func (a ValueFilter[T]) len() int { return len(a.Values) }
+func (a Append[T]) len() int  { return len(a.Values) }
+func (a Prepend[T]) len() int { return len(a.Values) }
 
 func (a Append[T]) op() arrayOp  { return appendOp }
 func (a Prepend[T]) op() arrayOp { return prependOp }
 
-func (a Append[T]) vals() any      { return a.Values }
-func (a Prepend[T]) vals() any     { return a.Values }
-func (a KeyFilter) vals() any      { return a.Keys }
-func (a ValueFilter[T]) vals() any { return a.Values }
+func (a Append[T]) vals() any  { return a.Values }
+func (a Prepend[T]) vals() any { return a.Values }
 
 type validator interface {
 	validate() error
