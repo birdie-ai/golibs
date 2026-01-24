@@ -25,7 +25,7 @@ type (
 
 	// Assign assigns field manipulations.
 	// The meaning of the assignment depends on the stmt operation kind.
-
+	//
 	// If the key is a dot (".") then it MUST be the only assignment.
 	//
 	// When stmt.Op == "SET", the assignment value can be any of:
