@@ -15,8 +15,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	_ "gocloud.dev/pubsub/gcppubsub"
 )
 
 // Event is the test event data.
@@ -105,12 +103,7 @@ func createSubscription(ctx context.Context, projectID, name string) {
 }
 
 func subscriberBatch(ctx context.Context, projectID, topicName string) {
-	// We need to split the Receive/ReceiveN subscription from the "server like" subscription.
-	// Right now they are together in the same object and the concurrency configuration makes no sense :-(.
-	const unusedMaxConcurrency = 1
-
-	url := fmt.Sprintf("gcppubsub://projects/%s/subscriptions/%s", projectID, topicName)
-	sub, err := event.NewSubscription[Event](topicName, url, unusedMaxConcurrency)
+	sub, err := event.NewGoogleBatchSub[Event](ctx, projectID, topicName, topicName)
 	panicerr(err)
 
 	const (
