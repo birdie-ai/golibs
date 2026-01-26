@@ -196,6 +196,55 @@ func encodeClauses(w io.Writer, clauses Where) error {
 	return write(w, string(d))
 }
 
+type assignEncoder interface {
+	encode(w io.Writer, key string) error
+}
+
+func (a KeyFilter) encode(w io.Writer, target string) error {
+	if len(a.Keys) == 1 {
+		return write(w, target+"."+a.Keys[0])
+	}
+	d, err := json.Marshal(a.Keys)
+	if err != nil {
+		return err
+	}
+	return write(w, target+"[k] WHERE k IN "+string(d))
+}
+
+func (a ValueFilter[T]) encode(w io.Writer, target string) error {
+	if len(a.Values) == 1 {
+		d, err := json.Marshal(a.Values[0])
+		if err != nil {
+			return err
+		}
+		return write(w, target+"[_] AS v WHERE v="+string(d))
+	}
+	d, err := json.Marshal(a.Values[0])
+	if err != nil {
+		return err
+	}
+	return write(w, target+"[_] AS v WHERE v IN "+string(d))
+}
+
+func (a KeyValueFilter[T]) encode(w io.Writer, target string) error {
+	err := write(w, target+"[k] AS v WHERE k="+strconv.Quote(a.Key)+" AND v")
+	if err != nil {
+		return err
+	}
+	if len(a.Values) == 1 {
+		d, err := json.Marshal(a.Values[0])
+		if err != nil {
+			return err
+		}
+		return write(w, "="+string(d))
+	}
+	d, err := json.Marshal(a.Values)
+	if err != nil {
+		return err
+	}
+	return write(w, " IN "+string(d))
+}
+
 func write(w io.Writer, s string) error {
 	_, err := w.Write([]byte(s))
 	return err

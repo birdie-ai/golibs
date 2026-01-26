@@ -507,7 +507,7 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			want: `DELETE feedbacks k IN obj WHERE k IN ["a","b"] WHERE {"id":"abc","org_id":"xyz"};`,
+			want: `DELETE feedbacks obj[k] WHERE k IN ["a","b"] WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 		{
 			ast: dml.Stmts{
@@ -523,7 +523,7 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			want: `DELETE feedbacks _,v IN labels WHERE v="label-1" WHERE {"id":"abc","org_id":"xyz"};`,
+			want: `DELETE feedbacks labels[_] AS v WHERE v="label-1" WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 		{
 			ast: dml.Stmts{
@@ -539,7 +539,24 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			want: `DELETE feedbacks k,v IN custom_fields WHERE k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
+			want: `DELETE feedbacks custom_fields[k] AS v WHERE k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b":   dml.KeyFilter{Keys: []string{"test"}},
+						"a.b.c": dml.KeyValueFilter[string]{Key: "country", Values: []string{"us"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks a.b.test,a.b.c[k] AS v WHERE k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 	} {
 		var buf bytes.Buffer

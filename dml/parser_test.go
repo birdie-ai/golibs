@@ -453,6 +453,61 @@ func TestParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			text: `DELETE feedbacks . WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						".": dml.DeleteKey{},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			text: `DELETE feedbacks a WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a": dml.DeleteKey{},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			text: `DELETE feedbacks a.b WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.DeleteKey{},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			text: `DELETE feedbacks custom_fields[k]=>v : k="test" and v="test" WHERE id = "abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"custom_fields": dml.KeyValueFilter[string]{
+							Key:    "abc",
+							Values: []string{"xyz"},
+						},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {
@@ -475,8 +530,8 @@ func FuzzParse(f *testing.F) {
 		[]byte(`SET a a=1 WHERE {"a":1};SET a a=1 WHERE id=1;`), // multiple stmts
 		[]byte(`SET a a=1,b="b" WHERE a=1;`),                    // multiple assignments
 		[]byte(`SET a a=[] WHERE a=1;`),                         // array assignment
-		[]byte(`DELETE abc WHERE a=1;`),                         // simple where (delete)
-		[]byte(`DELETE abc WHERE {"a": 1}`),                     // object where (delete)
+		[]byte(`DELETE abc . WHERE a=1;`),                       // simple where (delete)
+		[]byte(`DELETE abc a.b WHERE {"a": 1}`),                 // object where (delete)
 	} {
 		f.Add(valid)
 	}

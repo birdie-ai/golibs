@@ -76,36 +76,12 @@ func parseStmt(in []byte) (Stmt, []byte, error) {
 	}
 
 	if stmt.Op == SET {
-		stmt.Assign = Assign{}
-		for len(in) > 0 {
-			var (
-				key string
-				val any
-				err error
-			)
-			key, val, in, err = parseAssign(in)
-			if err != nil {
-				return Stmt{}, nil, err
-			}
-
-			stmt.Assign[key] = val
-			in = skipblank(in)
-			if len(in) == 0 {
-				return Stmt{}, nil, errUnexpectedEOF()
-			}
-			if in[0] == ',' {
-				// only one "." assign
-				if _, ok := stmt.Assign["."]; ok {
-					return Stmt{}, nil, fmt.Errorf("%w: only one '.' assignment is permitted. Unexpected ','", ErrSyntax)
-				}
-				in = skipblank(in[1:])
-				if len(in) == 0 {
-					return Stmt{}, nil, errUnexpectedEOF()
-				}
-				continue
-			}
-			break
-		}
+		stmt.Assign, in, err = parseSetAssigns(in)
+	} else {
+		stmt.Assign, in, err = parseDelAssigns(in)
+	}
+	if err != nil {
+		return Stmt{}, nil, err
 	}
 	in = skipblank(in)
 	if len(in) == 0 {
@@ -135,6 +111,70 @@ func parseStmt(in []byte) (Stmt, []byte, error) {
 	}
 	in = in[1:]
 	return stmt, in, nil
+}
+
+func parseSetAssigns(in []byte) (Assign, []byte, error) {
+	assign := Assign{}
+	for len(in) > 0 {
+		var (
+			key string
+			val any
+			err error
+		)
+		key, val, in, err = parseAssign(in)
+		if err != nil {
+			return Assign{}, nil, err
+		}
+
+		assign[key] = val
+		in = skipblank(in)
+		if len(in) == 0 {
+			return Assign{}, nil, errUnexpectedEOF()
+		}
+		if in[0] == ',' {
+			// only one "." assign
+			if _, ok := assign["."]; ok {
+				return Assign{}, nil, fmt.Errorf("%w: only one '.' assignment is permitted. Unexpected ','", ErrSyntax)
+			}
+			in = skipblank(in[1:])
+			if len(in) == 0 {
+				return Assign{}, nil, errUnexpectedEOF()
+			}
+			continue
+		}
+		break
+	}
+	return assign, in, nil
+}
+
+func parseDelAssigns(in []byte) (Assign, []byte, error) {
+	assign := Assign{}
+	for len(in) > 0 {
+		var (
+			key string
+			val any
+			err error
+		)
+		key, val, in, err = parseDelFilters(in)
+		if err != nil {
+			return Assign{}, nil, err
+		}
+
+		assign[key] = val
+		in = skipblank(in)
+		if len(in) == 0 {
+			return Assign{}, nil, errUnexpectedEOF()
+		}
+		if in[0] == ',' {
+			in = skipblank(in[1:])
+			if len(in) == 0 {
+				return Assign{}, nil, errUnexpectedEOF()
+			}
+			continue
+		}
+		break
+	}
+	return assign, in, nil
 }
 
 func parseAssign(in []byte) (string, any, []byte, error) {
@@ -168,52 +208,10 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 		}
 		return ".", val, in, nil
 	}
-	var (
-		dotident []byte
-		ident    string
-		err      error
-	)
 
-	ident, in, err = lexIdent(in)
+	dotident, in, err := parsePathTraversal(in)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
-	}
-
-	dotident = append(dotident, []byte(ident)...)
-	if len(in) == 0 {
-		return "", nil, nil, errUnexpectedEOF()
-	}
-
-	for len(in) > 0 && in[0] == '.' {
-		dotident = append(dotident, '.')
-		in = skipblank(in[1:])
-		if len(in) == 0 {
-			return "", nil, nil, errUnexpectedEOF()
-		}
-		if in[0] == '"' {
-			// parse the string as a JSON string.
-			// This means we support all of its escape sequences!
-			dec := json.NewDecoder(bytes.NewReader(in))
-			tok, err := dec.Token()
-			if err != nil {
-				return "", nil, nil, fmt.Errorf("%w: parsing quote string literal: %v", ErrSyntax, err)
-			}
-			str, ok := tok.(string)
-			if !ok {
-				return "", nil, nil, fmt.Errorf("%w: unexpected %v", ErrSyntax, tok)
-			}
-			dotident = append(dotident, []byte(strconv.Quote(str))...)
-			in = skipblank(in[dec.InputOffset():])
-			continue
-		}
-		ident, in, err = lexIdent(in)
-		if err != nil {
-			return "", nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
-		}
-		if len(in) == 0 {
-			return "", nil, nil, errUnexpectedEOF()
-		}
-		dotident = append(dotident, []byte(ident)...)
+		return "", nil, nil, err
 	}
 	in = skipblank(in)
 	if len(in) == 0 {
@@ -269,6 +267,166 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 		}
 	}
 	return string(dotident), val, in, nil
+}
+
+func parseDelFilters(in []byte) (string, any, []byte, error) {
+	in = skipblank(in)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] == '.' {
+		return ".", DeleteKey{}, in[1:], nil
+	}
+	dotident, in, err := parsePathTraversal(in)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	// lookahead for Where token.
+	if in[0] != '[' {
+		return dotident, DeleteKey{}, in, nil
+	}
+	in = in[1:]
+	var (
+		vark string
+		varv string
+	)
+	if len(in) > 0 && in[0] == '_' {
+		vark = "_"
+	} else {
+		vark, in, err = lexIdent(in)
+		if err != nil {
+			return "", nil, nil, err
+		}
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] != ']' {
+		return "", nil, nil, fmt.Errorf("%w: expected ']' but got %q", ErrSyntax, in)
+	}
+	in = skipblank(in[1:])
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] == '=' {
+		if len(in[1:]) == 0 {
+			return "", nil, nil, errUnexpectedEOF()
+		}
+		if in[1] != '>' {
+			return "", nil, nil, fmt.Errorf("%w: expected '>' but got %q", ErrSyntax, in[1:])
+		}
+		in = skipblank(in[2:])
+		if len(in) == 0 {
+			return "", nil, nil, errUnexpectedEOF()
+		}
+		varv, in, err = lexIdent(in)
+		if err != nil {
+			return "", nil, nil, err
+		}
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] != ':' {
+		return "", nil, nil, fmt.Errorf("%w: expected ':' but got %q", ErrSyntax, in)
+	}
+	in = in[1:]
+	cond, in, err := parseWhere(in)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	var keyfilter string
+	if vark != "_" {
+		condk, ok := cond[vark]
+		if !ok {
+			return "", nil, nil, fmt.Errorf("%w: variable %q not found in DELETE condition", ErrSyntax, vark)
+		}
+		keyfilter, ok = condk.(string)
+		if !ok {
+			// the key condition must be a string.
+			// TODO(i4k): use proper error for type check errors.
+			return "", nil, nil, fmt.Errorf("%w: the variable %s has string type but condition uses %T", ErrSyntax, vark, condk)
+		}
+		delete(cond, vark)
+		if varv == "" || varv == "_" {
+			if len(cond) > 0 {
+				return "", nil, nil, fmt.Errorf("%w: more clauses than declared variables", ErrSyntax)
+			}
+			return dotident, KeyFilter{Keys: []string{keyfilter}}, in, nil
+		}
+	}
+	condv, ok := cond[varv]
+	if !ok {
+		return "", nil, nil, fmt.Errorf("%w: variable %s not found in DELETE condition", ErrSyntax, varv)
+	}
+	delete(cond, varv)
+	if len(cond) > 0 {
+		return "", nil, nil, fmt.Errorf("%w: %d surplus conditions in DELETE filter: %v", ErrSyntax, len(cond), cond)
+	}
+	switch vv := condv.(type) {
+	case []string:
+		return dotident, KeyValueFilter[string]{Key: keyfilter, Values: vv}, in, nil
+	case string:
+		return dotident, KeyValueFilter[string]{Key: keyfilter, Values: []string{vv}}, in, nil
+	}
+	panic("unreachable")
+}
+
+func parsePathTraversal(in []byte) (string, []byte, error) {
+	var (
+		dotident []byte
+		ident    string
+		err      error
+	)
+
+	ident, in, err = lexIdent(in)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+	}
+
+	dotident = append(dotident, []byte(ident)...)
+	if len(in) == 0 {
+		return "", nil, errUnexpectedEOF()
+	}
+
+	for len(in) > 0 && in[0] == '.' {
+		dotident = append(dotident, '.')
+		in = skipblank(in[1:])
+		if len(in) == 0 {
+			return "", nil, errUnexpectedEOF()
+		}
+		if in[0] == '"' {
+			// parse the string as a JSON string.
+			// This means we support all of its escape sequences!
+			dec := json.NewDecoder(bytes.NewReader(in))
+			tok, err := dec.Token()
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: parsing quote string literal: %v", ErrSyntax, err)
+			}
+			str, ok := tok.(string)
+			if !ok {
+				return "", nil, fmt.Errorf("%w: unexpected %v", ErrSyntax, tok)
+			}
+			dotident = append(dotident, []byte(strconv.Quote(str))...)
+			in = skipblank(in[dec.InputOffset():])
+			continue
+		}
+		ident, in, err = lexIdent(in)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+		}
+		if len(in) == 0 {
+			return "", nil, errUnexpectedEOF()
+		}
+		dotident = append(dotident, []byte(ident)...)
+	}
+	return string(dotident), in, nil
 }
 
 func parseWhere(in []byte) (Where, []byte, error) {

@@ -1,11 +1,8 @@
 package dml
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"strconv"
 	"unique"
 )
 
@@ -62,15 +59,18 @@ type (
 		~[]any | ~map[string]any
 	}
 
-	// Append is an assign operation to append values.
+	// Append is an assign node to append values.
 	Append[T Primtype | Colltype] struct {
 		Values []T
 	}
 
-	// Prepend is an assign operation to prepend values.
+	// Prepend is an assign node to prepend values.
 	Prepend[T Primtype | Colltype] struct {
 		Values []T
 	}
+
+	// DeleteKey is an assign node to delete keys.
+	DeleteKey struct{}
 
 	// KeyFilter query a hash-map collection by keys.
 	KeyFilter struct {
@@ -183,56 +183,7 @@ func (a KeyValueFilter[T]) validate() error {
 	return nil
 }
 
-type assignEncoder interface {
-	encode(w io.Writer, key string) error
-}
-
-func (a KeyFilter) encode(w io.Writer, target string) error {
-	if len(a.Keys) == 1 {
-		return write(w, target+"."+a.Keys[0])
-	}
-	d, err := json.Marshal(a.Keys)
-	if err != nil {
-		return err
-	}
-	return write(w, "k IN "+target+" WHERE k IN "+string(d))
-}
-
-func (a ValueFilter[T]) encode(w io.Writer, target string) error {
-	if len(a.Values) == 1 {
-		d, err := json.Marshal(a.Values[0])
-		if err != nil {
-			return err
-		}
-		return write(w, "_,v IN "+target+" WHERE v="+string(d))
-	}
-	d, err := json.Marshal(a.Values[0])
-	if err != nil {
-		return err
-	}
-	return write(w, "_, v IN "+target+" WHERE v IN "+string(d))
-}
-
-func (a KeyValueFilter[T]) encode(w io.Writer, target string) error {
-	err := write(w, "k,v IN "+target+" WHERE k="+strconv.Quote(a.Key)+" AND v")
-	if err != nil {
-		return err
-	}
-	if len(a.Values) == 1 {
-		d, err := json.Marshal(a.Values[0])
-		if err != nil {
-			return err
-		}
-		return write(w, "="+string(d))
-	}
-	d, err := json.Marshal(a.Values)
-	if err != nil {
-		return err
-	}
-	return write(w, " IN "+string(d))
-}
-
-// ensure Append/Prepend implements array.
+// ensure AST nodes implements core interfaces.
 var (
 	_ array = Append[float64]{}
 	_ array = Prepend[float64]{}

@@ -93,54 +93,50 @@ DELETE conversations
 WHERE id="abc";
 ```
 
-The syntax below does the same thing but generalize for advanced filtering cases:
-```
-DELETE conversations
-	k IN custom_fields WHERE k="country"
-WHERE id="abc";
-```
-
-The statement above reads as `FOR EACH k IN custom_fields WHERE k EQUALS "country"`.
-
-Deleting a list of fields:
+Alternatively, the syntax below does the same but allows for fields with spaces:
 
 ```
 DELETE conversations
-	key IN custom_fields WHERE key IN ["country", "language", "status"]
+	custom_fields["country"]
 WHERE id="abc";
 ```
 
-Assuming `custom_fields` is a map with schema below:
+and again alternatively, you can use the syntax below for deleting a list of fields:
 ```
-{
-	(string): ({
-		"type": (string),
-		"value": (any),
-		"description": (string,optional),
-	})
-}
+DELETE conversations
+	custom_fields[k] : k IN ["a","b"]
+WHERE id="abc";
 ```
 
-The example below delete custom_fields where `cs.type == "string" && cs.value == "wrong stuff"`:
+The statement above reads as `FOR EACH key k IN custom_fields WHERE k IS IN THE LIST ["a","b"]`.
+
+For deleting based on field name and value condition:
+```
+DELETE conversations
+	custom_fields[k] => v WHERE k="country" AND v="us"
+WHERE id="abc";
+```
+
+The statement above reads as `FOR EACH KEY k AND VALUE v IN custom_fields WHERE k EQUALS "country" AND v EQUALS "us"`.
+
+If the key is not needed, it can be omitted with `_`.
 
 ```
 DELETE conversations
-	_, cs IN custom_fields WHERE cs.type = "string" AND cs.value = "wrong stuff"
+	custom_fields[_] => v WHERE v = "something"
 WHERE id="abc";
 ```
-
-Note that key is ommited (with `_`) because it's not used in the filter. 
 
 If `labels` has the schema below:
 ```
 [ (string) ]
 ```
 
-then stmt below delete "label-1" and "label-2" from the conversation:
+then stmt below deletes "label-1" and "label-2":
 
 ```
 DELETE conversations
-	_, v IN labels WHERE v IN ["label-1", "label-2"]
+	labels[_] as v WHERE v IN ["label-1", "label-2"]
 WHERE id="abc";
 ```
 
@@ -149,8 +145,8 @@ All examples above can be grouped into a single DELETE stmt:
 ```
 DELETE conversations
 	custom_fields.abc,
-	k, v IN custom_fields WHERE k="country" AND v="us",
-	_, l IN labels WHERE l="label-1",
+	custom_fields[k] as v WHERE k="country" AND v="us",
+	labels[_] as l WHERE l="label-1",
 WHERE id="abc";
 ```
 
@@ -186,6 +182,9 @@ dml {
     
   In =
   	caseInsensitive<"IN">
+    
+  Arrow =
+  	"=>"
 
   AssignList = 
     Assign ("," AssignList)?
@@ -194,17 +193,14 @@ dml {
     LFS "=" RFS
     
   DeleteFilter =
-  	DeleteKeyFilter | DeleteKeyValueFilter | DeleteKey
+  	LFS (KeyDecl VarDecl? ":" Condition)?
     
-  DeleteKey = 
-  	LFS
+  KeyDecl =
+  	"[" (ident | "_") "]"
     
-  DeleteKeyFilter = 
-  	(ident | "_")  In LFS Where Clause
+  VarDecl =
+  	Arrow ident
     
-  DeleteKeyValueFilter = 
-  	(ident | "_") "," ident  In LFS Where Condition
-
   LFS = 
   	"." | Traversal | ident
 
