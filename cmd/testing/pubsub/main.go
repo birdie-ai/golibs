@@ -59,7 +59,7 @@ func main() {
 }
 
 const (
-	totalPartitions    = 1000
+	totalPartitions    = 10000
 	eventsPerPartition = 100
 )
 
@@ -111,7 +111,7 @@ func subscriberBatch(ctx context.Context, projectID, topicName string) {
 
 	const (
 		batchSize       = 1000
-		batchTimeWindow = time.Minute
+		batchTimeWindow = 5 * time.Minute
 	)
 
 	log.Println("starting batch handler")
