@@ -25,3 +25,8 @@ go run . publisher
 ```
 
 Resources won't be automatically deleted (except subscription that have an expiration policy of one day), remember to delete them.
+To test batching behavior with ordered subscriptions run:
+
+```
+go run . subscriber -batch
+```

@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	_ "gocloud.dev/pubsub/gcppubsub"
 )
 
 // Event is the test event data.
@@ -41,9 +44,13 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
+	createTopic(ctx, projectID, topicName)
+
 	switch os.Args[1] {
 	case "subscriber":
-		subscriber(ctx, projectID, topicName)
+		createSubscription(ctx, projectID, topicName)
+		args := os.Args[2:]
+		subscriber(ctx, args, projectID, topicName)
 	case "publisher":
 		publisher(ctx, projectID, topicName)
 	default:
@@ -57,20 +64,15 @@ const (
 	totalEvents     = 100
 )
 
-func subscriber(ctx context.Context, projectID, topicName string) {
-	client, err := pubsub.NewClient(ctx, projectID)
-	panicerr(err)
-	defer func() {
-		_ = client.Close()
-	}()
+func subscriber(ctx context.Context, args []string, projectID, topicName string) {
+	var batch bool
+	fset := flag.NewFlagSet("subscriber", flag.ExitOnError)
+	fset.BoolVar(&batch, "batch", false, "test batched ordering")
+	panicerr(fset.Parse(args))
 
-	_, err = client.CreateSubscription(ctx, topicName, pubsub.SubscriptionConfig{
-		Topic:                 client.Topic(topicName),
-		ExpirationPolicy:      24 * time.Hour,
-		EnableMessageOrdering: true,
-	})
-	if err != nil && status.Code(err) != codes.AlreadyExists {
-		log.Fatalf("creating subscription: %v", err)
+	if batch {
+		subscriberBatch(ctx, projectID, topicName)
+		return
 	}
 
 	log.Printf("starting handler with concurrency=%d", totalPartitions)
@@ -86,15 +88,58 @@ func subscriber(ctx context.Context, projectID, topicName string) {
 	log.Printf("subscription stopped: %v", err)
 }
 
-func publisher(ctx context.Context, projectID, topicName string) {
-	const region = "us-central1"
+func createSubscription(ctx context.Context, projectID, name string) {
 	client, err := pubsub.NewClient(ctx, projectID)
 	panicerr(err)
 	defer func() {
 		_ = client.Close()
 	}()
 
-	createTopic(ctx, client, topicName)
+	_, err = client.CreateSubscription(ctx, name, pubsub.SubscriptionConfig{
+		Topic:                 client.Topic(name),
+		ExpirationPolicy:      24 * time.Hour,
+		EnableMessageOrdering: true,
+	})
+	if err != nil && status.Code(err) != codes.AlreadyExists {
+		log.Fatalf("creating subscription: %v", err)
+	}
+}
+
+func subscriberBatch(ctx context.Context, projectID, topicName string) {
+	// We need to split the Receive/ReceiveN subscription from the "server like" subscription.
+	// Right now they are together in the same object and the concurrency configuration makes no sense :-(.
+	const unusedMaxConcurrency = 1
+
+	url := fmt.Sprintf("gcppubsub://projects/%s/subscriptions/%s", projectID, topicName)
+	sub, err := event.NewSubscription[Event](topicName, url, unusedMaxConcurrency)
+	panicerr(err)
+
+	const (
+		batchSize       = 1000
+		batchTimeWindow = time.Minute
+	)
+
+	log.Println("starting batch handler")
+
+	for ctx.Err() == nil {
+		ctx, cancel := context.WithTimeout(ctx, batchTimeWindow)
+		events, err := sub.ReceiveN(ctx, batchSize)
+		cancel()
+		panicerr(err)
+
+		fmt.Printf("=== start batch size %d ===\n", len(events))
+		for i, e := range events {
+			fmt.Printf("event %d: partition %q: count %d\n", i, e.Event.PartitionID, e.Event.Count)
+		}
+		fmt.Printf("=== end batch size %d ===\n", len(events))
+		time.Sleep(5 * time.Second)
+	}
+
+	log.Printf("subscription stopped: %v", err)
+}
+
+func publisher(ctx context.Context, projectID, topicName string) {
+	const region = "us-central1"
 
 	publisher, err := event.NewOrderedGooglePublisher[Event](ctx, projectID, region, topicName, eventName)
 	panicerr(err)
@@ -121,12 +166,17 @@ func publisher(ctx context.Context, projectID, topicName string) {
 	log.Printf("publishers stopped: %v", err)
 }
 
-func createTopic(ctx context.Context, client *pubsub.Client, topicName string) {
-	_, err := client.CreateTopic(ctx, topicName)
+func createTopic(ctx context.Context, projectID, topicName string) {
+	client, err := pubsub.NewClient(ctx, projectID)
+	panicerr(err)
+	defer func() {
+		_ = client.Close()
+	}()
+
+	_, err = client.CreateTopic(ctx, topicName)
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		log.Fatalf("creating topic: %v", err)
 	}
-	log.Print("created topic")
 }
 
 func panicerr(err error) {
