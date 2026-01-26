@@ -507,7 +507,7 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			want: `DELETE feedbacks obj[k] WHERE k IN ["a","b"] WHERE {"id":"abc","org_id":"xyz"};`,
+			want: `DELETE feedbacks obj[k] : k IN ["a","b"] WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 		{
 			ast: dml.Stmts{
@@ -523,7 +523,7 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			want: `DELETE feedbacks labels[_] AS v WHERE v="label-1" WHERE {"id":"abc","org_id":"xyz"};`,
+			want: `DELETE feedbacks labels[_] => v : v="label-1" WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 		{
 			ast: dml.Stmts{
@@ -539,7 +539,7 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			want: `DELETE feedbacks custom_fields[k] AS v WHERE k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
+			want: `DELETE feedbacks custom_fields[k] => v : k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 		{
 			ast: dml.Stmts{
@@ -556,7 +556,7 @@ func TestEncode(t *testing.T) {
 					},
 				},
 			},
-			want: `DELETE feedbacks a.b.test,a.b.c[k] AS v WHERE k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
+			want: `DELETE feedbacks a.b.test,a.b.c[k] => v : k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 	} {
 		var buf bytes.Buffer

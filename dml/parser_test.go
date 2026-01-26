@@ -229,6 +229,49 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			text: `SET feedbacks a=1 WHERE id=1 and test=2;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"id":   1.0,
+						"test": 2.0,
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE a=1 and b=2 and c=3;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"a": 1.0,
+						"b": 2.0,
+						"c": 3.0,
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE {"a": 1} and {"b": 2};`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"a": 1.0,
+						"b": 2.0,
+					},
+				},
+			},
+		},
+		{
 			text: `SET feedbacks custom_fields={"a": 1, "b":"abc"} WHERE id    =   1;`,
 			want: dml.Stmts{
 				{
@@ -493,15 +536,15 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `DELETE feedbacks custom_fields[k]=>v : k="test" and v="test" WHERE id = "abc";`,
+			text: `DELETE feedbacks custom_fields[k]=>v : {"k":"test","v":"test"} WHERE id="abc";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.DELETE,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{
 						"custom_fields": dml.KeyValueFilter[string]{
-							Key:    "abc",
-							Values: []string{"xyz"},
+							Key:    "test",
+							Values: []string{"test"},
 						},
 					},
 					Where: dml.Where{"id": "abc"},

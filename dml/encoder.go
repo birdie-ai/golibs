@@ -208,7 +208,7 @@ func (a KeyFilter) encode(w io.Writer, target string) error {
 	if err != nil {
 		return err
 	}
-	return write(w, target+"[k] WHERE k IN "+string(d))
+	return write(w, target+"[k] : k IN "+string(d))
 }
 
 func (a ValueFilter[T]) encode(w io.Writer, target string) error {
@@ -217,17 +217,17 @@ func (a ValueFilter[T]) encode(w io.Writer, target string) error {
 		if err != nil {
 			return err
 		}
-		return write(w, target+"[_] AS v WHERE v="+string(d))
+		return write(w, target+"[_] => v : v="+string(d))
 	}
 	d, err := json.Marshal(a.Values[0])
 	if err != nil {
 		return err
 	}
-	return write(w, target+"[_] AS v WHERE v IN "+string(d))
+	return write(w, target+"[_] => v : v IN "+string(d))
 }
 
 func (a KeyValueFilter[T]) encode(w io.Writer, target string) error {
-	err := write(w, target+"[k] AS v WHERE k="+strconv.Quote(a.Key)+" AND v")
+	err := write(w, target+"[k] => v : k="+strconv.Quote(a.Key)+" AND v")
 	if err != nil {
 		return err
 	}

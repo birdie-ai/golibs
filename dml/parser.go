@@ -285,7 +285,6 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 	if len(in) == 0 {
 		return "", nil, nil, errUnexpectedEOF()
 	}
-	// lookahead for Where token.
 	if in[0] != '[' {
 		return dotident, DeleteKey{}, in, nil
 	}
@@ -336,7 +335,7 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 	if in[0] != ':' {
 		return "", nil, nil, fmt.Errorf("%w: expected ':' but got %q", ErrSyntax, in)
 	}
-	in = in[1:]
+	in = skipblank(in[1:])
 	cond, in, err := parseWhere(in)
 	if err != nil {
 		return "", nil, nil, err
@@ -431,20 +430,23 @@ func parsePathTraversal(in []byte) (string, []byte, error) {
 
 func parseWhere(in []byte) (Where, []byte, error) {
 	if in[0] == '{' {
-		var (
-			where Where
-			err   error
-		)
-		in, err = parseJSON(in, &where)
+		where, in, err := parseWhereObject(in)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%w: failed to parse value as JSON Object: %v", ErrSyntax, err)
+			return Where{}, nil, err
 		}
-		if len(where) == 0 {
-			return nil, nil, fmt.Errorf("%w: WHERE object require key-value entries", ErrSyntax)
-		}
-		for _, k := range slices.Sorted(maps.Keys(where)) {
-			if !isIdent(k) {
-				return nil, nil, fmt.Errorf("%w: WHERE object keys need to be valid identifier but found %q", ErrSyntax, k)
+		in = skipblank(in)
+		if len(in) > 3 && bytes.EqualFold(in[:3], []byte{'A', 'N', 'D'}) {
+			in = skipblank(in[3:])
+			var next Where
+			next, in, err = parseWhere(in)
+			if err != nil {
+				return Where{}, nil, err
+			}
+			for k, v := range next {
+				if _, ok := where[k]; ok {
+					return Where{}, nil, fmt.Errorf("%w: invalid WHERE: duplicate AND field %q", ErrSyntax, k)
+				}
+				where[k] = v
 			}
 		}
 		return where, in, nil
@@ -468,9 +470,45 @@ func parseWhere(in []byte) (Where, []byte, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: parsing value as JSON: %v", ErrSyntax, err)
 	}
-	return Where{
+	where := Where{
 		ident: val,
-	}, in, nil
+	}
+	in = skipblank(in)
+	if len(in) > 3 && bytes.EqualFold(in[:3], []byte{'A', 'N', 'D'}) {
+		in = skipblank(in[3:])
+		var next Where
+		next, in, err = parseWhere(in)
+		if err != nil {
+			return Where{}, nil, err
+		}
+		for k, v := range next {
+			if _, ok := where[k]; ok {
+				return Where{}, nil, fmt.Errorf("%w: invalid WHERE: duplicate AND field %q", ErrSyntax, k)
+			}
+			where[k] = v
+		}
+	}
+	return where, in, nil
+}
+
+func parseWhereObject(in []byte) (Where, []byte, error) {
+	var (
+		where Where
+		err   error
+	)
+	in, err = parseJSON(in, &where)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: failed to parse value as JSON Object: %v", ErrSyntax, err)
+	}
+	if len(where) == 0 {
+		return nil, nil, fmt.Errorf("%w: WHERE object require key-value entries", ErrSyntax)
+	}
+	for _, k := range slices.Sorted(maps.Keys(where)) {
+		if !isIdent(k) {
+			return nil, nil, fmt.Errorf("%w: WHERE object keys need to be valid identifier but found %q", ErrSyntax, k)
+		}
+	}
+	return where, in, nil
 }
 
 func parseJSON[T any](in []byte, val *T) ([]byte, error) {
@@ -596,7 +634,7 @@ func errUnexpectedEOF() error {
 func lexIdent(in []byte) (string, []byte, error) {
 	r, size := utf8.DecodeRune(in)
 	if r == utf8.RuneError || size == 0 || !unicode.IsLetter(r) {
-		return "", nil, ErrNotIdent
+		return "", nil, fmt.Errorf("%w: parsing %q", ErrNotIdent, in)
 	}
 
 	ident := []rune{r}
