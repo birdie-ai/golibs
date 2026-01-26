@@ -59,7 +59,6 @@ func main() {
 }
 
 const (
-	eventName       = "golibs-test"
 	totalPartitions = 10
 	totalEvents     = 100
 )
@@ -76,7 +75,7 @@ func subscriber(ctx context.Context, args []string, projectID, topicName string)
 	}
 
 	log.Printf("starting handler with concurrency=%d", totalPartitions)
-	sub, err := event.NewOrderedGoogleSub[Event](ctx, projectID, topicName, eventName, totalPartitions)
+	sub, err := event.NewOrderedGoogleSub[Event](ctx, projectID, topicName, topicName, totalPartitions)
 	panicerr(err)
 
 	err = sub.Serve(ctx, func(_ context.Context, event Event) error {
@@ -115,11 +114,12 @@ func subscriberBatch(ctx context.Context, projectID, topicName string) {
 	panicerr(err)
 
 	const (
-		batchSize       = 1000
+		batchSize       = 200
 		batchTimeWindow = time.Minute
 	)
 
 	log.Println("starting batch handler")
+	batches := map[string][]int{}
 
 	for ctx.Err() == nil {
 		ctx, cancel := context.WithTimeout(ctx, batchTimeWindow)
@@ -130,18 +130,23 @@ func subscriberBatch(ctx context.Context, projectID, topicName string) {
 		fmt.Printf("=== start batch size %d ===\n", len(events))
 		for i, e := range events {
 			fmt.Printf("event %d: partition %q: count %d\n", i, e.Event.PartitionID, e.Event.Count)
+			batches[e.Event.PartitionID] = append(batches[e.Event.PartitionID], e.Event.Count)
+			e.Ack()
 		}
 		fmt.Printf("=== end batch size %d ===\n", len(events))
-		time.Sleep(5 * time.Second)
 	}
 
-	log.Printf("subscription stopped: %v", err)
+	log.Printf("generating received batches report (values should be in order)\n")
+	for partitionID, values := range batches {
+		fmt.Printf("\tpartition %q: values: %v\n", partitionID, values)
+	}
+	log.Printf("done\n")
 }
 
 func publisher(ctx context.Context, projectID, topicName string) {
 	const region = "us-central1"
 
-	publisher, err := event.NewOrderedGooglePublisher[Event](ctx, projectID, region, topicName, eventName)
+	publisher, err := event.NewOrderedGooglePublisher[Event](ctx, projectID, region, topicName, topicName)
 	panicerr(err)
 
 	log.Printf("starting publisher with %d concurrent partitions", totalPartitions)
