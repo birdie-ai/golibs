@@ -6,8 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"os/signal"
+	"slices"
 	"time"
 
 	"cloud.google.com/go/pubsub"
@@ -131,8 +133,10 @@ func subscriberBatch(ctx context.Context, projectID, topicName string) {
 	}
 
 	log.Printf("generating received batches report (values should be in order)\n")
-	for partitionID, values := range batches {
-		fmt.Printf("\tpartition %q: values: %v\n", partitionID, values)
+	partitions := slices.Collect(maps.Keys(batches))
+	slices.Sort(partitions)
+	for _, partitionID := range partitions {
+		fmt.Printf("\tpartition %q: values: %v\n", partitionID, batches[partitionID])
 	}
 	log.Printf("done\n")
 }

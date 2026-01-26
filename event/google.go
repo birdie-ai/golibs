@@ -41,6 +41,7 @@ type (
 		sub       *pubsub.Subscription
 		receive   chan struct{}
 	}
+	// GoogleEvent is an event used by [GoogleExperimentalBatchSubscription].
 	GoogleEvent[T any] struct {
 		Envelope[T]
 		msg *pubsub.Message
@@ -293,10 +294,12 @@ func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n
 	return events, nil
 }
 
+// Ack the event.
 func (g GoogleEvent[T]) Ack() {
 	g.msg.Ack()
 }
 
+// Nack the event.
 func (g GoogleEvent[T]) Nack() {
 	g.msg.Nack()
 }
