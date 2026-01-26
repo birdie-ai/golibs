@@ -57,8 +57,8 @@ func main() {
 }
 
 const (
-	totalPartitions = 10
-	totalEvents     = 100
+	totalPartitions    = 100
+	eventsPerPartition = 100
 )
 
 func subscriber(ctx context.Context, args []string, projectID, topicName string) {
@@ -95,6 +95,7 @@ func createSubscription(ctx context.Context, projectID, name string) {
 	_, err = client.CreateSubscription(ctx, name, pubsub.SubscriptionConfig{
 		Topic:                 client.Topic(name),
 		ExpirationPolicy:      24 * time.Hour,
+		AckDeadline:           10 * time.Minute,
 		EnableMessageOrdering: true,
 	})
 	if err != nil && status.Code(err) != codes.AlreadyExists {
@@ -142,14 +143,14 @@ func publisher(ctx context.Context, projectID, topicName string) {
 	publisher, err := event.NewOrderedGooglePublisher[Event](ctx, projectID, region, topicName, topicName)
 	panicerr(err)
 
-	log.Printf("starting publisher with %d concurrent partitions", totalPartitions)
+	log.Printf("starting publisher with %d partitions", totalPartitions)
 
 	g := &errgroup.Group{}
 
 	for i := range totalPartitions {
 		partitionID := fmt.Sprintf("partition-%d", i)
 		g.Go(func() error {
-			for i := range totalEvents {
+			for i := range eventsPerPartition {
 				err := publisher.Publish(ctx, Event{
 					PartitionID: partitionID,
 					Count:       i,

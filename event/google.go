@@ -205,6 +205,11 @@ func NewGoogleBatchSub[T any](ctx context.Context, project, subName, eventName s
 		return nil, fmt.Errorf("creating client: %w", err)
 	}
 	sub := client.Subscription(subName)
+	// The batch size on ReceiveN dictates the amount of outstanding messages.
+	// We do keep the max outstanding bytes to avoid unbounded memory usage (default is 1GB).
+	sub.ReceiveSettings.MaxOutstandingMessages = -1
+	// Batch behavior favors long ack times, enforce this as high as possible, which is 600s currently.
+	sub.ReceiveSettings.MinExtensionPeriod = 10 * time.Minute
 	return &GoogleExperimentalBatchSubscription[T]{eventName: eventName, client: client, sub: sub, receive: make(chan struct{}, 1)}, nil
 }
 
