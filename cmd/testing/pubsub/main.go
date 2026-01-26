@@ -59,7 +59,7 @@ func main() {
 }
 
 const (
-	totalPartitions    = 100
+	totalPartitions    = 1000
 	eventsPerPartition = 100
 )
 
@@ -110,7 +110,7 @@ func subscriberBatch(ctx context.Context, projectID, topicName string) {
 	panicerr(err)
 
 	const (
-		batchSize       = 200
+		batchSize       = 1000
 		batchTimeWindow = time.Minute
 	)
 
@@ -119,17 +119,21 @@ func subscriberBatch(ctx context.Context, projectID, topicName string) {
 
 	for ctx.Err() == nil {
 		ctx, cancel := context.WithTimeout(ctx, batchTimeWindow)
+		rcvStart := time.Now()
 		events, err := sub.ReceiveN(ctx, batchSize)
+		rcvElapsed := time.Since(rcvStart)
 		cancel()
 		panicerr(err)
 
-		fmt.Printf("=== start batch size %d ===\n", len(events))
+		fmt.Printf("=== start batch size %d\n", len(events))
+		ackStart := time.Now()
 		for i, e := range events {
 			fmt.Printf("event %d: partition %q: count %d\n", i, e.Event.PartitionID, e.Event.Count)
 			batches[e.Event.PartitionID] = append(batches[e.Event.PartitionID], e.Event.Count)
 			e.Ack()
 		}
-		fmt.Printf("=== end batch size %d ===\n", len(events))
+		ackElapsed := time.Since(ackStart)
+		fmt.Printf("=== end batch size %d: receiveN elapsed %q : ack elapsed %q ===\n", len(events), rcvElapsed, ackElapsed)
 	}
 
 	log.Printf("generating received batches report (values should be in order)\n")
