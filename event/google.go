@@ -88,9 +88,7 @@ func (p *OrderedGooglePublisher[T]) Shutdown(context.Context) error {
 
 // NewOrderedGoogleSub creates an ordered subscription on Google Cloud Pubsub that will accept on events of the given type and name,
 // similar to [NewSubscription]. Ordering affects how concurrency is handled. Concurrency is done by handling
-// different ordering keys/partitions, every ordered key will be handled sequentially only different ordering keys will be
-// handled concurrently. This requires a client to be created per go routine, so beware of setting concurrency to a high value (every go routine
-// will create a different client/connection to pubsub).
+// different ordering keys/partitions, every ordered key will be handled sequentially only different ordering keys will be handled concurrently.
 // Call [OrderedGoogleSub.Shutdown] to stop all goroutines/clean up all resources.
 func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName string, maxConcurrentEvents int) (*OrderedGoogleSub[T], error) {
 	if maxConcurrentEvents <= 0 {
