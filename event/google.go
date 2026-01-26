@@ -206,9 +206,8 @@ func NewGoogleBatchSub[T any](ctx context.Context, project, subName, eventName s
 		return nil, fmt.Errorf("creating client: %w", err)
 	}
 	sub := client.Subscription(subName)
-	// The batch size on ReceiveN dictates the amount of outstanding messages.
-	// We do keep the max outstanding bytes to avoid unbounded memory usage (default is 1GB).
-	sub.ReceiveSettings.MaxOutstandingMessages = -1
+	// For this use case having more go routines causes more events to be pre-fetched/higher ack expiration and flow control throttles us.
+	sub.ReceiveSettings.NumGoroutines = 1
 	// Batch behavior favors long ack times, enforce this as high as possible, which is 600s currently.
 	// MaxExtension was copied from the current default (which seems to be the pubsub max limit ? Maybe ?).
 	// The other ones are the documented max values.
@@ -273,6 +272,9 @@ func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n
 		defer func() {
 			<-s.receive
 		}()
+		// The batch size on ReceiveN dictates the amount of outstanding messages.
+		// We do keep the max outstanding bytes to avoid unbounded memory usage (default is 1GB).
+		s.sub.ReceiveSettings.MaxOutstandingMessages = n
 		err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 			ctx, event, err := createEvent[T](ctx, s.eventName, msg.Data)
 			if err != nil {
