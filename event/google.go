@@ -274,6 +274,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n
 		}()
 		// The batch size on ReceiveN dictates the amount of outstanding messages.
 		// We do keep the max outstanding bytes to avoid unbounded memory usage (default is 1GB).
+		// MaxOutstandingMessages will not work 100% since we keep the messages outside of this callback, but we use it as a "hint".
+		// None of this is ideal, but if it works we're good for now.
 		s.sub.ReceiveSettings.MaxOutstandingMessages = n
 		err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 			ctx, event, err := createEvent[T](ctx, s.eventName, msg.Data)
