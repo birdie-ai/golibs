@@ -209,7 +209,11 @@ func NewGoogleBatchSub[T any](ctx context.Context, project, subName, eventName s
 	// We do keep the max outstanding bytes to avoid unbounded memory usage (default is 1GB).
 	sub.ReceiveSettings.MaxOutstandingMessages = -1
 	// Batch behavior favors long ack times, enforce this as high as possible, which is 600s currently.
+	// MaxExtension was copied from the current default (which seems to be the pubsub max limit ? Maybe ?).
+	// The other ones are the documented max values.
+	sub.ReceiveSettings.MaxExtension = 60 * time.Minute
 	sub.ReceiveSettings.MinExtensionPeriod = 10 * time.Minute
+	sub.ReceiveSettings.MaxExtensionPeriod = 10 * time.Minute
 	return &GoogleExperimentalBatchSubscription[T]{eventName: eventName, client: client, sub: sub, receive: make(chan struct{}, 1)}, nil
 }
 
@@ -233,7 +237,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n
 		panic(fmt.Errorf("n must be > 0"))
 	}
 
-	// each subscription can have only once receive call active. Let's  wait for the previous one to finish until the given context expires.
+	// Each subscription can have only one receive call active. Let's  wait for the previous one to finish until the given context expires.
 	select {
 	case <-ctx.Done():
 		return nil, errors.New("google batch subscription: waiting for previous receive call to finish (probably unacked/pending events from previous call or calling ReceiveN multiple times)")
