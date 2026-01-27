@@ -16,7 +16,11 @@ import (
 
 // parser errors.
 var (
-	ErrSyntax = errors.New("syntax error")
+	ErrSyntax           = errors.New("syntax error")
+	ErrTypeCheck        = errors.New("type error")
+	ErrClauseDuplicated = errors.New("duplicated field in clause")
+	ErrUnusedVariable   = errors.New("unused variable")
+	ErrUnknownVariable  = errors.New("unknown variable")
 )
 
 // Parse the textual input and return a list of statements.
@@ -344,7 +348,7 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 	if vark != "_" {
 		condk, ok := cond[vark]
 		if !ok {
-			return "", nil, nil, fmt.Errorf("%w: variable %q not found in DELETE condition", ErrSyntax, vark)
+			return "", nil, nil, fmt.Errorf("%w: %q not found in DELETE filter condition", ErrUnusedVariable, vark)
 		}
 		kf, err = kfilter(condk)
 		if err != nil {
@@ -353,7 +357,11 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 		delete(cond, vark)
 		if varv == "" || varv == "_" {
 			if len(cond) > 0 {
-				return "", nil, nil, fmt.Errorf("%w: more clauses than declared variables", ErrSyntax)
+				var errs []error
+				for _, name := range slices.Sorted(maps.Keys(cond)) {
+					errs = append(errs, fmt.Errorf("%w: %s", ErrUnknownVariable, name))
+				}
+				return "", nil, nil, errors.Join(errs...)
 			}
 			return dotident, kf, in, nil
 		}
@@ -371,7 +379,11 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 	}
 	delete(cond, varv)
 	if len(cond) > 0 {
-		return "", nil, nil, fmt.Errorf("%w: %d surplus conditions in DELETE filter: %v", ErrSyntax, len(cond), cond)
+		var errs []error
+		for _, name := range slices.Sorted(maps.Keys(cond)) {
+			errs = append(errs, fmt.Errorf("%w: %s", ErrUnknownVariable, name))
+		}
+		return "", nil, nil, errors.Join(errs...)
 	}
 	return dotident, kvf, in, nil
 }
@@ -380,8 +392,7 @@ func kfilter(val any) (KeyFilter, error) {
 	switch v := val.(type) {
 	default:
 		// the key condition must be a string or []string
-		// TODO(i4k): use proper error for type check errors.
-		return KeyFilter{}, fmt.Errorf("%w: the variable has string type but condition uses %T", ErrSyntax, val)
+		return KeyFilter{}, fmt.Errorf("%w: the variable has string type but condition uses %T", ErrTypeCheck, val)
 	case string:
 		return KeyFilter{Keys: []string{v}}, nil
 	case []any:
@@ -394,7 +405,7 @@ func kfilter(val any) (KeyFilter, error) {
 }
 
 func kvfilter(key string, val any) (any, error) {
-	// there's an invariance that `val` can *ONLY* be a list **iff* if syntax `<name> IN [...]`
+	// there's an invariance that `val` can *ONLY* be a list **iff* syntax `<name> IN [...]`
 	// or `{"<name>": [...]}` is used and both are ensured by `parseWhere()` to have len(val)>0.
 
 	switch vv := val.(type) {
@@ -403,19 +414,19 @@ func kvfilter(key string, val any) (any, error) {
 		case string:
 			vals, err := tarr[string](vv)
 			if err != nil {
-				return nil, fmt.Errorf("%w: list with mixed types: %v", ErrSyntax, err)
+				return nil, err
 			}
 			return KeyValueFilter[string]{Key: key, Values: vals}, nil
 		case float64:
 			vals, err := tarr[float64](vv)
 			if err != nil {
-				return nil, fmt.Errorf("%w: list with mixed types: %v", ErrSyntax, err)
+				return nil, err
 			}
 			return KeyValueFilter[float64]{Key: key, Values: vals}, nil
 		case bool:
 			vals, err := tarr[bool](vv)
 			if err != nil {
-				return nil, fmt.Errorf("%w: list with mixed types: %v", ErrSyntax, err)
+				return nil, err
 			}
 			return KeyValueFilter[bool]{Key: key, Values: vals}, nil
 		default:
@@ -423,6 +434,8 @@ func kvfilter(key string, val any) (any, error) {
 		}
 	case string:
 		return KeyValueFilter[string]{Key: key, Values: []string{vv}}, nil
+	case float64:
+		return KeyValueFilter[float64]{Key: key, Values: []float64{vv}}, nil
 	default:
 		return nil, fmt.Errorf("%w: filters need to operate on primitive types (string, float64, bool) or lists of them but type %T is used", ErrSyntax, vv)
 	}
@@ -433,7 +446,7 @@ func tarr[T any](arr []any) ([]T, error) {
 	for _, v := range arr {
 		s, ok := v.(T)
 		if !ok {
-			return nil, fmt.Errorf("unexpected value %[1]v with type %[1]T in list items", v)
+			return nil, fmt.Errorf("%w: unexpected value %[2]v with type %[2]T in %T list", ErrTypeCheck, v, ret)
 		}
 		ret = append(ret, s)
 	}
@@ -505,11 +518,9 @@ func parseWhere(in []byte) (Where, []byte, error) {
 			if err != nil {
 				return Where{}, nil, err
 			}
-			for k, v := range next {
-				if _, ok := where[k]; ok {
-					return Where{}, nil, fmt.Errorf("%w: invalid WHERE: duplicate AND field %q", ErrSyntax, k)
-				}
-				where[k] = v
+			err = mergeclauses(where, next)
+			if err != nil {
+				return Where{}, nil, fmt.Errorf("%w: invalid WHERE expression", err)
 			}
 		}
 		return where, in, nil
@@ -538,12 +549,31 @@ func parseWhere(in []byte) (Where, []byte, error) {
 		return nil, nil, errUnexpectedEOF()
 	}
 	if isin && in[0] != '[' {
+		// NOTE(i4k): The `IN` keyword requires a subsequent `[...]` (syntactically). Why?
+		// Well, alternatively we could just parse a value and keep it as is in the AST and
+		// type-check it in runtime, but we want to catch most mistakes at the parsing/codegen
+		// phase. At the moment, we ingest dml statements in big batches that are transactional,
+		// so, they all suceed or all fail, and then having an `any` value in a data structure
+		// that only allows for `[]Primtipe` leave too much failing cases to be caught in the
+		// server side. Additionally, if the grammar asks for at least 1 entry in the array.
+		// Another reason to check for that is imagine generating code like:
+		// 		echo "... IN $(jsonencode $values)"
+		// then if somehow $values is not a []Primtype this would be syntactically correct and
+		// errors would only be detected later in the engine that executes the statements.
+		// This implementation makes it a syntactic errors to not encode a []Primtype in the `IN`
+		// clause.
+		// Additionally, down below we also check if the list contain items, otherwise it's just
+		// nonsense.
 		return nil, nil, fmt.Errorf("%w: IN requires a JSON list argument but got %q", ErrSyntax, in)
 	}
 	var val any
 	in, err = parseJSON(in, &val)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: parsing value as JSON: %v", ErrSyntax, err)
+	}
+	if arr, ok := val.([]any); ok && len(arr) == 0 {
+		// NOTE(i4k): This prevents the nonsense: ... WHERE id IN [];
+		return nil, nil, fmt.Errorf("%w: a clause expression of type list must be non-empty", ErrSyntax)
 	}
 	where := Where{
 		ident: val,
@@ -556,11 +586,9 @@ func parseWhere(in []byte) (Where, []byte, error) {
 		if err != nil {
 			return Where{}, nil, err
 		}
-		for k, v := range next {
-			if _, ok := where[k]; ok {
-				return Where{}, nil, fmt.Errorf("%w: invalid WHERE: duplicate AND field %q", ErrSyntax, k)
-			}
-			where[k] = v
+		err = mergeclauses(where, next)
+		if err != nil {
+			return Where{}, nil, fmt.Errorf("%w: invalid WHERE expression", err)
 		}
 	}
 	return where, in, nil
@@ -584,6 +612,16 @@ func parseWhereObject(in []byte) (Where, []byte, error) {
 		}
 	}
 	return where, in, nil
+}
+
+func mergeclauses(dst, src Where) error {
+	for k, v := range src {
+		if _, ok := dst[k]; ok {
+			return fmt.Errorf("%w: duplicate AND field %q", ErrClauseDuplicated, k)
+		}
+		dst[k] = v
+	}
+	return nil
 }
 
 func parseJSON[T any](in []byte, val *T) ([]byte, error) {

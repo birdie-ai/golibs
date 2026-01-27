@@ -582,6 +582,63 @@ func TestParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			text: `DELETE feedbacks a[b] : b IN {} WHERE id="abc";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			// IN requires a list
+			text: `DELETE feedbacks a[b] : b IN "10" WHERE id="abc";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			// IN requires a []string
+			text: `DELETE feedbacks a[b] : b IN ["test", 10] WHERE id="abc";`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			// IN requires a []string
+			text: `DELETE feedbacks a[b] : b IN ["test", false] WHERE id="abc";`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			// IN requires a []string
+			text: `DELETE feedbacks a[b] : b IN ["test", []] WHERE id="abc";`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			// value requires: IN ["str", ...]
+			text: `DELETE feedbacks a[b]=>c : b="test" and c IN ["test", "a", 10] WHERE id="abc";`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			text: `DELETE a . WHERE b=1 and b=2'`,
+			err:  dml.ErrClauseDuplicated,
+		},
+		{
+			text: `DELETE a b[k] : a=1 and a=2 WHERE id=1;`,
+			err:  dml.ErrClauseDuplicated,
+		},
+		{
+			text: `DELETE a b[k] : k={} WHERE id=1;`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			text: `DELETE feedbacks . WHERE id IN [];`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `DELETE feedbacks . WHERE id IN [];`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `DELETE feedbacks custom_fields[k]=>v : v=1 WHERE id="abc";`,
+			err:  dml.ErrUnusedVariable,
+		},
+		{
+			text: `DELETE feedbacks custom_fields[k]=>v : k="test" and v=1 and c=2 WHERE id="abc";`,
+			err:  dml.ErrUnknownVariable,
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {
