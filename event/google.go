@@ -199,8 +199,8 @@ func (s *OrderedGoogleSub[T]) Shutdown(context.Context) error {
 	return s.client.Close()
 }
 
-// NewGoogleBatchSub creates a new google batch subscriber that can read N events at once (building a batch).
-func NewGoogleBatchSub[T any](ctx context.Context, project, subName, eventName string) (*GoogleExperimentalBatchSubscription[T], error) {
+// NewExperimentalBatchSubscription creates a new google batch subscriber that can read N events at once (building a batch).
+func NewExperimentalBatchSubscription[T any](ctx context.Context, project, subName, eventName string) (*GoogleExperimentalBatchSubscription[T], error) {
 	client, err := pubsub.NewClient(ctx, project)
 	if err != nil {
 		return nil, fmt.Errorf("creating client: %w", err)
@@ -296,6 +296,11 @@ func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n
 
 	<-ctx.Done()
 	return events, nil
+}
+
+// Shutdown will send all pending publish messages and stop all goroutines.
+func (s *GoogleExperimentalBatchSubscription[T]) Shutdown(context.Context) error {
+	return s.client.Close()
 }
 
 // Ack the event.
