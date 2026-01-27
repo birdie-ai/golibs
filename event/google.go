@@ -194,8 +194,8 @@ func (s *OrderedGoogleSub[T]) Shutdown(context.Context) error {
 	return s.client.Close()
 }
 
-// NewExperimentalBatchSubscription creates a new google batch subscriber that can read N events at once (building a batch).
-func NewExperimentalBatchSubscription[T any](ctx context.Context, project, subName, eventName string) (*GoogleExperimentalBatchSubscription[T], error) {
+// NewGoogleExperimentalBatchSubscription creates a new google batch subscriber that can read N events at once (building a batch).
+func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project, subName, eventName string) (*GoogleExperimentalBatchSubscription[T], error) {
 	client, err := pubsub.NewClient(ctx, project)
 	if err != nil {
 		return nil, fmt.Errorf("creating client: %w", err)
