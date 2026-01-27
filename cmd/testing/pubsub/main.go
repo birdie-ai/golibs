@@ -106,7 +106,7 @@ func createSubscription(ctx context.Context, projectID, name string) {
 }
 
 func subscriberBatch(ctx context.Context, projectID, topicName string) {
-	sub, err := event.NewGoogleBatchSub[Event](ctx, projectID, topicName, topicName)
+	sub, err := event.NewExperimentalBatchSubscription[Event](ctx, projectID, topicName, topicName)
 	panicerr(err)
 
 	const (
