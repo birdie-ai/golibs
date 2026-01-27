@@ -24,12 +24,18 @@ type (
 		topic *pubsub.Topic
 	}
 
+	// AckerNacker supports ack/nack.
+	AckerNacker interface {
+		Ack()
+		Nack()
+	}
+
 	// Event represents the structure of all data that wraps all events, like the [Envelope], but
 	// but with Ack/Nack. After the [Event] is handled [Event.Ack] or [Event.Nack] must be called.
 	// This type is used when receiving individual events with [Subscription.Receive].
 	Event[T any] struct {
 		Envelope[T]
-		msg *message
+		msg AckerNacker
 	}
 
 	// Envelope represents the structure of all data that wraps all events.
