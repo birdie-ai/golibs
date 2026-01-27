@@ -12,6 +12,12 @@ linters:
       - third_party$
       - builtin$
       - examples$
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - '-SA1019' # Disabled since we know we have deprecated things that we can't update because of protobuf limitations
+
 formatters:
   enable:
     - gofmt
