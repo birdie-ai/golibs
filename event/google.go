@@ -41,11 +41,6 @@ type (
 		sub       *pubsub.Subscription
 		receive   chan struct{}
 	}
-	// GoogleEvent is an event used by [GoogleExperimentalBatchSubscription].
-	GoogleEvent[T any] struct {
-		Envelope[T]
-		msg *pubsub.Message
-	}
 )
 
 // NewOrderedGooglePublisher creates a new ordered Google Cloud event publisher for the given project/topic/event name.
@@ -232,7 +227,7 @@ func NewExperimentalBatchSubscription[T any](ctx context.Context, project, subNa
 // not a proper leak, but it might use increasing amounts of memory depending on how poorly the API is used
 // and the frequency. You have been warned.
 // This method should NOT be called concurrently, we can make only a single receive call per subscription.
-func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n int) ([]*GoogleEvent[T], error) {
+func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n int) ([]*Event[T], error) {
 	if n <= 0 {
 		panic(fmt.Errorf("n must be > 0"))
 	}
@@ -245,9 +240,9 @@ func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	events := []*GoogleEvent[T]{}
+	events := []*Event[T]{}
 	l := &sync.Mutex{}
-	addEvent := func(e *GoogleEvent[T]) bool {
+	addEvent := func(e *Event[T]) bool {
 		l.Lock()
 		defer l.Unlock()
 
@@ -284,7 +279,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n
 				msg.Nack()
 				return
 			}
-			if !addEvent(&GoogleEvent[T]{Envelope: event, msg: msg}) {
+			if !addEvent(&Event[T]{Envelope: event, msg: msg}) {
 				msg.Nack()
 				return
 			}
@@ -301,14 +296,4 @@ func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n
 // Shutdown will send all pending publish messages and stop all goroutines.
 func (s *GoogleExperimentalBatchSubscription[T]) Shutdown(context.Context) error {
 	return s.client.Close()
-}
-
-// Ack the event.
-func (g GoogleEvent[T]) Ack() {
-	g.msg.Ack()
-}
-
-// Nack the event.
-func (g GoogleEvent[T]) Nack() {
-	g.msg.Nack()
 }
