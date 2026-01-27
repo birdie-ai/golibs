@@ -340,41 +340,104 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 	if err != nil {
 		return "", nil, nil, err
 	}
-	var keyfilter string
+	var kf KeyFilter
 	if vark != "_" {
 		condk, ok := cond[vark]
 		if !ok {
 			return "", nil, nil, fmt.Errorf("%w: variable %q not found in DELETE condition", ErrSyntax, vark)
 		}
-		keyfilter, ok = condk.(string)
-		if !ok {
-			// the key condition must be a string.
-			// TODO(i4k): use proper error for type check errors.
-			return "", nil, nil, fmt.Errorf("%w: the variable %s has string type but condition uses %T", ErrSyntax, vark, condk)
+		kf, err = kfilter(condk)
+		if err != nil {
+			return "", nil, nil, err
 		}
 		delete(cond, vark)
 		if varv == "" || varv == "_" {
 			if len(cond) > 0 {
 				return "", nil, nil, fmt.Errorf("%w: more clauses than declared variables", ErrSyntax)
 			}
-			return dotident, KeyFilter{Keys: []string{keyfilter}}, in, nil
+			return dotident, kf, in, nil
 		}
+	}
+	if len(kf.Keys) > 1 {
+		return "", nil, nil, fmt.Errorf("%w: key-value filter requires filtering by single keys but %d key clauses given: %v", ErrSyntax, len(kf.Keys), kf.Keys)
 	}
 	condv, ok := cond[varv]
 	if !ok {
 		return "", nil, nil, fmt.Errorf("%w: variable %s not found in DELETE condition", ErrSyntax, varv)
 	}
+	kvf, err := kvfilter(kf.Keys[0], condv)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%w: handling condition variable %s", err, varv)
+	}
 	delete(cond, varv)
 	if len(cond) > 0 {
 		return "", nil, nil, fmt.Errorf("%w: %d surplus conditions in DELETE filter: %v", ErrSyntax, len(cond), cond)
 	}
-	switch vv := condv.(type) {
-	case []string:
-		return dotident, KeyValueFilter[string]{Key: keyfilter, Values: vv}, in, nil
+	return dotident, kvf, in, nil
+}
+
+func kfilter(val any) (KeyFilter, error) {
+	switch v := val.(type) {
+	default:
+		// the key condition must be a string or []string
+		// TODO(i4k): use proper error for type check errors.
+		return KeyFilter{}, fmt.Errorf("%w: the variable has string type but condition uses %T", ErrSyntax, val)
 	case string:
-		return dotident, KeyValueFilter[string]{Key: keyfilter, Values: []string{vv}}, in, nil
+		return KeyFilter{Keys: []string{v}}, nil
+	case []any:
+		strs, err := tarr[string](v)
+		if err != nil {
+			return KeyFilter{}, err
+		}
+		return KeyFilter{Keys: strs}, nil
 	}
-	panic("unreachable")
+}
+
+func kvfilter(key string, val any) (any, error) {
+	// there's an invariance that `val` can *ONLY* be a list **iff* if syntax `<name> IN [...]`
+	// or `{"<name>": [...]}` is used and both are ensured by `parseWhere()` to have len(val)>0.
+
+	switch vv := val.(type) {
+	case []any:
+		switch vv[0].(type) {
+		case string:
+			vals, err := tarr[string](vv)
+			if err != nil {
+				return nil, fmt.Errorf("%w: list with mixed types: %v", ErrSyntax, err)
+			}
+			return KeyValueFilter[string]{Key: key, Values: vals}, nil
+		case float64:
+			vals, err := tarr[float64](vv)
+			if err != nil {
+				return nil, fmt.Errorf("%w: list with mixed types: %v", ErrSyntax, err)
+			}
+			return KeyValueFilter[float64]{Key: key, Values: vals}, nil
+		case bool:
+			vals, err := tarr[bool](vv)
+			if err != nil {
+				return nil, fmt.Errorf("%w: list with mixed types: %v", ErrSyntax, err)
+			}
+			return KeyValueFilter[bool]{Key: key, Values: vals}, nil
+		default:
+			return nil, fmt.Errorf("%w: unexpected list with type %T", ErrSyntax, vv)
+		}
+	case string:
+		return KeyValueFilter[string]{Key: key, Values: []string{vv}}, nil
+	default:
+		return nil, fmt.Errorf("%w: filters need to operate on primitive types (string, float64, bool) or lists of them but type %T is used", ErrSyntax, vv)
+	}
+}
+
+func tarr[T any](arr []any) ([]T, error) {
+	ret := make([]T, 0, len(arr))
+	for _, v := range arr {
+		s, ok := v.(T)
+		if !ok {
+			return nil, fmt.Errorf("unexpected value %[1]v with type %[1]T in list items", v)
+		}
+		ret = append(ret, s)
+	}
+	return ret, nil
 }
 
 func parsePathTraversal(in []byte) (string, []byte, error) {
@@ -461,10 +524,22 @@ func parseWhere(in []byte) (Where, []byte, error) {
 	if len(in) == 0 {
 		return nil, nil, errUnexpectedEOF()
 	}
-	if in[0] != '=' {
+	isin := len(in) >= 2 && bytes.EqualFold(in[:2], []byte{'I', 'N'})
+	if in[0] != '=' && !isin {
 		return nil, nil, fmt.Errorf("%w: invalid where: unexpected char %c", ErrSyntax, in[0])
 	}
-	in = in[1:]
+	if isin {
+		in = in[2:]
+	} else {
+		in = in[1:]
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return nil, nil, errUnexpectedEOF()
+	}
+	if isin && in[0] != '[' {
+		return nil, nil, fmt.Errorf("%w: IN requires a JSON list argument but got %q", ErrSyntax, in)
+	}
 	var val any
 	in, err = parseJSON(in, &val)
 	if err != nil {

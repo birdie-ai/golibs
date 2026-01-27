@@ -551,6 +551,37 @@ func TestParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			text: `DELETE feedbacks a[b] : b IN ["a","b"] WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a": dml.KeyFilter{
+							Keys: []string{"a", "b"},
+						},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			text: `DELETE feedbacks a[b] => c : b="a" and c IN ["a", "b"] WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a": dml.KeyValueFilter[string]{
+							Key:    "a",
+							Values: []string{"a", "b"},
+						},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {
