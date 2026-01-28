@@ -59,8 +59,10 @@ func main() {
 }
 
 const (
-	totalPartitions    = 10000
-	eventsPerPartition = 100
+	totalPartitions    = 1000
+	eventsPerPartition = 200
+	batchSize          = 1000
+	batchTimeWindow    = 30 * time.Second
 )
 
 func subscriber(ctx context.Context, args []string, projectID, topicName string) {
@@ -106,13 +108,8 @@ func createSubscription(ctx context.Context, projectID, name string) {
 }
 
 func subscriberBatch(ctx context.Context, projectID, topicName string) {
-	sub, err := event.NewGoogleExperimentalBatchSubscription[Event](ctx, projectID, topicName, topicName)
+	sub, err := event.NewGoogleExperimentalBatchSubscription[Event](ctx, projectID, topicName, topicName, batchSize)
 	panicerr(err)
-
-	const (
-		batchSize       = 1000
-		batchTimeWindow = 5 * time.Minute
-	)
 
 	log.Println("starting batch handler")
 	batches := map[string][]int{}
@@ -120,7 +117,7 @@ func subscriberBatch(ctx context.Context, projectID, topicName string) {
 	for ctx.Err() == nil {
 		ctx, cancel := context.WithTimeout(ctx, batchTimeWindow)
 		rcvStart := time.Now()
-		events, err := sub.ReceiveN(ctx, batchSize)
+		events, err := sub.ReceiveN(ctx)
 		rcvElapsed := time.Since(rcvStart)
 		cancel()
 		panicerr(err)
