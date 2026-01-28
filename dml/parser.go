@@ -553,7 +553,7 @@ func parseWhere(in []byte) (Where, []byte, error) {
 		// Well, alternatively we could just parse a value and keep it as is in the AST and
 		// type-check it in runtime, but we want to catch most mistakes at the parsing/codegen
 		// phase. At the moment, we ingest dml statements in big batches that are transactional,
-		// so, they all suceed or all fail, and then having an `any` value in a data structure
+		// so, they all succeed or all fail, and then having an `any` value in a data structure
 		// that only allows for `[]Primtipe` leave too much failing cases to be caught in the
 		// server side. Additionally, if the grammar asks for at least 1 entry in the array.
 		// Another reason to check for that is imagine generating code like:
