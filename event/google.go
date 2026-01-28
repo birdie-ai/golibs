@@ -2,8 +2,10 @@ package event
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/pubsub"
@@ -24,6 +26,20 @@ type (
 		eventName string
 		client    *pubsub.Client
 		sub       *pubsub.Subscription
+	}
+	// GoogleExperimentalBatchSubscription helps build batches of N events even for ordered subscriptions.
+	// N events will be received for the same ordering key, but in order.
+	// In order to do this we need to do unconventional stuff since the conventional docs just don't allow this at all:
+	//
+	//	- https://pkg.go.dev/cloud.google.com/go/pubsub#hdr-Receiving
+	//
+	// The side effects/possible issues are something we are willing to live with when using this.
+	// If in doubt, don't use this, it is somewhat experimental (even though we really need this to work well in production).
+	GoogleExperimentalBatchSubscription[T any] struct {
+		eventName string
+		client    *pubsub.Client
+		sub       *pubsub.Subscription
+		receive   chan struct{}
 	}
 )
 
@@ -88,9 +104,7 @@ func (p *OrderedGooglePublisher[T]) Shutdown(context.Context) error {
 
 // NewOrderedGoogleSub creates an ordered subscription on Google Cloud Pubsub that will accept on events of the given type and name,
 // similar to [NewSubscription]. Ordering affects how concurrency is handled. Concurrency is done by handling
-// different ordering keys/partitions, every ordered key will be handled sequentially only different ordering keys will be
-// handled concurrently. This requires a client to be created per go routine, so beware of setting concurrency to a high value (every go routine
-// will create a different client/connection to pubsub).
+// different ordering keys/partitions, every ordered key will be handled sequentially only different ordering keys will be handled concurrently.
 // Call [OrderedGoogleSub.Shutdown] to stop all goroutines/clean up all resources.
 func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName string, maxConcurrentEvents int) (*OrderedGoogleSub[T], error) {
 	if maxConcurrentEvents <= 0 {
@@ -177,5 +191,109 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 
 // Shutdown will send all pending publish messages and stop all goroutines.
 func (s *OrderedGoogleSub[T]) Shutdown(context.Context) error {
+	return s.client.Close()
+}
+
+// NewGoogleExperimentalBatchSubscription creates a new google batch subscriber that can read N events at once (building a batch).
+func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project, subName, eventName string) (*GoogleExperimentalBatchSubscription[T], error) {
+	client, err := pubsub.NewClient(ctx, project)
+	if err != nil {
+		return nil, fmt.Errorf("creating client: %w", err)
+	}
+	sub := client.Subscription(subName)
+	// For this use case having more go routines causes more events to be pre-fetched/higher ack expiration and flow control throttles us.
+	sub.ReceiveSettings.NumGoroutines = 1
+	// Batch behavior favors long ack times, enforce this as high as possible, which is 600s currently.
+	// MaxExtension was copied from the current default (which seems to be the pubsub max limit ? Maybe ?).
+	// The other ones are the documented max values.
+	sub.ReceiveSettings.MaxExtension = 60 * time.Minute
+	sub.ReceiveSettings.MinExtensionPeriod = 10 * time.Minute
+	sub.ReceiveSettings.MaxExtensionPeriod = 10 * time.Minute
+	return &GoogleExperimentalBatchSubscription[T]{eventName: eventName, client: client, sub: sub, receive: make(chan struct{}, 1)}, nil
+}
+
+// ReceiveN will receive at most N events.
+// It may return less events if the provided context is canceled/deadline exceeded.
+// If a batch size can never be reached and the given context has no deadline this method will wait forever.
+// Always pass a context.Context with a max period you are willing to wait for a batch to be built.
+// Events returned here must be Ack-ed after the caller is done with them.
+// Some events may have been sitting idle for quite some time, since this waits
+// for the context to expire or for the batch to be built.
+// So if a deadline is too long (the context.Context) all events may already been redelivered.
+// This is a fairly advanced/risky API and shouldn't be used lightly (or maybe not used at all ?).
+// Each call to this method creates a new receiver go-routine that finishes only
+// when all received events are acked/nacked/expired. So callers should always ack/nack events
+// as fast as possible or else resources will start to pile up. Since events always expire, it is
+// not a proper leak, but it might use increasing amounts of memory depending on how poorly the API is used
+// and the frequency. You have been warned.
+// This method should NOT be called concurrently, we can make only a single receive call per subscription.
+func (s *GoogleExperimentalBatchSubscription[T]) ReceiveN(ctx context.Context, n int) ([]*Event[T], error) {
+	if n <= 0 {
+		panic(fmt.Errorf("n must be > 0"))
+	}
+
+	// Each subscription can have only one receive call active. Let's  wait for the previous one to finish until the given context expires.
+	select {
+	case <-ctx.Done():
+		return nil, errors.New("google batch subscription: waiting for previous receive call to finish (probably unacked/pending events from previous call or calling ReceiveN multiple times)")
+	case s.receive <- struct{}{}:
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	events := []*Event[T]{}
+	l := &sync.Mutex{}
+	addEvent := func(e *Event[T]) bool {
+		l.Lock()
+		defer l.Unlock()
+
+		if len(events) == n {
+			return false
+		}
+		events = append(events, e)
+		if len(events) == n {
+			// Stop processing/collecting events from Receive
+			cancel()
+		}
+		return true
+	}
+
+	// Yeah this is not a great idea according to the docs:
+	//  - https://pkg.go.dev/cloud.google.com/go/pubsub#hdr-Receiving
+	// But seems to still be doable and we really want to collect N pending events, in order, but all in memory at once.
+	// Maybe this is something that shouldn't be done in pubsub, lets find out !!!
+	// Why create a new goroutine ? The Receive call waits for all messages to be ack'ed or expired, but we want to
+	// return the batched events so the caller can ack or nack them later.
+	go func() {
+		defer func() {
+			<-s.receive
+		}()
+		// The batch size on ReceiveN dictates the amount of outstanding messages.
+		// We do keep the max outstanding bytes to avoid unbounded memory usage (default is 1GB).
+		// MaxOutstandingMessages will not work 100% since we keep the messages outside of this callback, but we use it as a "hint".
+		// None of this is ideal, but if it works we're good for now.
+		s.sub.ReceiveSettings.MaxOutstandingMessages = n
+		err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+			ctx, event, err := createEvent[T](ctx, s.eventName, msg.Data)
+			if err != nil {
+				slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
+				msg.Nack()
+				return
+			}
+			if !addEvent(&Event[T]{Envelope: event, msg: msg}) {
+				msg.Nack()
+				return
+			}
+		})
+		if err != nil {
+			slog.FromCtx(ctx).Error("google batch subscription receive", "error", err)
+		}
+	}()
+
+	<-ctx.Done()
+	return events, nil
+}
+
+// Shutdown will send all pending publish messages and stop all goroutines.
+func (s *GoogleExperimentalBatchSubscription[T]) Shutdown(context.Context) error {
 	return s.client.Close()
 }
