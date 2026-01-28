@@ -163,6 +163,10 @@ func (a KeyValueFilter[T]) validate() error {
 	return nil
 }
 
+func (a DeleteKey) validate() error {
+	return nil
+}
+
 // ensure AST nodes implements core interfaces.
 var (
 	_ array = Append[float64]{}

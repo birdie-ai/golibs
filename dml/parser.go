@@ -299,6 +299,7 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 	)
 	if len(in) > 0 && in[0] == '_' {
 		vark = "_"
+		in = in[1:]
 	} else {
 		vark, in, err = lexIdent(in)
 		if err != nil {
@@ -373,7 +374,12 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 	if !ok {
 		return "", nil, nil, fmt.Errorf("%w: variable %s not found in DELETE condition", ErrSyntax, varv)
 	}
-	kvf, err := kvfilter(kf.Keys[0], condv)
+	var filter any
+	if vark == "_" {
+		filter, err = vfilter(condv)
+	} else {
+		filter, err = kvfilter(kf.Keys[0], condv)
+	}
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("%w: handling condition variable %s", err, varv)
 	}
@@ -385,7 +391,7 @@ func parseDelFilters(in []byte) (string, any, []byte, error) {
 		}
 		return "", nil, nil, errors.Join(errs...)
 	}
-	return dotident, kvf, in, nil
+	return dotident, filter, in, nil
 }
 
 func kfilter(val any) (KeyFilter, error) {
@@ -401,6 +407,45 @@ func kfilter(val any) (KeyFilter, error) {
 			return KeyFilter{}, err
 		}
 		return KeyFilter{Keys: strs}, nil
+	}
+}
+
+func vfilter(val any) (any, error) {
+	// there's an invariance that `val` can *ONLY* be a list **iff* syntax `<name> IN [...]`
+	// or `{"<name>": [...]}` is used and both are ensured by `parseWhere()` to have len(val)>0.
+
+	switch vv := val.(type) {
+	case []any:
+		switch vv[0].(type) {
+		case string:
+			vals, err := tarr[string](vv)
+			if err != nil {
+				return nil, err
+			}
+			return ValueFilter[string]{Values: vals}, nil
+		case float64:
+			vals, err := tarr[float64](vv)
+			if err != nil {
+				return nil, err
+			}
+			return ValueFilter[float64]{Values: vals}, nil
+		case bool:
+			vals, err := tarr[bool](vv)
+			if err != nil {
+				return nil, err
+			}
+			return ValueFilter[bool]{Values: vals}, nil
+		default:
+			return nil, fmt.Errorf("%w: unexpected list with type %T", ErrSyntax, vv)
+		}
+	case string:
+		return ValueFilter[string]{Values: []string{vv}}, nil
+	case float64:
+		return ValueFilter[float64]{Values: []float64{vv}}, nil
+	case bool:
+		return ValueFilter[bool]{Values: []bool{vv}}, nil
+	default:
+		return nil, fmt.Errorf("%w: filters need to operate on primitive types (string, float64, bool) or lists of them but type %T is used", ErrSyntax, vv)
 	}
 }
 

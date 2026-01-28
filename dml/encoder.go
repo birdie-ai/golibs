@@ -230,7 +230,7 @@ type assignEncoder interface {
 
 func (a KeyFilter) encode(w io.Writer, target string) error {
 	if len(a.Keys) == 1 {
-		return write(w, target+"."+a.Keys[0])
+		return write(w, target+"[k] : k="+strconv.Quote(a.Keys[0]))
 	}
 	d, err := json.Marshal(a.Keys)
 	if err != nil {
@@ -271,6 +271,10 @@ func (a KeyValueFilter[T]) encode(w io.Writer, target string) error {
 		return err
 	}
 	return write(w, " IN "+string(d))
+}
+
+func (a DeleteKey) encode(w io.Writer, target string) error {
+	return write(w, target)
 }
 
 func write(w io.Writer, s string) error {

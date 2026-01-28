@@ -1,6 +1,7 @@
 package dml_test
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"unique"
@@ -14,9 +15,10 @@ func TestParser(t *testing.T) {
 	t.Parallel()
 
 	type testcase struct {
-		text string
-		want dml.Stmts
-		err  error
+		text          string
+		noEncoderTest bool
+		want          dml.Stmts
+		err           error
 	}
 
 	for _, tc := range []testcase{
@@ -113,7 +115,7 @@ func TestParser(t *testing.T) {
 			err:  dml.ErrSyntax,
 		},
 		{
-			text: `SET feedbacks .={} WHERE {"id": 1};`,
+			text: `SET feedbacks .={} WHERE id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -139,7 +141,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks .={} WHERE id    =   1;`,
+			text:          `SET feedbacks .={} WHERE id   =   1;`,
+			noEncoderTest: true,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -152,6 +155,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			noEncoderTest: true,
 			text: `
 			SET
 			feedbacks
@@ -173,7 +177,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks some-field=1 WHERE id = 1;`,
+			noEncoderTest: true,
+			text:          `SET feedbacks some-field=1 WHERE id = 1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -188,7 +193,22 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks-2025-01-01 my-field=1 WHERE my-id = 1;`,
+			text: `SET feedbacks some-field=1 WHERE id=1;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"some-field": 1.0,
+					},
+					Where: dml.Where{
+						"id": 1.0,
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks-2025-01-01 my-field=1 WHERE my-id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -203,7 +223,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks custom_fields={} WHERE id    =   1;`,
+			text: `SET feedbacks custom_fields={} WHERE id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -216,7 +236,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks custom-fields={} WHERE id = 1;`,
+			text: `SET feedbacks custom-fields={} WHERE id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -229,7 +249,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a=1 WHERE id=1 and test=2;`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE id=1 and test=2;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -243,7 +264,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a=1 WHERE a=1 and b=2 and c=3;`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE a=1 and b=2 and c=3;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -258,7 +280,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a=1 WHERE {"a": 1} and {"b": 2};`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE {"a": 1} and {"b": 2};`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -272,7 +295,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks custom_fields={"a": 1, "b":"abc"} WHERE id    =   1;`,
+			text: `SET feedbacks custom_fields={"a":1,"b":"abc"} WHERE id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -290,7 +313,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a=1,b="b",c={},d=["a","b"],e=false WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1,b="b",c={},d=["a","b"],e=false WHERE id="test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -309,7 +333,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a."  "=1, a.b."c"=1,a."this is a test"=1,a."╚(•⌂•)╝".shout=1,a."b".ident."c"."d".test=1 WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a."  "=1,a.b."c"=1,a."this is a test"=1,a."╚(•⌂•)╝".shout=1,a."b".ident."c"."d".test=1 WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -328,7 +353,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b=1,b.test_test.c.d="b",c.d.eee.e={},x."something"="test",d.e.f.ggg.h=["a","b"],e.f.g.h.i.j.k=false WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b=1,b.test_test.c.d="b",c.d.eee.e={},x."something"="test",d.e.f.ggg.h=["a","b"],e.f.g.h.i.j.k=false WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -348,7 +374,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = ... ["some", "thing"] WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b = ... ["some", "thing"] WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -365,7 +392,25 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = ... [1, 2, 3] WHERE id = "test";`,
+			text: `SET feedbacks a.b=...["some","thing"] WHERE id="test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Append[string]{
+							Values: []string{"some", "thing"},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b = ... [1, 2, 3] WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -390,7 +435,8 @@ func TestParser(t *testing.T) {
 			err:  dml.ErrMissingArrayValues,
 		},
 		{
-			text: `SET feedbacks a.b = ["some", "thing"] ... WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b = ["some", "thing"] ... WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -407,7 +453,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = [1, 2] ... WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b = [1, 2] ... WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -428,6 +475,7 @@ func TestParser(t *testing.T) {
 			err:  dml.ErrArrayWithMixedTypes,
 		},
 		{
+			noEncoderTest: true,
 			text: `
 			SET feedbacks
 				a = ["a"] ...,
@@ -463,7 +511,7 @@ func TestParser(t *testing.T) {
 			err:  dml.ErrUnsupportedArrayValue,
 		},
 		{
-			text: `SET feedbacks a.b = ["test", "string"] ... WHERE id = "test";`,
+			text: `SET feedbacks a.b=["test","string"]... WHERE id="test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -480,7 +528,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = ... ["test", "string"] WHERE id = "test";`,
+			text: `SET feedbacks a.b=...["test","string"] WHERE id="test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -536,7 +584,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `DELETE feedbacks custom_fields[k]=>v : {"k":"test","v":"test"} WHERE id="abc";`,
+			noEncoderTest: true,
+			text:          `DELETE feedbacks custom_fields[k] => v : {"k":"test","v":"test"} WHERE id="abc";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.DELETE,
@@ -552,7 +601,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `DELETE feedbacks a[b] : b IN ["a","b"] WHERE id="abc";`,
+			noEncoderTest: true,
+			text:          `DELETE feedbacks a[b] : b IN ["a","b"] WHERE id="abc";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.DELETE,
@@ -567,7 +617,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `DELETE feedbacks a[b] => c : b="a" and c IN ["a", "b"] WHERE id="abc";`,
+			noEncoderTest: true,
+			text:          `DELETE feedbacks a[b] => c : b="a" and c IN ["a", "b"] WHERE id="abc";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.DELETE,
@@ -656,6 +707,19 @@ func TestParser(t *testing.T) {
 			text: `DELETE feedbacks .,custom_fields.test WHERE id="abc";`,
 			err:  dml.ErrSyntax,
 		},
+		{
+			text: `DELETE feedbacks labels[_] => v : v="test" WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"labels": dml.ValueFilter[string]{Values: []string{"test"}},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {
@@ -666,6 +730,17 @@ func TestParser(t *testing.T) {
 		}
 		if diff := cmp.Diff(tc.want, got, cmpopts.EquateComparable(unique.Handle[string]{})); diff != "" {
 			t.Fatalf("got [+], want [-]: %s", diff)
+		}
+		if tc.noEncoderTest {
+			continue
+		}
+		var encoded bytes.Buffer
+		err = dml.Encode(&encoded, got)
+		if err != nil {
+			t.Fatalf("failed to encode the decoded ast [%s]: %v", tc.text, err)
+		}
+		if diff := cmp.Diff(encoded.String(), tc.text); diff != "" {
+			t.Fatal(diff)
 		}
 	}
 }
