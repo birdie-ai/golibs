@@ -81,7 +81,7 @@ WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
 Delete an entity record:
 
 ```
-DELETE conversations WHERE id="abc";
+DELETE conversations . WHERE id="abc";
 ```
 
 Assuming `custom_fields` is an object, then stmt below delete a dynamic field from an

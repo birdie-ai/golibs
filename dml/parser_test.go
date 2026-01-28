@@ -583,6 +583,19 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			text: `DELETE feedbacks . WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						".": dml.DeleteKey{},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
 			text: `DELETE feedbacks a[b] : b IN {} WHERE id="abc";`,
 			err:  dml.ErrSyntax,
 		},
