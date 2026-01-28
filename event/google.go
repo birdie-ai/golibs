@@ -255,7 +255,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 		// Batch behavior favors long ack times, enforce this as high as possible, which is 600s currently.
 		// MaxExtension was copied from the current default (which seems to be the pubsub max limit ? Maybe ?).
 		// The other ones are the documented max values.
-		s.sub.ReceiveSettings.MaxExtension = 60 * time.Minute
+		const maxExtension = 60 * time.Minute
+		s.sub.ReceiveSettings.MaxExtension = maxExtension
 		s.sub.ReceiveSettings.MinExtensionPeriod = 10 * time.Minute
 		s.sub.ReceiveSettings.MaxExtensionPeriod = 10 * time.Minute
 		s.sub.ReceiveSettings.MaxOutstandingMessages = s.batchSize
@@ -268,7 +269,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 				return
 			}
 			// Avoid stale events being sent if caller took too long to call ReceiveN
-			ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+			// Relying on receive deadline extension to keep the message valid as much as possible.
+			ctx, cancel := context.WithTimeout(ctx, maxExtension)
 			defer cancel()
 
 			select {
