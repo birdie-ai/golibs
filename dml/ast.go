@@ -1,7 +1,6 @@
 package dml
 
 import (
-	"errors"
 	"fmt"
 	"unique"
 )
@@ -93,25 +92,6 @@ type (
 var (
 	SET    = OpKind("SET")
 	DELETE = OpKind("DELETE")
-)
-
-// dml errors.
-var (
-	ErrInvalidOperation      = errors.New("invalid operation")
-	ErrMissingEntity         = errors.New(`entity is not provided`)
-	ErrMissingAssign         = errors.New(`"SET" requires an assign`)
-	ErrMissingArrayValues    = errors.New(`...: missing array values`)
-	ErrUnsupportedArrayValue = errors.New(`unsupported array values`)
-	ErrArrayWithMixedTypes   = errors.New(`array items with mixed types`)
-	ErrInvalidAssignKey      = errors.New(`invalid assign key`)
-	ErrMissingWhereClause    = errors.New(`WHERE clause is not given`)
-	ErrNotIdent              = errors.New(`not an identifier`)
-
-	// delete specific errors
-	ErrDelEmptyFilterKeys        = errors.New(`missing keys in filter`)
-	ErrDelEmptyFilterValues      = errors.New(`missing values in filter`)
-	ErrDelInvalidFilterKeyValues = errors.New(`invalid keyvalue filter`)
-	ErrDelInvalidAssign          = errors.New(`invalid DELETE assign`)
 )
 
 type arrayOp int

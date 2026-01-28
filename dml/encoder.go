@@ -12,6 +12,26 @@ import (
 	"unique"
 )
 
+// encoder errors.
+var (
+	ErrInvalidOperation      = errors.New("invalid operation")
+	ErrMissingEntity         = errors.New(`entity is not provided`)
+	ErrMissingAssign         = errors.New(`"SET" requires an assign`)
+	ErrMissingArrayValues    = errors.New(`...: missing array values`)
+	ErrUnsupportedArrayValue = errors.New(`unsupported array values`)
+	ErrArrayWithMixedTypes   = errors.New(`array items with mixed types`)
+	ErrInvalidAssignKey      = errors.New(`invalid assign key`)
+	ErrMissingWhereClause    = errors.New(`WHERE clause is not given`)
+	ErrNotIdent              = errors.New(`not an identifier`)
+	ErrInvalidDotAssign      = errors.New(`. (dot) requires to be the only assignment`)
+
+	// delete specific errors
+	ErrDelEmptyFilterKeys        = errors.New(`missing keys in filter`)
+	ErrDelEmptyFilterValues      = errors.New(`missing values in filter`)
+	ErrDelInvalidFilterKeyValues = errors.New(`invalid keyvalue filter`)
+	ErrDelInvalidAssign          = errors.New(`invalid DELETE assign`)
+)
+
 // Encode validates and encode the statements in its text format.
 // TODO(i4k): support prettify output.
 func Encode(w io.Writer, stmts Stmts) error {
@@ -45,11 +65,19 @@ func validate(stmt Stmt) error {
 	if len(stmt.Assign) == 0 && stmt.Op != DELETE {
 		errs = append(errs, ErrMissingAssign)
 	}
-	for _, k := range slices.Sorted(maps.Keys(stmt.Assign)) {
+	keys := slices.Sorted(maps.Keys(stmt.Assign))
+	hasdot := false
+	for _, k := range keys {
+		if !hasdot {
+			hasdot = k == "."
+		}
 		v, ok := stmt.Assign[k].(validator)
 		if ok {
 			errs = append(errs, v.validate())
 		}
+	}
+	if hasdot && len(stmt.Assign) > 1 {
+		errs = append(errs, ErrInvalidDotAssign)
 	}
 	if len(stmt.Where) == 0 {
 		errs = append(errs, ErrMissingWhereClause)

@@ -93,7 +93,7 @@ func parseStmt(in []byte) (Stmt, []byte, error) {
 	}
 	ident, in, err = lexIdent(in)
 	if err != nil {
-		return Stmt{}, nil, err
+		return Stmt{}, nil, fmt.Errorf("%w: %w", ErrSyntax, err)
 	}
 	if !strings.EqualFold(ident, "WHERE") {
 		return Stmt{}, nil, fmt.Errorf("%w: expected WHERE token", ErrSyntax)
@@ -169,7 +169,7 @@ func parseDelAssigns(in []byte) (Assign, []byte, error) {
 		if len(in) == 0 {
 			return Assign{}, nil, errUnexpectedEOF()
 		}
-		if in[0] == ',' {
+		if in[0] == ',' && key != "." {
 			in = skipblank(in[1:])
 			if len(in) == 0 {
 				return Assign{}, nil, errUnexpectedEOF()

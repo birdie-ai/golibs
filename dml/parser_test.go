@@ -652,6 +652,10 @@ func TestParser(t *testing.T) {
 			text: `DELETE feedbacks custom_fields[k]=>v : k="test" and v=1 and c=2 WHERE id="abc";`,
 			err:  dml.ErrUnknownVariable,
 		},
+		{
+			text: `DELETE feedbacks .,custom_fields.test WHERE id="abc";`,
+			err:  dml.ErrSyntax,
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {

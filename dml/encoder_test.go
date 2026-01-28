@@ -283,6 +283,25 @@ func TestEncode(t *testing.T) {
 			ast: dml.Stmts{
 				{
 					Op:     dml.SET,
+					Entity: u("organizations"),
+					Assign: dml.Assign{
+						".": map[string]string{
+							"name": "some org",
+							"test": "abc",
+						},
+						"test": 1,
+					},
+					Where: dml.Where{
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidDotAssign,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{"a": 1},
 					Where: dml.Where{
