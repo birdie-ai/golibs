@@ -59,9 +59,9 @@ func main() {
 }
 
 const (
-	totalPartitions    = 1000
+	totalPartitions    = 5000
 	eventsPerPartition = 200
-	batchSize          = 1000
+	batchSize          = 5000
 	batchTimeWindow    = 30 * time.Second
 )
 

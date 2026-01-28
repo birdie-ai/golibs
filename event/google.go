@@ -256,6 +256,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 		// MaxExtension was copied from the current default (which seems to be the pubsub max limit ? Maybe ?).
 		// The other ones are the documented max values.
 		const maxExtension = 60 * time.Minute
+		s.sub.ReceiveSettings.NumGoroutines = 1
 		s.sub.ReceiveSettings.MaxExtension = maxExtension
 		s.sub.ReceiveSettings.MinExtensionPeriod = 10 * time.Minute
 		s.sub.ReceiveSettings.MaxExtensionPeriod = 10 * time.Minute
