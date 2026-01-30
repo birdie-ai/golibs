@@ -101,7 +101,7 @@ DELETE conversations
 WHERE id="abc";
 ```
 
-and again alternatively, you can use the syntax below for deleting a list of fields:
+Deleting a list of fields:
 ```
 DELETE conversations
 	custom_fields[k] : k IN ["a","b"]
