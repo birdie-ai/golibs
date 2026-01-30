@@ -16,7 +16,11 @@ import (
 
 // parser errors.
 var (
-	ErrSyntax = errors.New("syntax error")
+	ErrSyntax           = errors.New("syntax error")
+	ErrTypeCheck        = errors.New("type error")
+	ErrClauseDuplicated = errors.New("duplicated field in clause")
+	ErrUnusedVariable   = errors.New("unused variable")
+	ErrUnknownVariable  = errors.New("unknown variable")
 )
 
 // Parse the textual input and return a list of statements.
@@ -76,36 +80,12 @@ func parseStmt(in []byte) (Stmt, []byte, error) {
 	}
 
 	if stmt.Op == SET {
-		stmt.Assign = Assign{}
-		for len(in) > 0 {
-			var (
-				key string
-				val any
-				err error
-			)
-			key, val, in, err = parseAssign(in)
-			if err != nil {
-				return Stmt{}, nil, err
-			}
-
-			stmt.Assign[key] = val
-			in = skipblank(in)
-			if len(in) == 0 {
-				return Stmt{}, nil, errUnexpectedEOF()
-			}
-			if in[0] == ',' {
-				// only one "." assign
-				if _, ok := stmt.Assign["."]; ok {
-					return Stmt{}, nil, fmt.Errorf("%w: only one '.' assignment is permitted. Unexpected ','", ErrSyntax)
-				}
-				in = skipblank(in[1:])
-				if len(in) == 0 {
-					return Stmt{}, nil, errUnexpectedEOF()
-				}
-				continue
-			}
-			break
-		}
+		stmt.Assign, in, err = parseSetAssigns(in)
+	} else {
+		stmt.Assign, in, err = parseDelAssigns(in)
+	}
+	if err != nil {
+		return Stmt{}, nil, err
 	}
 	in = skipblank(in)
 	if len(in) == 0 {
@@ -113,7 +93,7 @@ func parseStmt(in []byte) (Stmt, []byte, error) {
 	}
 	ident, in, err = lexIdent(in)
 	if err != nil {
-		return Stmt{}, nil, err
+		return Stmt{}, nil, fmt.Errorf("%w: %w", ErrSyntax, err)
 	}
 	if !strings.EqualFold(ident, "WHERE") {
 		return Stmt{}, nil, fmt.Errorf("%w: expected WHERE token", ErrSyntax)
@@ -135,6 +115,70 @@ func parseStmt(in []byte) (Stmt, []byte, error) {
 	}
 	in = in[1:]
 	return stmt, in, nil
+}
+
+func parseSetAssigns(in []byte) (Assign, []byte, error) {
+	assign := Assign{}
+	for len(in) > 0 {
+		var (
+			key string
+			val any
+			err error
+		)
+		key, val, in, err = parseAssign(in)
+		if err != nil {
+			return Assign{}, nil, err
+		}
+
+		assign[key] = val
+		in = skipblank(in)
+		if len(in) == 0 {
+			return Assign{}, nil, errUnexpectedEOF()
+		}
+		if in[0] == ',' {
+			// only one "." assign
+			if _, ok := assign["."]; ok {
+				return Assign{}, nil, fmt.Errorf("%w: only one '.' assignment is permitted. Unexpected ','", ErrSyntax)
+			}
+			in = skipblank(in[1:])
+			if len(in) == 0 {
+				return Assign{}, nil, errUnexpectedEOF()
+			}
+			continue
+		}
+		break
+	}
+	return assign, in, nil
+}
+
+func parseDelAssigns(in []byte) (Assign, []byte, error) {
+	assign := Assign{}
+	for len(in) > 0 {
+		var (
+			key string
+			val any
+			err error
+		)
+		key, val, in, err = parseDelFilters(in)
+		if err != nil {
+			return Assign{}, nil, err
+		}
+
+		assign[key] = val
+		in = skipblank(in)
+		if len(in) == 0 {
+			return Assign{}, nil, errUnexpectedEOF()
+		}
+		if in[0] == ',' && key != "." {
+			in = skipblank(in[1:])
+			if len(in) == 0 {
+				return Assign{}, nil, errUnexpectedEOF()
+			}
+			continue
+		}
+		break
+	}
+	return assign, in, nil
 }
 
 func parseAssign(in []byte) (string, any, []byte, error) {
@@ -168,52 +212,10 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 		}
 		return ".", val, in, nil
 	}
-	var (
-		dotident []byte
-		ident    string
-		err      error
-	)
 
-	ident, in, err = lexIdent(in)
+	dotident, in, err := parsePathTraversal(in)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
-	}
-
-	dotident = append(dotident, []byte(ident)...)
-	if len(in) == 0 {
-		return "", nil, nil, errUnexpectedEOF()
-	}
-
-	for len(in) > 0 && in[0] == '.' {
-		dotident = append(dotident, '.')
-		in = skipblank(in[1:])
-		if len(in) == 0 {
-			return "", nil, nil, errUnexpectedEOF()
-		}
-		if in[0] == '"' {
-			// parse the string as a JSON string.
-			// This means we support all of its escape sequences!
-			dec := json.NewDecoder(bytes.NewReader(in))
-			tok, err := dec.Token()
-			if err != nil {
-				return "", nil, nil, fmt.Errorf("%w: parsing quote string literal: %v", ErrSyntax, err)
-			}
-			str, ok := tok.(string)
-			if !ok {
-				return "", nil, nil, fmt.Errorf("%w: unexpected %v", ErrSyntax, tok)
-			}
-			dotident = append(dotident, []byte(strconv.Quote(str))...)
-			in = skipblank(in[dec.InputOffset():])
-			continue
-		}
-		ident, in, err = lexIdent(in)
-		if err != nil {
-			return "", nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
-		}
-		if len(in) == 0 {
-			return "", nil, nil, errUnexpectedEOF()
-		}
-		dotident = append(dotident, []byte(ident)...)
+		return "", nil, nil, err
 	}
 	in = skipblank(in)
 	if len(in) == 0 {
@@ -271,22 +273,299 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 	return string(dotident), val, in, nil
 }
 
+func parseDelFilters(in []byte) (string, any, []byte, error) {
+	in = skipblank(in)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] == '.' {
+		return ".", DeleteKey{}, in[1:], nil
+	}
+	dotident, in, err := parsePathTraversal(in)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] != '[' {
+		return dotident, DeleteKey{}, in, nil
+	}
+	in = in[1:]
+	var (
+		vark string
+		varv string
+	)
+	if len(in) > 0 && in[0] == '_' {
+		vark = "_"
+		in = in[1:]
+	} else {
+		vark, in, err = lexIdent(in)
+		if err != nil {
+			return "", nil, nil, err
+		}
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] != ']' {
+		return "", nil, nil, fmt.Errorf("%w: expected ']' but got %q", ErrSyntax, in)
+	}
+	in = skipblank(in[1:])
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] == '=' {
+		if len(in[1:]) == 0 {
+			return "", nil, nil, errUnexpectedEOF()
+		}
+		if in[1] != '>' {
+			return "", nil, nil, fmt.Errorf("%w: expected '>' but got %q", ErrSyntax, in[1:])
+		}
+		in = skipblank(in[2:])
+		if len(in) == 0 {
+			return "", nil, nil, errUnexpectedEOF()
+		}
+		varv, in, err = lexIdent(in)
+		if err != nil {
+			return "", nil, nil, err
+		}
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return "", nil, nil, errUnexpectedEOF()
+	}
+	if in[0] != ':' {
+		return "", nil, nil, fmt.Errorf("%w: expected ':' but got %q", ErrSyntax, in)
+	}
+	in = skipblank(in[1:])
+	cond, in, err := parseWhere(in)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	var kf KeyFilter
+	if vark != "_" {
+		condk, ok := cond[vark]
+		if !ok {
+			return "", nil, nil, fmt.Errorf("%w: %q not found in DELETE filter condition", ErrUnusedVariable, vark)
+		}
+		kf, err = kfilter(condk)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		delete(cond, vark)
+		if varv == "" || varv == "_" {
+			if len(cond) > 0 {
+				var errs []error
+				for _, name := range slices.Sorted(maps.Keys(cond)) {
+					errs = append(errs, fmt.Errorf("%w: %s", ErrUnknownVariable, name))
+				}
+				return "", nil, nil, errors.Join(errs...)
+			}
+			return dotident, kf, in, nil
+		}
+	}
+	if len(kf.Keys) > 1 {
+		return "", nil, nil, fmt.Errorf("%w: key-value filter requires filtering by single keys but %d key clauses given: %v", ErrSyntax, len(kf.Keys), kf.Keys)
+	}
+	condv, ok := cond[varv]
+	if !ok {
+		return "", nil, nil, fmt.Errorf("%w: variable %s not found in DELETE condition", ErrSyntax, varv)
+	}
+	var filter any
+	if vark == "_" {
+		filter, err = vfilter(condv)
+	} else {
+		filter, err = kvfilter(kf.Keys[0], condv)
+	}
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%w: handling condition variable %s", err, varv)
+	}
+	delete(cond, varv)
+	if len(cond) > 0 {
+		var errs []error
+		for _, name := range slices.Sorted(maps.Keys(cond)) {
+			errs = append(errs, fmt.Errorf("%w: %s", ErrUnknownVariable, name))
+		}
+		return "", nil, nil, errors.Join(errs...)
+	}
+	return dotident, filter, in, nil
+}
+
+func kfilter(val any) (KeyFilter, error) {
+	switch v := val.(type) {
+	default:
+		// the key condition must be a string or []string
+		return KeyFilter{}, fmt.Errorf("%w: the variable has string type but condition uses %T", ErrTypeCheck, val)
+	case string:
+		return KeyFilter{Keys: []string{v}}, nil
+	case []any:
+		strs, err := tarr[string](v)
+		if err != nil {
+			return KeyFilter{}, err
+		}
+		return KeyFilter{Keys: strs}, nil
+	}
+}
+
+func vfilter(val any) (any, error) {
+	// there's an invariance that `val` can *ONLY* be a list **iff* syntax `<name> IN [...]`
+	// or `{"<name>": [...]}` is used and both are ensured by `parseWhere()` to have len(val)>0.
+
+	switch vv := val.(type) {
+	case []any:
+		switch vv[0].(type) {
+		case string:
+			vals, err := tarr[string](vv)
+			if err != nil {
+				return nil, err
+			}
+			return ValueFilter[string]{Values: vals}, nil
+		case float64:
+			vals, err := tarr[float64](vv)
+			if err != nil {
+				return nil, err
+			}
+			return ValueFilter[float64]{Values: vals}, nil
+		case bool:
+			vals, err := tarr[bool](vv)
+			if err != nil {
+				return nil, err
+			}
+			return ValueFilter[bool]{Values: vals}, nil
+		default:
+			return nil, fmt.Errorf("%w: unexpected list with type %T", ErrSyntax, vv)
+		}
+	case string:
+		return ValueFilter[string]{Values: []string{vv}}, nil
+	case float64:
+		return ValueFilter[float64]{Values: []float64{vv}}, nil
+	case bool:
+		return ValueFilter[bool]{Values: []bool{vv}}, nil
+	default:
+		return nil, fmt.Errorf("%w: filters need to operate on primitive types (string, float64, bool) or lists of them but type %T is used", ErrSyntax, vv)
+	}
+}
+
+func kvfilter(key string, val any) (any, error) {
+	// there's an invariance that `val` can *ONLY* be a list **iff* syntax `<name> IN [...]`
+	// or `{"<name>": [...]}` is used and both are ensured by `parseWhere()` to have len(val)>0.
+
+	switch vv := val.(type) {
+	case []any:
+		switch vv[0].(type) {
+		case string:
+			vals, err := tarr[string](vv)
+			if err != nil {
+				return nil, err
+			}
+			return KeyValueFilter[string]{Key: key, Values: vals}, nil
+		case float64:
+			vals, err := tarr[float64](vv)
+			if err != nil {
+				return nil, err
+			}
+			return KeyValueFilter[float64]{Key: key, Values: vals}, nil
+		case bool:
+			vals, err := tarr[bool](vv)
+			if err != nil {
+				return nil, err
+			}
+			return KeyValueFilter[bool]{Key: key, Values: vals}, nil
+		default:
+			return nil, fmt.Errorf("%w: unexpected list with type %T", ErrSyntax, vv)
+		}
+	case string:
+		return KeyValueFilter[string]{Key: key, Values: []string{vv}}, nil
+	case float64:
+		return KeyValueFilter[float64]{Key: key, Values: []float64{vv}}, nil
+	default:
+		return nil, fmt.Errorf("%w: filters need to operate on primitive types (string, float64, bool) or lists of them but type %T is used", ErrSyntax, vv)
+	}
+}
+
+func tarr[T any](arr []any) ([]T, error) {
+	ret := make([]T, 0, len(arr))
+	for _, v := range arr {
+		s, ok := v.(T)
+		if !ok {
+			return nil, fmt.Errorf("%w: unexpected value %[2]v with type %[2]T in %T list", ErrTypeCheck, v, ret)
+		}
+		ret = append(ret, s)
+	}
+	return ret, nil
+}
+
+func parsePathTraversal(in []byte) (string, []byte, error) {
+	var (
+		dotident []byte
+		ident    string
+		err      error
+	)
+
+	ident, in, err = lexIdent(in)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+	}
+
+	dotident = append(dotident, []byte(ident)...)
+	if len(in) == 0 {
+		return "", nil, errUnexpectedEOF()
+	}
+
+	for len(in) > 0 && in[0] == '.' {
+		dotident = append(dotident, '.')
+		in = skipblank(in[1:])
+		if len(in) == 0 {
+			return "", nil, errUnexpectedEOF()
+		}
+		if in[0] == '"' {
+			// parse the string as a JSON string.
+			// This means we support all of its escape sequences!
+			dec := json.NewDecoder(bytes.NewReader(in))
+			tok, err := dec.Token()
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: parsing quote string literal: %v", ErrSyntax, err)
+			}
+			str, ok := tok.(string)
+			if !ok {
+				return "", nil, fmt.Errorf("%w: unexpected %v", ErrSyntax, tok)
+			}
+			dotident = append(dotident, []byte(strconv.Quote(str))...)
+			in = skipblank(in[dec.InputOffset():])
+			continue
+		}
+		ident, in, err = lexIdent(in)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+		}
+		if len(in) == 0 {
+			return "", nil, errUnexpectedEOF()
+		}
+		dotident = append(dotident, []byte(ident)...)
+	}
+	return string(dotident), in, nil
+}
+
 func parseWhere(in []byte) (Where, []byte, error) {
 	if in[0] == '{' {
-		var (
-			where Where
-			err   error
-		)
-		in, err = parseJSON(in, &where)
+		where, in, err := parseWhereObject(in)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%w: failed to parse value as JSON Object: %v", ErrSyntax, err)
+			return Where{}, nil, err
 		}
-		if len(where) == 0 {
-			return nil, nil, fmt.Errorf("%w: WHERE object require key-value entries", ErrSyntax)
-		}
-		for _, k := range slices.Sorted(maps.Keys(where)) {
-			if !isIdent(k) {
-				return nil, nil, fmt.Errorf("%w: WHERE object keys need to be valid identifier but found %q", ErrSyntax, k)
+		in = skipblank(in)
+		if len(in) > 3 && bytes.EqualFold(in[:3], []byte{'A', 'N', 'D'}) {
+			in = skipblank(in[3:])
+			var next Where
+			next, in, err = parseWhere(in)
+			if err != nil {
+				return Where{}, nil, err
+			}
+			err = mergeclauses(where, next)
+			if err != nil {
+				return Where{}, nil, fmt.Errorf("%w: invalid WHERE expression", err)
 			}
 		}
 		return where, in, nil
@@ -301,18 +580,93 @@ func parseWhere(in []byte) (Where, []byte, error) {
 	if len(in) == 0 {
 		return nil, nil, errUnexpectedEOF()
 	}
-	if in[0] != '=' {
+	isin := len(in) >= 2 && bytes.EqualFold(in[:2], []byte{'I', 'N'})
+	if in[0] != '=' && !isin {
 		return nil, nil, fmt.Errorf("%w: invalid where: unexpected char %c", ErrSyntax, in[0])
 	}
-	in = in[1:]
+	if isin {
+		in = in[2:]
+	} else {
+		in = in[1:]
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return nil, nil, errUnexpectedEOF()
+	}
+	if isin && in[0] != '[' {
+		// NOTE(i4k): The `IN` keyword requires a subsequent `[...]` (syntactically). Why?
+		// Well, alternatively we could just parse a value and keep it as is in the AST and
+		// type-check it in runtime, but we want to catch most mistakes at the parsing/codegen
+		// phase. At the moment, we ingest dml statements in big batches that are transactional,
+		// so, they all succeed or all fail, and then having an `any` value in a data structure
+		// that only allows for `[]Primtype` leaves too much failing cases to be caught in the
+		// server side. Additionally, if the grammar asks for at least 1 entry in the array.
+		// Another reason to check for that is imagine generating code like:
+		// 		echo "... IN $(jsonencode $values)"
+		// then if somehow $values is not a []Primtype this would be syntactically correct and
+		// errors would only be detected later in the engine that executes the statements.
+		// This implementation makes it a syntactic error to not encode a []Primtype in the `IN`
+		// clause.
+		// Additionally, down below we also check if the list contains items, otherwise it's just
+		// nonsense.
+		return nil, nil, fmt.Errorf("%w: IN requires a JSON list argument but got %q", ErrSyntax, in)
+	}
 	var val any
 	in, err = parseJSON(in, &val)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: parsing value as JSON: %v", ErrSyntax, err)
 	}
-	return Where{
+	if arr, ok := val.([]any); ok && len(arr) == 0 {
+		// NOTE(i4k): This prevents the nonsense: ... WHERE id IN [];
+		return nil, nil, fmt.Errorf("%w: a clause expression of type list must be non-empty", ErrSyntax)
+	}
+	where := Where{
 		ident: val,
-	}, in, nil
+	}
+	in = skipblank(in)
+	if len(in) > 3 && bytes.EqualFold(in[:3], []byte{'A', 'N', 'D'}) {
+		in = skipblank(in[3:])
+		var next Where
+		next, in, err = parseWhere(in)
+		if err != nil {
+			return Where{}, nil, err
+		}
+		err = mergeclauses(where, next)
+		if err != nil {
+			return Where{}, nil, fmt.Errorf("%w: invalid WHERE expression", err)
+		}
+	}
+	return where, in, nil
+}
+
+func parseWhereObject(in []byte) (Where, []byte, error) {
+	var (
+		where Where
+		err   error
+	)
+	in, err = parseJSON(in, &where)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: failed to parse value as JSON Object: %v", ErrSyntax, err)
+	}
+	if len(where) == 0 {
+		return nil, nil, fmt.Errorf("%w: WHERE object require key-value entries", ErrSyntax)
+	}
+	for _, k := range slices.Sorted(maps.Keys(where)) {
+		if !isIdent(k) {
+			return nil, nil, fmt.Errorf("%w: WHERE object keys need to be valid identifier but found %q", ErrSyntax, k)
+		}
+	}
+	return where, in, nil
+}
+
+func mergeclauses(dst, src Where) error {
+	for k, v := range src {
+		if _, ok := dst[k]; ok {
+			return fmt.Errorf("%w: duplicate AND field %q", ErrClauseDuplicated, k)
+		}
+		dst[k] = v
+	}
+	return nil
 }
 
 func parseJSON[T any](in []byte, val *T) ([]byte, error) {
@@ -327,15 +681,18 @@ func parseJSON[T any](in []byte, val *T) ([]byte, error) {
 type kind int
 
 const (
-	tany kind = iota
+	tinvalid = iota
 	tstr
 	tfloat
 	tbool
+	tarray
+	tobj
 )
 
 type arrayvalues struct {
 	kind  kind
-	avals []any
+	avals [][]any
+	ovals []map[string]any
 	bvals []bool
 	fvals []float64
 	svals []string
@@ -347,60 +704,45 @@ func arrayvals(val any) (arrayvalues, error) {
 		// parser must ensure: dotdotdot LBracket
 		panic("unreachable")
 	}
-	var array arrayvalues
-	var length int
-	kinds := map[string]struct{}{}
-	for _, v := range anyvals {
-		if v != nil {
-			// nulls are ignored because there's no use case for that and it complicates
-			// implementation in the target storage system.
-			length++
-			array.avals = append(array.avals, v)
-		}
-		switch vv := v.(type) {
-		case string:
-			kinds["string"] = struct{}{}
-			array.svals = append(array.svals, vv)
-		case float64:
-			kinds["float"] = struct{}{}
-			array.fvals = append(array.fvals, vv)
-		case bool:
-			kinds["bool"] = struct{}{}
-			array.bvals = append(array.bvals, vv)
-		case nil:
-			// skip
-		default:
-			kinds["any"] = struct{}{}
-		}
-	}
-	if length == 0 {
+	if len(anyvals) == 0 {
 		return arrayvalues{}, ErrMissingArrayValues
 	}
-
-	// kinds is supposed to have a single key if all entries are of same type.
-	// In case there are multiple keys, there are mixed types in the array and then
-	// we map into an `any` type.
-
-	var kind string
-	for k := range kinds {
-		kind = k
-		break
-	}
-	if len(kinds) > 1 || kind == "any" {
-		array.kind = tany
-		return array, nil
-	}
-	switch kind {
-	case "bool":
-		array.kind = tbool
-	case "string":
+	var err error
+	var array arrayvalues
+	switch anyvals[0].(type) {
+	case string:
 		array.kind = tstr
-	case "float":
+		array.svals, err = appendchk(array.svals, anyvals...)
+	case float64:
 		array.kind = tfloat
+		array.fvals, err = appendchk(array.fvals, anyvals...)
+	case bool:
+		array.kind = tbool
+		array.bvals, err = appendchk(array.bvals, anyvals...)
+	case []any:
+		array.kind = tarray
+		array.avals, err = appendchk(array.avals, anyvals...)
+	case map[string]any:
+		array.kind = tobj
+		array.ovals, err = appendchk(array.ovals, anyvals...)
 	default:
-		panic("unreachable")
+		return arrayvalues{}, ErrUnsupportedArrayValue
+	}
+	if err != nil {
+		return arrayvalues{}, err
 	}
 	return array, nil
+}
+
+func appendchk[T any](arr []T, values ...any) ([]T, error) {
+	for _, v := range values {
+		vv, ok := v.(T)
+		if !ok {
+			return nil, ErrArrayWithMixedTypes
+		}
+		arr = append(arr, vv)
+	}
+	return arr, nil
 }
 
 func appendval(val any) (any, error) {
@@ -409,14 +751,16 @@ func appendval(val any) (any, error) {
 		return nil, err
 	}
 	switch array.kind {
-	case tany:
-		return Append[any]{Values: array.avals}, nil
 	case tbool:
 		return Append[bool]{Values: array.bvals}, nil
 	case tstr:
 		return Append[string]{Values: array.svals}, nil
 	case tfloat:
 		return Append[float64]{Values: array.fvals}, nil
+	case tarray:
+		return Append[[]any]{Values: array.avals}, nil
+	case tobj:
+		return Append[map[string]any]{Values: array.ovals}, nil
 	}
 	panic("unreachable")
 }
@@ -427,14 +771,16 @@ func prependval(val any) (any, error) {
 		return nil, err
 	}
 	switch array.kind {
-	case tany:
-		return Prepend[any]{Values: array.avals}, nil
 	case tbool:
 		return Prepend[bool]{Values: array.bvals}, nil
 	case tstr:
 		return Prepend[string]{Values: array.svals}, nil
 	case tfloat:
 		return Prepend[float64]{Values: array.fvals}, nil
+	case tarray:
+		return Prepend[[]any]{Values: array.avals}, nil
+	case tobj:
+		return Prepend[map[string]any]{Values: array.ovals}, nil
 	}
 	panic("unreachable")
 }
@@ -446,7 +792,7 @@ func errUnexpectedEOF() error {
 func lexIdent(in []byte) (string, []byte, error) {
 	r, size := utf8.DecodeRune(in)
 	if r == utf8.RuneError || size == 0 || !unicode.IsLetter(r) {
-		return "", nil, ErrNotIdent
+		return "", nil, fmt.Errorf("%w: parsing %q", ErrNotIdent, in)
 	}
 
 	ident := []rune{r}

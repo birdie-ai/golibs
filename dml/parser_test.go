@@ -1,6 +1,7 @@
 package dml_test
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"unique"
@@ -14,9 +15,10 @@ func TestParser(t *testing.T) {
 	t.Parallel()
 
 	type testcase struct {
-		text string
-		want dml.Stmts
-		err  error
+		text          string
+		noEncoderTest bool
+		want          dml.Stmts
+		err           error
 	}
 
 	for _, tc := range []testcase{
@@ -113,7 +115,7 @@ func TestParser(t *testing.T) {
 			err:  dml.ErrSyntax,
 		},
 		{
-			text: `SET feedbacks .={} WHERE {"id": 1};`,
+			text: `SET feedbacks .={} WHERE id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -139,7 +141,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks .={} WHERE id    =   1;`,
+			text:          `SET feedbacks .={} WHERE id   =   1;`,
+			noEncoderTest: true,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -152,6 +155,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			noEncoderTest: true,
 			text: `
 			SET
 			feedbacks
@@ -173,7 +177,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks some-field=1 WHERE id = 1;`,
+			noEncoderTest: true,
+			text:          `SET feedbacks some-field=1 WHERE id = 1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -188,7 +193,22 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks-2025-01-01 my-field=1 WHERE my-id = 1;`,
+			text: `SET feedbacks some-field=1 WHERE id=1;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"some-field": 1.0,
+					},
+					Where: dml.Where{
+						"id": 1.0,
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks-2025-01-01 my-field=1 WHERE my-id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -203,7 +223,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks custom_fields={} WHERE id    =   1;`,
+			text: `SET feedbacks custom_fields={} WHERE id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -216,7 +236,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks custom-fields={} WHERE id = 1;`,
+			text: `SET feedbacks custom-fields={} WHERE id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -229,7 +249,53 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks custom_fields={"a": 1, "b":"abc"} WHERE id    =   1;`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE id=1 and test=2;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"id":   1.0,
+						"test": 2.0,
+					},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE a=1 and b=2 and c=3;`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"a": 1.0,
+						"b": 2.0,
+						"c": 3.0,
+					},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE {"a": 1} and {"b": 2};`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"a": 1.0,
+						"b": 2.0,
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks custom_fields={"a":1,"b":"abc"} WHERE id=1;`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -247,7 +313,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a=1,b="b",c={},d=["a","b"],e=false WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1,b="b",c={},d=["a","b"],e=false WHERE id="test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -266,7 +333,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a."  "=1, a.b."c"=1,a."this is a test"=1,a."╚(•⌂•)╝".shout=1,a."b".ident."c"."d".test=1 WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a."  "=1,a.b."c"=1,a."this is a test"=1,a."╚(•⌂•)╝".shout=1,a."b".ident."c"."d".test=1 WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -285,7 +353,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b=1,b.test_test.c.d="b",c.d.eee.e={},x."something"="test",d.e.f.ggg.h=["a","b"],e.f.g.h.i.j.k=false WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b=1,b.test_test.c.d="b",c.d.eee.e={},x."something"="test",d.e.f.ggg.h=["a","b"],e.f.g.h.i.j.k=false WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -305,7 +374,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = ... ["some", "thing"] WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b = ... ["some", "thing"] WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -322,7 +392,25 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = ... [1, 2, 3] WHERE id = "test";`,
+			text: `SET feedbacks a.b=...["some","thing"] WHERE id="test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.Append[string]{
+							Values: []string{"some", "thing"},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b = ... [1, 2, 3] WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -340,27 +428,15 @@ func TestParser(t *testing.T) {
 		},
 		{
 			text: `SET feedbacks a.b = ... [1, "string"] WHERE id = "test";`,
-			want: dml.Stmts{
-				{
-					Op:     dml.SET,
-					Entity: u("feedbacks"),
-					Assign: dml.Assign{
-						"a.b": dml.Append[any]{
-							Values: []any{1.0, "string"},
-						},
-					},
-					Where: dml.Where{
-						"id": "test",
-					},
-				},
-			},
+			err:  dml.ErrArrayWithMixedTypes,
 		},
 		{
 			text: `SET feedbacks a.b = ... [] WHERE id = "test";`,
 			err:  dml.ErrMissingArrayValues,
 		},
 		{
-			text: `SET feedbacks a.b = ["some", "thing"] ... WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b = ["some", "thing"] ... WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -377,7 +453,8 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = [1, 2] ... WHERE id = "test";`,
+			noEncoderTest: true,
+			text:          `SET feedbacks a.b = [1, 2] ... WHERE id = "test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -395,22 +472,10 @@ func TestParser(t *testing.T) {
 		},
 		{
 			text: `SET feedbacks a.b = [1, "string"] ... WHERE id = "test";`,
-			want: dml.Stmts{
-				{
-					Op:     dml.SET,
-					Entity: u("feedbacks"),
-					Assign: dml.Assign{
-						"a.b": dml.Prepend[any]{
-							Values: []any{1.0, "string"},
-						},
-					},
-					Where: dml.Where{
-						"id": "test",
-					},
-				},
-			},
+			err:  dml.ErrArrayWithMixedTypes,
 		},
 		{
+			noEncoderTest: true,
 			text: `
 			SET feedbacks
 				a = ["a"] ...,
@@ -443,10 +508,10 @@ func TestParser(t *testing.T) {
 		},
 		{
 			text: `SET feedbacks a.b = [null, null, null] ... WHERE id = "test";`,
-			err:  dml.ErrMissingArrayValues,
+			err:  dml.ErrUnsupportedArrayValue,
 		},
 		{
-			text: `SET feedbacks a.b = ["test", null, "string"] ... WHERE id = "test";`,
+			text: `SET feedbacks a.b=["test","string"]... WHERE id="test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -463,7 +528,7 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			text: `SET feedbacks a.b = ... ["test", null, "string"] WHERE id = "test";`,
+			text: `SET feedbacks a.b=...["test","string"] WHERE id="test";`,
 			want: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -479,6 +544,182 @@ func TestParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			text: `DELETE feedbacks . WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						".": dml.DeleteKey{},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			text: `DELETE feedbacks a WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a": dml.DeleteKey{},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			text: `DELETE feedbacks a.b WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b": dml.DeleteKey{},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `DELETE feedbacks custom_fields[k] => v : {"k":"test","v":"test"} WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"custom_fields": dml.KeyValueFilter[string]{
+							Key:    "test",
+							Values: []string{"test"},
+						},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `DELETE feedbacks a[b] : b IN ["a","b"] WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a": dml.KeyFilter{
+							Keys: []string{"a", "b"},
+						},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `DELETE feedbacks a[b] => c : b="a" and c IN ["a", "b"] WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a": dml.KeyValueFilter[string]{
+							Key:    "a",
+							Values: []string{"a", "b"},
+						},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			text: `DELETE feedbacks . WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						".": dml.DeleteKey{},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
+		{
+			text: `DELETE feedbacks a[b] : b IN {} WHERE id="abc";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			// IN requires a list
+			text: `DELETE feedbacks a[b] : b IN "10" WHERE id="abc";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			// IN requires a []string
+			text: `DELETE feedbacks a[b] : b IN ["test", 10] WHERE id="abc";`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			// IN requires a []string
+			text: `DELETE feedbacks a[b] : b IN ["test", false] WHERE id="abc";`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			// IN requires a []string
+			text: `DELETE feedbacks a[b] : b IN ["test", []] WHERE id="abc";`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			// value requires: IN ["str", ...]
+			text: `DELETE feedbacks a[b]=>c : b="test" and c IN ["test", "a", 10] WHERE id="abc";`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			text: `DELETE a . WHERE b=1 and b=2'`,
+			err:  dml.ErrClauseDuplicated,
+		},
+		{
+			text: `DELETE a b[k] : a=1 and a=2 WHERE id=1;`,
+			err:  dml.ErrClauseDuplicated,
+		},
+		{
+			text: `DELETE a b[k] : k={} WHERE id=1;`,
+			err:  dml.ErrTypeCheck,
+		},
+		{
+			text: `DELETE feedbacks . WHERE id IN [];`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `DELETE feedbacks . WHERE id IN [];`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `DELETE feedbacks custom_fields[k]=>v : v=1 WHERE id="abc";`,
+			err:  dml.ErrUnusedVariable,
+		},
+		{
+			text: `DELETE feedbacks custom_fields[k]=>v : k="test" and v=1 and c=2 WHERE id="abc";`,
+			err:  dml.ErrUnknownVariable,
+		},
+		{
+			text: `DELETE feedbacks .,custom_fields.test WHERE id="abc";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `DELETE feedbacks labels[_] => v : v="test" WHERE id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"labels": dml.ValueFilter[string]{Values: []string{"test"}},
+					},
+					Where: dml.Where{"id": "abc"},
+				},
+			},
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {
@@ -489,6 +730,17 @@ func TestParser(t *testing.T) {
 		}
 		if diff := cmp.Diff(tc.want, got, cmpopts.EquateComparable(unique.Handle[string]{})); diff != "" {
 			t.Fatalf("got [+], want [-]: %s", diff)
+		}
+		if tc.noEncoderTest {
+			continue
+		}
+		var encoded bytes.Buffer
+		err = dml.Encode(&encoded, got)
+		if err != nil {
+			t.Fatalf("failed to encode the decoded ast [%s]: %v", tc.text, err)
+		}
+		if diff := cmp.Diff(encoded.String(), tc.text); diff != "" {
+			t.Fatal(diff)
 		}
 	}
 }
@@ -501,8 +753,8 @@ func FuzzParse(f *testing.F) {
 		[]byte(`SET a a=1 WHERE {"a":1};SET a a=1 WHERE id=1;`), // multiple stmts
 		[]byte(`SET a a=1,b="b" WHERE a=1;`),                    // multiple assignments
 		[]byte(`SET a a=[] WHERE a=1;`),                         // array assignment
-		[]byte(`DELETE abc WHERE a=1;`),                         // simple where (delete)
-		[]byte(`DELETE abc WHERE {"a": 1}`),                     // object where (delete)
+		[]byte(`DELETE abc . WHERE a=1;`),                       // simple where (delete)
+		[]byte(`DELETE abc a.b WHERE {"a": 1}`),                 // object where (delete)
 	} {
 		f.Add(valid)
 	}
