@@ -35,7 +35,7 @@ type (
 	// This type is used when receiving individual events with [Subscription.Receive].
 	Event[T any] struct {
 		Envelope[T]
-		msg AckerNacker
+		AckerNacker
 	}
 
 	// Envelope represents the structure of all data that wraps all events.
@@ -209,18 +209,8 @@ func (s *Subscription[T]) Receive(ctx context.Context) (*Event[T], error) {
 	}
 	var res Event[T]
 	res.Envelope = envelope
-	res.msg = m
+	res.AckerNacker = m
 	return &res, nil
-}
-
-// Ack this event.
-func (e *Event[T]) Ack() {
-	e.msg.Ack()
-}
-
-// Nack this event.
-func (e *Event[T]) Nack() {
-	e.msg.Nack()
 }
 
 // Serve will start serving all events from the subscription calling handler for each

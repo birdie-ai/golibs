@@ -275,7 +275,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 			defer cancel()
 
 			select {
-			case s.events <- &Event[T]{Envelope: event, msg: msg}:
+			case s.events <- &Event[T]{Envelope: event, AckerNacker: msg}:
 				// Just send event and let the client ack the event, unblocking this goroutine to get the next message from the same partition.
 				// Not recommended by the docs, but lets see if it works well enough.
 			case <-ctx.Done():
