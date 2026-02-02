@@ -247,7 +247,7 @@ func (a ValueFilter[T]) encode(w io.Writer, target string) error {
 		}
 		return write(w, target+"[_] => v : v="+string(d))
 	}
-	d, err := json.Marshal(a.Values[0])
+	d, err := json.Marshal(a.Values)
 	if err != nil {
 		return err
 	}

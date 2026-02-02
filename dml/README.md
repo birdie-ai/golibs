@@ -113,7 +113,7 @@ The statement above reads as `FOR EACH key k IN custom_fields WHERE k IS IN THE 
 For deleting based on field name and value condition:
 ```
 DELETE conversations
-	custom_fields[k] => v WHERE k="country" AND v="us"
+	custom_fields[k] => v : k="country" AND v="us"
 WHERE id="abc";
 ```
 
@@ -123,7 +123,7 @@ If the key is not needed, it can be omitted with `_`.
 
 ```
 DELETE conversations
-	custom_fields[_] => v WHERE v = "something"
+	custom_fields[_] => v : v = "something"
 WHERE id="abc";
 ```
 
@@ -136,7 +136,7 @@ then stmt below deletes "label-1" and "label-2":
 
 ```
 DELETE conversations
-	labels[_] as v WHERE v IN ["label-1", "label-2"]
+	labels[_] as v : v IN ["label-1", "label-2"]
 WHERE id="abc";
 ```
 
@@ -145,8 +145,8 @@ All examples above can be grouped into a single DELETE stmt:
 ```
 DELETE conversations
 	custom_fields.abc,
-	custom_fields[k] as v WHERE k="country" AND v="us",
-	labels[_] as l WHERE l="label-1",
+	custom_fields[k] as v : k="country" AND v="us",
+	labels[_] as l : l="label-1",
 WHERE id="abc";
 ```
 

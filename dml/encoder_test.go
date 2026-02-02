@@ -551,6 +551,22 @@ func TestEncode(t *testing.T) {
 					Op:     dml.DELETE,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{
+						"labels": dml.ValueFilter[string]{Values: []string{"label-1", "label-2"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks labels[_] => v : v IN ["label-1","label-2"] WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
 						"custom_fields": dml.KeyValueFilter[string]{Key: "country", Values: []string{"us"}},
 					},
 					Where: dml.Where{
