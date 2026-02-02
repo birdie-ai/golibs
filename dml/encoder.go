@@ -16,7 +16,7 @@ import (
 var (
 	ErrInvalidOperation      = errors.New("invalid operation")
 	ErrMissingEntity         = errors.New(`entity is not provided`)
-	ErrMissingAssign         = errors.New(`"SET" requires an assign`)
+	ErrMissingAssign         = errors.New(`missing an assign`)
 	ErrMissingArrayValues    = errors.New(`...: missing array values`)
 	ErrUnsupportedArrayValue = errors.New(`unsupported array values`)
 	ErrArrayWithMixedTypes   = errors.New(`array items with mixed types`)
@@ -183,11 +183,18 @@ func encodeSetAssign(w io.Writer, assign Assign) error {
 }
 
 func encodeDelAssign(w io.Writer, assign Assign) error {
+	var hasdot bool
 	keys := slices.Sorted(maps.Keys(assign))
 	for i, key := range keys {
 		v, ok := assign[key].(assignEncoder)
 		if !ok {
 			return ErrDelInvalidAssign
+		}
+		if key == "." {
+			if hasdot {
+				return ErrInvalidDotAssign
+			}
+			hasdot = true
 		}
 		err := v.encode(w, key)
 		if err != nil {

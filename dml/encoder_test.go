@@ -503,6 +503,23 @@ func TestEncode(t *testing.T) {
 					Op:     dml.DELETE,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{
+						".":      dml.DeleteKey{},
+						"labels": dml.DeleteKey{},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			err: dml.ErrInvalidDotAssign,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
 						"obj": dml.KeyFilter{Keys: []string{"a"}},
 					},
 					Where: dml.Where{
