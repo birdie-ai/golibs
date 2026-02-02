@@ -155,10 +155,10 @@ func (a ValueFilter[T]) validate() error {
 
 func (a KeyValueFilter[T]) validate() error {
 	if a.Key == "" {
-		return fmt.Errorf("%w: empty key", ErrDelInvalidFilterKeyValues)
+		return fmt.Errorf("%w: empty key", ErrInvalidFilterKeyValues)
 	}
 	if len(a.Values) == 0 {
-		return fmt.Errorf("%w: empty values list", ErrDelInvalidFilterKeyValues)
+		return fmt.Errorf("%w: empty values list", ErrInvalidFilterKeyValues)
 	}
 	return nil
 }

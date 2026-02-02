@@ -26,10 +26,10 @@ var (
 	ErrInvalidDotAssign      = errors.New(`. (dot) requires to be the only assignment`)
 
 	// delete specific errors
-	ErrDelEmptyFilterKeys        = errors.New(`missing keys in filter`)
-	ErrDelEmptyFilterValues      = errors.New(`missing values in filter`)
-	ErrDelInvalidFilterKeyValues = errors.New(`invalid keyvalue filter`)
-	ErrDelInvalidAssign          = errors.New(`invalid DELETE assign`)
+	ErrEmptyFilterKeys        = errors.New(`missing keys in filter`)
+	ErrEmptyFilterValues      = errors.New(`missing values in filter`)
+	ErrInvalidFilterKeyValues = errors.New(`invalid keyvalue filter`)
+	ErrInvalidAssign          = errors.New(`invalid DELETE assign`)
 )
 
 // Encode validates and encode the statements in its text format.
@@ -188,7 +188,7 @@ func encodeDelAssign(w io.Writer, assign Assign) error {
 	for i, key := range keys {
 		v, ok := assign[key].(assignEncoder)
 		if !ok {
-			return ErrDelInvalidAssign
+			return ErrInvalidAssign
 		}
 		if key == "." {
 			if hasdot {
