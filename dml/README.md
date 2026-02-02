@@ -93,14 +93,6 @@ DELETE conversations
 WHERE id="abc";
 ```
 
-Alternatively, the syntax below does the same but allows for fields with spaces:
-
-```
-DELETE conversations
-	custom_fields["country"]
-WHERE id="abc";
-```
-
 Deleting a list of fields:
 ```
 DELETE conversations
