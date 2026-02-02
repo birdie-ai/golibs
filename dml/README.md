@@ -76,6 +76,72 @@ SET feedbacks
 WHERE id="4362f76c287a6866a1f1d1a206d8ad654ad84fc183a3f99a948eb60d1506918b";
 ```
 
+### Delete data
+
+Delete an entity record:
+
+```
+DELETE conversations . WHERE id="abc";
+```
+
+Assuming `custom_fields` is an object, then stmt below delete a dynamic field from an
+entity record (the record is not deleted, just the field):
+
+```
+DELETE conversations
+	custom_fields.country
+WHERE id="abc";
+```
+
+Deleting a list of fields:
+```
+DELETE conversations
+	custom_fields[k] : k IN ["a","b"]
+WHERE id="abc";
+```
+
+The statement above reads as `FOR EACH key k IN custom_fields WHERE k IS IN THE LIST ["a","b"]`.
+
+For deleting based on field name and value condition:
+```
+DELETE conversations
+	custom_fields[k] => v : k="country" AND v="us"
+WHERE id="abc";
+```
+
+The statement above reads as `FOR EACH KEY k AND VALUE v IN custom_fields WHERE k EQUALS "country" AND v EQUALS "us"`.
+
+If the key is not needed, it can be omitted with `_`.
+
+```
+DELETE conversations
+	custom_fields[_] => v : v = "something"
+WHERE id="abc";
+```
+
+If `labels` has the schema below:
+```
+[ (string) ]
+```
+
+then stmt below deletes "label-1" and "label-2":
+
+```
+DELETE conversations
+	labels[_] as v : v IN ["label-1", "label-2"]
+WHERE id="abc";
+```
+
+All examples above can be grouped into a single DELETE stmt:
+
+```
+DELETE conversations
+	custom_fields.abc,
+	custom_fields[k] as v : k="country" AND v="us",
+	labels[_] as l : l="label-1",
+WHERE id="abc";
+```
+
 ## Syntax
 
 The language grammar is defined below using [ohm](https://ohmjs.org/docs/syntax-reference).
@@ -92,10 +158,10 @@ dml {
     | DelStmt -- delstmt
 
   SetStmt = 
-    Set ident AssignList Where Clause ";"
+    Set ident AssignList Where Condition ";"
 
   DelStmt =
-    Delete ident Where Clause ";"
+    Delete ident DeleteFilter? Where Condition ";"
 
   Set = 
     caseInsensitive<"SET">
@@ -105,18 +171,44 @@ dml {
   
   Where = 
     caseInsensitive<"WHERE">
+    
+  In =
+  	caseInsensitive<"IN">
+    
+  Arrow =
+  	"=>"
 
   AssignList = 
     Assign ("," AssignList)?
 
   Assign = 
     LFS "=" RFS
-
+    
+  DeleteFilter =
+  	LFS (KeyDecl VarDecl? ":" Condition)?
+    
+  KeyDecl =
+  	"[" (ident | "_") "]"
+    
+  VarDecl =
+  	Arrow ident
+    
   LFS = 
   	"." | Traversal | ident
 
   RFS = 
     ArrayAppend | ArrayPrepend | JSONValue
+    
+  Condition =
+  	Clause (LogicalOp Clause)?
+    
+  LogicalOp = AND | OR
+  
+  AND = 
+  	caseInsensitive<"AND">
+    
+  OR =
+  	caseInsensitive<"OR">
 
   Clause = 
   	ident "=" Scalar

@@ -8,6 +8,7 @@ import (
 
 	dml "github.com/birdie-ai/golibs/dml"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestEncode(t *testing.T) {
@@ -196,9 +197,9 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{"a": 1},
+					Assign: dml.Assign{"a": 1.0},
 					Where: dml.Where{
-						"id": 1,
+						"id": 1.0,
 					},
 				},
 			},
@@ -222,7 +223,7 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{"a": map[string]string{"k1": "v1", "k2": "v2"}},
+					Assign: dml.Assign{"a": map[string]any{"k1": "v1", "k2": "v2"}},
 					Where: dml.Where{
 						"id": "abc",
 					},
@@ -236,7 +237,7 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{
-						"a.b.c": []string{"a", "b", "c"},
+						"a.b.c": []any{"a", "b", "c"},
 					},
 					Where: dml.Where{
 						"id": "abc",
@@ -267,7 +268,7 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("organizations"),
 					Assign: dml.Assign{
-						".": map[string]string{
+						".": map[string]any{
 							"name": "some org",
 							"test": "abc",
 						},
@@ -283,16 +284,35 @@ func TestEncode(t *testing.T) {
 			ast: dml.Stmts{
 				{
 					Op:     dml.SET,
-					Entity: u("feedbacks"),
-					Assign: dml.Assign{"a": 1},
+					Entity: u("organizations"),
+					Assign: dml.Assign{
+						".": map[string]string{
+							"name": "some org",
+							"test": "abc",
+						},
+						"test": 1.0,
+					},
 					Where: dml.Where{
-						"id": 1,
+						"id": "abc",
+					},
+				},
+			},
+			err: dml.ErrInvalidDotAssign,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"id": 1.0,
 					},
 				},
 				{
 					Op:     dml.SET,
 					Entity: u("organizations"),
-					Assign: dml.Assign{"abc": 1},
+					Assign: dml.Assign{"abc": 1.0},
 					Where: dml.Where{
 						"id": "abc",
 					},
@@ -306,9 +326,9 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{"some-field": 1},
+					Assign: dml.Assign{"some-field": 1.0},
 					Where: dml.Where{
-						"id": 1,
+						"id": 1.0,
 					},
 				},
 			},
@@ -319,9 +339,9 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{"abc.some-field": 1},
+					Assign: dml.Assign{"abc.some-field": 1.0},
 					Where: dml.Where{
-						"id": 1,
+						"id": 1.0,
 					},
 				},
 			},
@@ -332,9 +352,9 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{"some-field.some-other-field": 1},
+					Assign: dml.Assign{"some-field.some-other-field": 1.0},
 					Where: dml.Where{
-						"id": 1,
+						"id": 1.0,
 					},
 				},
 			},
@@ -345,9 +365,9 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{`a."some_field"`: 1},
+					Assign: dml.Assign{`a."some_field"`: 1.0},
 					Where: dml.Where{
-						"id": 1,
+						"id": 1.0,
 					},
 				},
 			},
@@ -358,9 +378,9 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{"a.\"some-other-field\"": 1},
+					Assign: dml.Assign{"a.\"some-other-field\"": 1.0},
 					Where: dml.Where{
-						"id": 1,
+						"id": 1.0,
 					},
 				},
 			},
@@ -371,9 +391,9 @@ func TestEncode(t *testing.T) {
 				{
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
-					Assign: dml.Assign{`a."some field".test."other field"`: 1},
+					Assign: dml.Assign{`a."some field".test."other field"`: 1.0},
 					Where: dml.Where{
-						"id": 1,
+						"id": 1.0,
 					},
 				},
 			},
@@ -385,7 +405,7 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{
-						"a.b.c": []string{"a", "b", "c"},
+						"a.b.c": []any{"a", "b", "c"},
 					},
 					Where: dml.Where{
 						"id":     "abc",
@@ -433,7 +453,7 @@ func TestEncode(t *testing.T) {
 					Op:     dml.SET,
 					Entity: u("feedbacks"),
 					Assign: dml.Assign{
-						"d":       1,
+						"d":       1.0,
 						"i.j.k":   dml.Append[float64]{Values: []float64{1, 2, 3}},
 						"s.t.r.a": dml.Prepend[string]{Values: []string{"a", "b", "c"}},
 					},
@@ -477,6 +497,120 @@ func TestEncode(t *testing.T) {
 			},
 			err: dml.ErrMissingArrayValues,
 		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						".":      dml.DeleteKey{},
+						"labels": dml.DeleteKey{},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			err: dml.ErrInvalidDotAssign,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"obj": dml.KeyFilter{Keys: []string{"a"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks obj[k] : k="a" WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"obj": dml.KeyFilter{Keys: []string{"a", "b"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks obj[k] : k IN ["a","b"] WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"labels": dml.ValueFilter[string]{Values: []string{"label-1"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks labels[_] => v : v="label-1" WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"labels": dml.ValueFilter[string]{Values: []string{"label-1", "label-2"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks labels[_] => v : v IN ["label-1","label-2"] WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"custom_fields": dml.KeyValueFilter[string]{Key: "country", Values: []string{"us"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks custom_fields[k] => v : k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
+		},
+		{
+			ast: dml.Stmts{
+				{
+					Op:     dml.DELETE,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{
+						"a.b":   dml.KeyFilter{Keys: []string{"test"}},
+						"a.b.c": dml.KeyValueFilter[string]{Key: "country", Values: []string{"us"}},
+					},
+					Where: dml.Where{
+						"id":     "abc",
+						"org_id": "xyz",
+					},
+				},
+			},
+			want: `DELETE feedbacks a.b[k] : k="test",a.b.c[k] => v : k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
+		},
 	} {
 		var buf bytes.Buffer
 		err := dml.Encode(&buf, tc.ast)
@@ -488,7 +622,15 @@ func TestEncode(t *testing.T) {
 		}
 		got := buf.String()
 		if diff := cmp.Diff(tc.want, got); diff != "" {
+			t.Log(tc.want)
 			t.Fatalf("got [+], want [-]: %s", diff)
+		}
+		decoded, err := dml.Parse([]byte(got))
+		if err != nil {
+			t.Fatalf("failed to decoded the encoded buffer [%s]: %v", tc.want, err)
+		}
+		if diff := cmp.Diff(decoded, tc.ast, cmpopts.EquateComparable(unique.Handle[string]{})); diff != "" {
+			t.Fatalf("encode/decode of [%s], got diff: %s", tc.want, diff)
 		}
 	}
 }
