@@ -599,15 +599,15 @@ func parseWhere(in []byte) (Where, []byte, error) {
 		// type-check it in runtime, but we want to catch most mistakes at the parsing/codegen
 		// phase. At the moment, we ingest dml statements in big batches that are transactional,
 		// so, they all succeed or all fail, and then having an `any` value in a data structure
-		// that only allows for `[]Primtipe` leave too much failing cases to be caught in the
+		// that only allows for `[]Primtype` leaves too much failing cases to be caught in the
 		// server side. Additionally, if the grammar asks for at least 1 entry in the array.
 		// Another reason to check for that is imagine generating code like:
 		// 		echo "... IN $(jsonencode $values)"
 		// then if somehow $values is not a []Primtype this would be syntactically correct and
 		// errors would only be detected later in the engine that executes the statements.
-		// This implementation makes it a syntactic errors to not encode a []Primtype in the `IN`
+		// This implementation makes it a syntactic error to not encode a []Primtype in the `IN`
 		// clause.
-		// Additionally, down below we also check if the list contain items, otherwise it's just
+		// Additionally, down below we also check if the list contains items, otherwise it's just
 		// nonsense.
 		return nil, nil, fmt.Errorf("%w: IN requires a JSON list argument but got %q", ErrSyntax, in)
 	}
