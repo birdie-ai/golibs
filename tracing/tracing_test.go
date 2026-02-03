@@ -72,7 +72,7 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		gotLogger = slog.FromCtx(req.Context())
 		gotTraceID = tracing.CtxGetTraceID(req.Context())
 		gotOrgID = tracing.CtxGetOrgID(req.Context())
-		gotUserAgent = tracing.CtxGetUserAgent(req.Context())
+		gotUserAgent = tracing.CtxGetInboundUserAgent(req.Context())
 		w.WriteHeader(wantStatus)
 		_, _ = fmt.Fprint(w, wantBody)
 		gotResponseWriter = w
@@ -195,7 +195,7 @@ func TestCtxWithTraceOrgRequestIDUserAgent(t *testing.T) {
 	ctx = tracing.CtxWithRequestID(ctx, wantRequestID)
 	ctx = tracing.CtxWithTraceID(ctx, wantTraceID)
 	ctx = tracing.CtxWithOrgID(ctx, wantOrgID)
-	ctx = tracing.CtxWithUserAgent(ctx, wantUserAgent)
+	ctx = tracing.CtxWithInboundUserAgent(ctx, wantUserAgent)
 
 	got = tracing.CtxGetRequestID(ctx)
 	if got != wantRequestID {
@@ -211,7 +211,7 @@ func TestCtxWithTraceOrgRequestIDUserAgent(t *testing.T) {
 	if got != wantOrgID {
 		t.Fatalf("got %q != want %q", got, wantTraceID)
 	}
-	got = tracing.CtxGetUserAgent(ctx)
+	got = tracing.CtxGetInboundUserAgent(ctx)
 	if got != wantUserAgent {
 		t.Fatalf("got %q != want %q", got, wantUserAgent)
 	}

@@ -58,7 +58,7 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 			ctx = CtxWithOrgID(ctx, orgID)
 		}
 		if userAgent != "" {
-			ctx = CtxWithUserAgent(ctx, userAgent)
+			ctx = CtxWithInboundUserAgent(ctx, userAgent)
 		}
 		requestID := uuid.NewString()
 		ctx = CtxWithRequestID(ctx, requestID)
@@ -136,14 +136,14 @@ func CtxGetOrgID(ctx context.Context) string {
 	return ctxget(ctx, orgIDKey)
 }
 
-// CtxWithUserAgent creates a new [context.Context] with the given user-agent associated with it.
-// Call [CtxGetUserAgent] to retrieve the user-agent.
-func CtxWithUserAgent(ctx context.Context, userAgent string) context.Context {
+// CtxWithInboundUserAgent creates a new [context.Context] with the given inbound user-agent associated with it.
+// Call [CtxGetInboundUserAgent] to retrieve the user-agent.
+func CtxWithInboundUserAgent(ctx context.Context, userAgent string) context.Context {
 	return context.WithValue(ctx, userAgentKey, userAgent)
 }
 
-// CtxGetUserAgent gets the user-agent associated with this context.
-func CtxGetUserAgent(ctx context.Context) string {
+// CtxGetInboundUserAgent gets the inbound user-agent associated with this context.
+func CtxGetInboundUserAgent(ctx context.Context) string {
 	return ctxget(ctx, userAgentKey)
 }
 
