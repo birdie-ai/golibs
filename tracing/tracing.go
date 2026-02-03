@@ -50,11 +50,15 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 			traceID = uuid.NewString()
 		}
 		orgID := req.Header.Get(orgIDHeader)
+		userAgent := req.Header.Get("User-Agent")
 
 		ctx := req.Context()
 		ctx = CtxWithTraceID(ctx, traceID)
 		if orgID != "" {
 			ctx = CtxWithOrgID(ctx, orgID)
+		}
+		if userAgent != "" {
+			ctx = CtxWithUserAgent(ctx, userAgent)
 		}
 		requestID := uuid.NewString()
 		ctx = CtxWithRequestID(ctx, requestID)
@@ -64,6 +68,9 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 		log = log.With("request_id", requestID)
 		if orgID != "" {
 			log = log.With("organization_id", orgID)
+		}
+		if userAgent != "" {
+			log = log.With("user_agent", orgID)
 		}
 		ctx = slog.NewContext(ctx, log)
 

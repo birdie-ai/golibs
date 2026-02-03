@@ -17,7 +17,7 @@ func TestSetRequestHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	const (
@@ -55,21 +55,24 @@ func TestSetRequestHeadersEmptyCtx(t *testing.T) {
 
 func TestIntrumentedHTTPHandler(t *testing.T) {
 	const (
-		wantTraceID = "test-trace-id"
-		wantOrgID   = "test-org-id"
-		wantStatus  = 201 // should be a non-default status, to actually test things.
-		wantBody    = "Worked!"
+		wantTraceID   = "test-trace-id"
+		wantOrgID     = "test-org-id"
+		wantStatus    = 201 // should be a non-default status, to actually test things.
+		wantBody      = "Worked!"
+		wantUserAgent = "test-user-agent"
 	)
 	var (
 		gotLogger         *slog.Logger
 		gotTraceID        string
 		gotOrgID          string
+		gotUserAgent      string
 		gotResponseWriter http.ResponseWriter
 	)
 	handler := tracing.InstrumentHTTP(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		gotLogger = slog.FromCtx(req.Context())
 		gotTraceID = tracing.CtxGetTraceID(req.Context())
 		gotOrgID = tracing.CtxGetOrgID(req.Context())
+		gotUserAgent = tracing.CtxGetUserAgent(req.Context())
 		w.WriteHeader(wantStatus)
 		_, _ = fmt.Fprint(w, wantBody)
 		gotResponseWriter = w
@@ -78,6 +81,7 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("traceparent", wantTraceID)
 	req.Header.Set("Birdie-Organization-ID", wantOrgID)
+	req.Header.Set("User-Agent", wantUserAgent)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -89,6 +93,9 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		t.Fatalf("got %q != want %q", gotTraceID, wantTraceID)
 	}
 	if gotOrgID != wantOrgID {
+		t.Fatalf("got %q != want %q", gotOrgID, wantOrgID)
+	}
+	if gotUserAgent != wantUserAgent {
 		t.Fatalf("got %q != want %q", gotOrgID, wantOrgID)
 	}
 	res := w.Result()
