@@ -129,6 +129,17 @@ func CtxGetOrgID(ctx context.Context) string {
 	return ctxget(ctx, orgIDKey)
 }
 
+// CtxWithUserAgent creates a new [context.Context] with the given user-agent associated with it.
+// Call [CtxGetUserAgent] to retrieve the user-agent.
+func CtxWithUserAgent(ctx context.Context, userAgent string) context.Context {
+	return context.WithValue(ctx, userAgentKey, userAgent)
+}
+
+// CtxGetUserAgent gets the user-agent associated with this context.
+func CtxGetUserAgent(ctx context.Context) string {
+	return ctxget(ctx, userAgentKey)
+}
+
 // SetRequestHeaders adds headers to the given [Request] using information
 // extracted from the given [context.Context].
 //
@@ -172,6 +183,7 @@ const (
 	traceIDKey key = iota
 	orgIDKey
 	requestIDKey
+	userAgentKey
 )
 
 func newResponseWriter(r http.ResponseWriter) responseWriterObserver {
