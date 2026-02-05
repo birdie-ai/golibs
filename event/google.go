@@ -88,6 +88,28 @@ func (p *OrderedGooglePublisher[T]) Publish(ctx context.Context, event T, orderi
 	return nil
 }
 
+// AsyncPublish will publish asyncronously.
+func (p *OrderedGooglePublisher[T]) AsyncPublish(ctx context.Context, event T, orderingKey string) (*pubsub.PublishResult, error) {
+	encBody, err := serializeEvent(ctx, p.eventName, event)
+	if err != nil {
+		return nil, err
+	}
+	res := p.topic.Publish(ctx, &pubsub.Message{
+		OrderingKey: orderingKey,
+		Data:        encBody,
+	})
+	return res, nil
+}
+
+// AsyncWait waits for the provided result to be sent.
+func (p *OrderedGooglePublisher[T]) AsyncWait(ctx context.Context, res *pubsub.PublishResult) error {
+	_, err := res.Get(ctx)
+	if err != nil {
+		return xerrors.Tag(err, ErrUnrecoverable)
+	}
+	return nil
+}
+
 // Resume must be called for the given orderingKey after a Publish call with the same
 // orderingKey failed and the error is [ErrUnrecoverable].
 func (p *OrderedGooglePublisher[T]) Resume(_ context.Context, orderingKey string) error {
