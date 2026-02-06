@@ -50,11 +50,15 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 			traceID = uuid.NewString()
 		}
 		orgID := req.Header.Get(orgIDHeader)
+		userAgent := req.Header.Get("User-Agent")
 
 		ctx := req.Context()
 		ctx = CtxWithTraceID(ctx, traceID)
 		if orgID != "" {
 			ctx = CtxWithOrgID(ctx, orgID)
+		}
+		if userAgent != "" {
+			ctx = CtxWithInboundUserAgent(ctx, userAgent)
 		}
 		requestID := uuid.NewString()
 		ctx = CtxWithRequestID(ctx, requestID)
@@ -64,6 +68,9 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 		log = log.With("request_id", requestID)
 		if orgID != "" {
 			log = log.With("organization_id", orgID)
+		}
+		if userAgent != "" {
+			log = log.With("user_agent", orgID)
 		}
 		ctx = slog.NewContext(ctx, log)
 
@@ -129,6 +136,17 @@ func CtxGetOrgID(ctx context.Context) string {
 	return ctxget(ctx, orgIDKey)
 }
 
+// CtxWithInboundUserAgent creates a new [context.Context] with the given inbound user-agent associated with it.
+// Call [CtxGetInboundUserAgent] to retrieve the user-agent.
+func CtxWithInboundUserAgent(ctx context.Context, userAgent string) context.Context {
+	return context.WithValue(ctx, userAgentKey, userAgent)
+}
+
+// CtxGetInboundUserAgent gets the inbound user-agent associated with this context.
+func CtxGetInboundUserAgent(ctx context.Context) string {
+	return ctxget(ctx, userAgentKey)
+}
+
 // SetRequestHeaders adds headers to the given [Request] using information
 // extracted from the given [context.Context].
 //
@@ -172,6 +190,7 @@ const (
 	traceIDKey key = iota
 	orgIDKey
 	requestIDKey
+	userAgentKey
 )
 
 func newResponseWriter(r http.ResponseWriter) responseWriterObserver {
