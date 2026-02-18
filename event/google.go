@@ -34,11 +34,12 @@ type (
 	// The side effects/possible issues are something we are willing to live with when using this.
 	// If in doubt, don't use this, it is somewhat experimental (even though we really need this to work well in production).
 	GoogleExperimentalBatchSubscription[T any] struct {
-		eventName string
-		client    *pubsub.Client
-		sub       *pubsub.Subscription
-		events    chan *Event[T]
-		batchSize int
+		eventName     string
+		client        *pubsub.Client
+		sub           *pubsub.Subscription
+		events        chan *Event[T]
+		batchSize     int
+		numGoroutines int
 	}
 )
 
@@ -194,7 +195,8 @@ func (s *OrderedGoogleSub[T]) Shutdown(context.Context) error {
 }
 
 // NewGoogleExperimentalBatchSubscription creates a new google batch subscriber that can read N events at once (building a batch).
-func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project, subName, eventName string, batchSize int) (*GoogleExperimentalBatchSubscription[T], error) {
+// numGoroutines controls [pubsub.ReceiveSettings.NumGoroutines].
+func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project, subName, eventName string, batchSize, numGoroutines int) (*GoogleExperimentalBatchSubscription[T], error) {
 	if batchSize <= 0 {
 		return nil, fmt.Errorf("batch size %q must be > 0", batchSize)
 	}
@@ -203,11 +205,12 @@ func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project,
 		return nil, fmt.Errorf("creating client: %w", err)
 	}
 	s := &GoogleExperimentalBatchSubscription[T]{
-		eventName: eventName,
-		client:    client,
-		sub:       client.Subscription(subName),
-		events:    make(chan *Event[T]),
-		batchSize: batchSize,
+		eventName:     eventName,
+		client:        client,
+		sub:           client.Subscription(subName),
+		events:        make(chan *Event[T]),
+		batchSize:     batchSize,
+		numGoroutines: numGoroutines,
 	}
 	s.runReceiver(ctx)
 	return s, nil
@@ -256,7 +259,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 		// MaxExtension was copied from the current default (which seems to be the pubsub max limit ? Maybe ?).
 		// The other ones are the documented max values.
 		const maxExtension = 60 * time.Minute
-		s.sub.ReceiveSettings.NumGoroutines = 1
+		s.sub.ReceiveSettings.NumGoroutines = s.numGoroutines
 		s.sub.ReceiveSettings.MaxExtension = maxExtension
 		s.sub.ReceiveSettings.MinExtensionPeriod = 10 * time.Minute
 		s.sub.ReceiveSettings.MaxExtensionPeriod = 10 * time.Minute
