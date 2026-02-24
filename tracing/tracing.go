@@ -70,7 +70,7 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 			log = log.With("organization_id", orgID)
 		}
 		if userAgent != "" {
-			log = log.With("user_agent", orgID)
+			log = log.With("user_agent", userAgent)
 		}
 		ctx = slog.NewContext(ctx, log)
 
