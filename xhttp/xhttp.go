@@ -67,7 +67,7 @@ func Do[T any](c Client, req *http.Request) (*Response[T], error) {
 // Get is a helper that creates a HTTP request with a GET method and no request body and calls [Do].
 // It will behave exactly as documented on [Do].
 func Get[T any](ctx context.Context, c Client, url string) (*Response[T], error) {
-	r, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	r, err := NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

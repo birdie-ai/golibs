@@ -62,6 +62,7 @@ const (
 	totalPartitions    = 5000
 	eventsPerPartition = 200
 	batchSize          = 5000
+	numGoroutines      = 1
 	batchTimeWindow    = 30 * time.Second
 )
 
@@ -108,7 +109,7 @@ func createSubscription(ctx context.Context, projectID, name string) {
 }
 
 func subscriberBatch(ctx context.Context, projectID, topicName string) {
-	sub, err := event.NewGoogleExperimentalBatchSubscription[Event](ctx, projectID, topicName, topicName, batchSize)
+	sub, err := event.NewGoogleExperimentalBatchSubscription[Event](ctx, projectID, topicName, topicName, batchSize, numGoroutines)
 	panicerr(err)
 
 	log.Println("starting batch handler")
