@@ -89,6 +89,8 @@ func (p *OrderedGooglePublisher[T]) Publish(ctx context.Context, event T, orderi
 }
 
 // AsyncPublish will publish asyncronously.
+// This method only fails if the event cannot be serialized, otherwise it returns a [pubsub.PublishResult]
+// that can be used to check if the event went through by calling [PublishResult.Get].
 func (p *OrderedGooglePublisher[T]) AsyncPublish(ctx context.Context, event T, orderingKey string) (*pubsub.PublishResult, error) {
 	encBody, err := serializeEvent(ctx, p.eventName, event)
 	if err != nil {
@@ -99,15 +101,6 @@ func (p *OrderedGooglePublisher[T]) AsyncPublish(ctx context.Context, event T, o
 		Data:        encBody,
 	})
 	return res, nil
-}
-
-// AsyncWait waits for the provided result to be sent.
-func (p *OrderedGooglePublisher[T]) AsyncWait(ctx context.Context, res *pubsub.PublishResult) error {
-	_, err := res.Get(ctx)
-	if err != nil {
-		return xerrors.Tag(err, ErrUnrecoverable)
-	}
-	return nil
 }
 
 // Resume must be called for the given orderingKey after a Publish call with the same
