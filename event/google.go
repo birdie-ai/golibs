@@ -97,11 +97,10 @@ func (p *OrderedGooglePublisher[T]) AsyncPublish(ctx context.Context, event T, o
 	if err != nil {
 		return nil, err
 	}
-	res := p.topic.Publish(ctx, &pubsub.Message{
+	return p.topic.Publish(ctx, &pubsub.Message{
 		OrderingKey: orderingKey,
 		Data:        encBody,
-	})
-	return res, nil
+	}), nil
 }
 
 // Resume must be called for the given orderingKey after a Publish call with the same
