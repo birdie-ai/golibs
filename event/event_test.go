@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"testing"
 	"time"
@@ -306,7 +307,7 @@ func TestSubscriptionReceiveN(t *testing.T) {
 
 	publisher := event.NewPublisher[Event](eventName, topic)
 	wantEvents := make([]Event, totalEvents)
-	for i := 0; i < 9; i++ {
+	for i := range 9 {
 		wantEvents[i] = Event{i}
 		if err := publisher.Publish(ctx, Event{i}); err != nil {
 			t.Fatalf("publishing test event: %v", err)
@@ -550,7 +551,7 @@ func TestRawSubscriptionServing(t *testing.T) {
 	got := []string{}
 
 	// Lets check that all go-routines were created and handled each message
-	for i := 0; i < maxConcurrency; i++ {
+	for i := range maxConcurrency {
 		msg := fmt.Sprintf("message %d", i)
 		want = append(want, msg)
 
@@ -648,6 +649,92 @@ func TestRawSubscriptionRecoversFromPanic(t *testing.T) {
 		t.Fatalf("shutting down subscription: %v", err)
 	}
 	<-servingDone
+}
+
+func TestRawSubscriptionBatchServe(t *testing.T) {
+	t.Parallel()
+
+	url := newTopicURL(t)
+	ctx := t.Context()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = topic.Shutdown(ctx) }()
+
+	sendMsg := func(msg []byte) {
+		t.Helper()
+		if err := topic.Send(ctx, &pubsub.Message{Body: []byte(msg)}); err != nil {
+			t.Fatalf("publishing message: %v", err)
+		}
+	}
+
+	const (
+		batchSize      = 10
+		batchWindow    = time.Second
+		totalEvents    = 100
+		maxConcurrency = 5
+	)
+
+	subscription, err := event.NewRawSubscription(url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotBatches := make(chan []*event.AckerNackerMsg)
+	servingDone := make(chan struct{})
+	serveCtx, stopServe := context.WithCancel(ctx)
+
+	go func() {
+		_ = subscription.ServeBatch(serveCtx, batchSize, batchWindow, func(_ context.Context, batch []*event.AckerNackerMsg) {
+			gotBatches <- batch
+		})
+		close(servingDone)
+	}()
+
+	var wantMsgs []string
+	for i := range totalEvents {
+		msg := fmt.Sprintf("message[%d]", i)
+		wantMsgs = append(wantMsgs, msg)
+		sendMsg([]byte(msg))
+	}
+
+	var gotMsgs []string
+	for gotBatch := range gotBatches {
+		if len(gotBatch) > batchSize {
+			t.Errorf("batch %v len %d is bigger than %d", gotBatch, len(gotBatch), batchSize)
+		}
+		if len(gotBatch) == 0 {
+			t.Error("got empty batch")
+		}
+		for _, e := range gotBatch {
+			e.Ack()
+			gotMsgs = append(gotMsgs, string(e.Body))
+		}
+		if len(gotMsgs) >= len(wantMsgs) {
+			break
+		}
+	}
+	slices.Sort(wantMsgs)
+	slices.Sort(gotMsgs)
+	assertEqual(t, gotMsgs, wantMsgs)
+
+	stopServe()
+
+	// Wait for subscription to shutdown
+	select {
+	case <-servingDone:
+	case <-ctx.Done():
+		t.Fatalf("subscription ServeBatch didn't exit")
+	}
+
+	// There shouldn't be any events left
+	select {
+	case v := <-gotBatches:
+		t.Fatalf("unexpected batch: %v", v)
+	default:
+	}
 }
 
 func TestSubscriptionServingWithMetadata(t *testing.T) {

@@ -109,7 +109,7 @@ type (
 
 	// MessageBatchHandler is responsible for handling a batch of N messages from a [MessageSubscription] at once.
 	// No [Message] from the batch is acked or nacked, the handler is responsible for sending ack/nack for each message (allows partial processing).
-	MessageBatchHandler func(context.Context, []AckerNackerMsg)
+	MessageBatchHandler func(context.Context, []*AckerNackerMsg)
 )
 
 // ErrUnrecoverable represents unrecoverable errors, used to deal with ordered publishing errors.
@@ -386,13 +386,17 @@ func (r *MessageSubscription) ServeBatch(
 	if batchWindow <= 0 {
 		return fmt.Errorf("batch window %v must be > 0", batchWindow)
 	}
+
 	semaphore := make(chan struct{}, r.maxConcurrency)
 	fatalErr := make(chan error)
+
 	for ctx.Err() == nil {
 		select {
 		case semaphore <- struct{}{}:
 		case err := <-fatalErr:
 			return err
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 		go func() {
 			defer func() {
@@ -411,9 +415,9 @@ func (r *MessageSubscription) ServeBatch(
 			if len(rmsgs) == 0 {
 				return
 			}
-			msgs := make([]AckerNackerMsg, len(rmsgs))
+			msgs := make([]*AckerNackerMsg, len(rmsgs))
 			for i, v := range rmsgs {
-				msgs[i] = AckerNackerMsg{
+				msgs[i] = &AckerNackerMsg{
 					Message:     v.Message,
 					AckerNacker: v,
 				}
