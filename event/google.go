@@ -182,12 +182,7 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 			msg.Nack()
 			return
 		}
-		metadata := Metadata{
-			ID:            msg.ID,
-			PublishedTime: msg.PublishTime,
-			Attributes:    msg.Attributes,
-		}
-
+		metadata := googlePubsubMetadata(msg)
 		start := time.Now()
 		err = handler(ctx, event.Event, metadata)
 		elapsed := time.Since(start)
@@ -292,7 +287,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 			defer cancel()
 
 			select {
-			case s.events <- &Event[T]{Envelope: event, AckerNacker: msg}:
+			case s.events <- &Event[T]{Envelope: event, AckerNacker: msg, Metadata: googlePubsubMetadata(msg)}:
 				// Just send event and let the client ack the event, unblocking this goroutine to get the next message from the same partition.
 				// Not recommended by the docs, but lets see if it works well enough.
 			case <-ctx.Done():
@@ -308,4 +303,12 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 // Shutdown will send all pending publish messages and stop all goroutines.
 func (s *GoogleExperimentalBatchSubscription[T]) Shutdown(context.Context) error {
 	return s.client.Close()
+}
+
+func googlePubsubMetadata(msg *pubsub.Message) Metadata {
+	return Metadata{
+		ID:            msg.ID,
+		PublishedTime: msg.PublishTime,
+		Attributes:    msg.Attributes,
+	}
 }
