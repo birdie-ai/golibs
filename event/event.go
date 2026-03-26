@@ -369,6 +369,8 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 //
 // The batch handler is called with N events where 0 < N <= batchSize.
 // The batch time window controls for how long it will wait for a batch to fill.
+// The [context.Context] might not have any deadline enforced on it (it is the overall batch run one),
+// it is responsibility of handlers to create a new child context with an explicit/clean deadline for the event handling.
 //
 // If the handler panics it is assumed that the effect of the panic was isolated to the failed batch handling,
 // Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
@@ -387,28 +389,39 @@ func (r *MessageSubscription) ServeBatch(
 		return fmt.Errorf("batch window %v must be > 0", batchWindow)
 	}
 	semaphore := make(chan struct{}, r.maxConcurrency)
+	fatalErr := make(chan error)
 	for ctx.Err() == nil {
-		semaphore <- struct{}{}
-		rmsgs, err := r.receiveN(ctx, batchSize)
-		if err != nil {
-			// From: https://pkg.go.dev/gocloud.dev@v0.30.0/pubsub#example-Subscription.Receive-Concurrent
-			// Errors from Receive indicate that Receive will no longer succeed.
-			return fmt.Errorf("receiveN from message subscription failed, stopping serving: %w", err)
-		}
-		if len(rmsgs) == 0 {
-			continue
-		}
-		msgs := make([]AckerNackerMsg, len(rmsgs))
-		for i, v := range rmsgs {
-			msgs[i] = AckerNackerMsg{
-				Message:     v.Message,
-				AckerNacker: v,
-			}
+		select {
+		case semaphore <- struct{}{}:
+		case err := <-fatalErr:
+			return err
 		}
 		go func() {
 			defer func() {
 				<-semaphore
 			}()
+
+			rcvCtx, cancel := context.WithTimeout(ctx, batchWindow)
+			rmsgs, err := r.receiveN(rcvCtx, batchSize)
+			cancel()
+			if err != nil {
+				// From: https://pkg.go.dev/gocloud.dev@v0.30.0/pubsub#example-Subscription.Receive-Concurrent
+				// Errors from Receive indicate that Receive will no longer succeed.
+				fatalErr <- err
+				return
+			}
+			if len(rmsgs) == 0 {
+				return
+			}
+			msgs := make([]AckerNackerMsg, len(rmsgs))
+			for i, v := range rmsgs {
+				msgs[i] = AckerNackerMsg{
+					Message:     v.Message,
+					AckerNacker: v,
+				}
+			}
+			// We only handle panics from the handler, the core logic shouldn't panic and
+			// should abort if a panic happens.
 			defer func() {
 				if err := recover(); err != nil {
 					// 64KB, if it is good enough for Go's standard lib it is good enough for us :-)
@@ -428,7 +441,7 @@ func (r *MessageSubscription) ServeBatch(
 			bh(ctx, msgs)
 		}()
 	}
-	return nil
+	return ctx.Err()
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [MessageSubscription.Serve].
