@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/pubsub/apiv1/pubsubpb"
@@ -361,14 +362,17 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 }
 
 // ServeBatch will start serving all events from the subscription calling handler for each batch of events.
-// It will run until the given [context.Context] is cancelled.
+// It will run until the given [context.Context] is cancelled. When the context is cancelled
+// it will wait for all handlers to finish before returning. Handlers receive the same context
+// as a parameter and must respect its cancellation.
+// The [context.Context] might not have any deadline enforced on it (it is the overall batch run one),
+// it is responsibility of handlers to create a new child context with an explicit/clean deadline for the event handling.
+//
 // ServeBatch may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" go-routines (configured on [MessageSubscription] creation).
 //
 // The batch handler is called with N events where 0 < N <= batchSize.
 // The batch time window controls for how long it will wait for a batch to fill.
-// The [context.Context] might not have any deadline enforced on it (it is the overall batch run one),
-// it is responsibility of handlers to create a new child context with an explicit/clean deadline for the event handling.
 //
 // If the handler panics it is assumed that the effect of the panic was isolated to the failed batch handling,
 // Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
@@ -389,16 +393,19 @@ func (r *MessageSubscription) ServeBatch(
 
 	semaphore := make(chan struct{}, r.maxConcurrency)
 	fatalErr := make(chan error)
+	var wg sync.WaitGroup
 
 	for ctx.Err() == nil {
 		select {
 		case semaphore <- struct{}{}:
 		case err := <-fatalErr:
+			wg.Wait()
 			return err
 		case <-ctx.Done():
+			wg.Wait()
 			return ctx.Err()
 		}
-		go func() {
+		wg.Go(func() {
 			defer func() {
 				<-semaphore
 			}()
@@ -441,8 +448,9 @@ func (r *MessageSubscription) ServeBatch(
 			}()
 
 			bh(ctx, msgs)
-		}()
+		})
 	}
+	wg.Wait()
 	return ctx.Err()
 }
 

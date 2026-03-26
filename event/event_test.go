@@ -727,14 +727,17 @@ func TestRawSubscriptionBatchServe(t *testing.T) {
 	// Wait for subscription to shutdown
 	select {
 	case <-servingDone:
+		// If any handlers are still running this will panic, which is what we want (they shouldn't)
+		close(gotBatches)
 	case <-ctx.Done():
 		t.Fatalf("subscription ServeBatch didn't exit")
 	}
 
-	// There shouldn't be any events left
 	select {
-	case v := <-gotBatches:
-		t.Fatalf("unexpected batch: %v", v)
+	case v, ok := <-gotBatches:
+		if ok {
+			t.Fatalf("unexpected batch: %v", v)
+		}
 	default:
 	}
 }
