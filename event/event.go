@@ -265,27 +265,25 @@ func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) erro
 // ServeBatch may be called multiple times, each time will start a new serving service that will
 // run up to "maxConcurrency" go-routines (configured on [Subscription] creation).
 //
-// The batch handler is called with at most N events at once, controlled by the batch size.
-// The batch time window controls for how long it will wait for a batch to fill (it uses [Subscription.ReceiveN]).
+// The batch handler is called with N events where 0 < N <= batchSize.
+// The batch time window controls for how long it will wait for a batch to fill.
+// The [context.Context] might not have any deadline enforced on it (it is the overall batch run one),
+// it is responsibility of handlers to create a new child context with an explicit/clean deadline for the event handling.
 //
-// If the handler panics it is assumed that the effect of the panic was isolated to the active batch handling.
+// If the handler panics it is assumed that the effect of the panic was isolated to the failed batch handling,
 // Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
 // It recovers the panic, logs a stack trace with ERROR log level and keeps running (unacked events will eventually
 // expire and be re-delivered, depending on the broker configuration).
-func (s *Subscription[T]) ServeBatch(
-	ctx context.Context,
-	batchSize int,
-	batchWindow time.Duration,
-	bh BatchHandler[T],
-) error {
-	if batchSize <= 0 {
-		return fmt.Errorf("batch size %d must be > 0", batchSize)
-	}
-	if batchWindow <= 0 {
-		return fmt.Errorf("batch window %v must be > 0", batchWindow)
-	}
-	return nil
-}
+//func (s *Subscription[T]) ServeBatch(
+//ctx context.Context,
+//batchSize int,
+//batchWindow time.Duration,
+//bh BatchHandler[T],
+//) error {
+//return s.rawsub.ServeBatch(ctx, batchSize, batchWindow, func(context.Context, []AckerNackerMsg) {
+////TODO
+//})
+//}
 
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
 // The subscription should not be used after this method is called.
