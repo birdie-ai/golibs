@@ -158,7 +158,7 @@ func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, e
 	if maxConcurrency <= 0 {
 		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
 	}
-	// We don't want the subscription to expire, so we use the background context.
+	// FIXME(katcipis): we should accept a context here (so we can cancel when a signal is received/process shutdown).
 	sub, err := pubsub.OpenSubscription(context.Background(), url)
 	if err != nil {
 		return nil, err
@@ -351,6 +351,11 @@ func (r *MessageSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
 }
 
+type message struct {
+	Message
+	msg *pubsub.Message
+}
+
 func (r *MessageSubscription) receive(ctx context.Context) (*message, error) {
 	gocloudMsg, err := r.sub.Receive(ctx)
 	if err != nil {
@@ -368,11 +373,6 @@ func (r *MessageSubscription) receive(ctx context.Context) (*message, error) {
 		},
 		msg: gocloudMsg,
 	}, nil
-}
-
-type message struct {
-	Message
-	msg *pubsub.Message
 }
 
 // Nack this msg (if possible).
