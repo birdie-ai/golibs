@@ -32,10 +32,11 @@ type (
 
 	// Event represents the structure of all data that wraps all events, like the [Envelope], but
 	// but with Ack/Nack. After the [Event] is handled [Event.Ack] or [Event.Nack] must be called.
-	// This type is used when receiving individual events with [Subscription.Receive].
+	// This type is used when receiving individual events with [Subscription.Receive] or [Subscription.ReceiveN].
 	Event[T any] struct {
 		Envelope[T]
 		AckerNacker
+		Metadata Metadata
 	}
 
 	// Envelope represents the structure of all data that wraps all events.
@@ -210,6 +211,7 @@ func (s *Subscription[T]) Receive(ctx context.Context) (*Event[T], error) {
 	var res Event[T]
 	res.Envelope = envelope
 	res.AckerNacker = m
+	res.Metadata = m.Metadata
 	return &res, nil
 }
 
