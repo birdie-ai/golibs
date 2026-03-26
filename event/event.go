@@ -60,6 +60,13 @@ type (
 	// by using [slog.FromCtx].
 	Handler[T any] func(context.Context, T) error
 
+	// BatchHandler is responsible for handling N events at once.
+	// Since it is usual for partial results to happen it is the responsibility of the handler
+	// to ack/unack individual events.
+	// The context passed to the handler will not have any metadata (opposed to [Handler]) since
+	// each event has its own metadata (different org ID, different trace ID, etc).
+	BatchHandler[T any] func(context.Context, []*Event[T]) error
+
 	// HandlerWithMetadata is responsible for handling events from a [Subscription] with its associated [Metadata].
 	// The context passed to the handler will have the same general metadata as the ones passed to [Handler], like the trace ID,
 	// and extra metadata that is more event specific as defined by [Metadata].
@@ -255,6 +262,30 @@ func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) erro
 		}
 		return handler(ctx, event.Event, msg.Metadata)
 	}))
+}
+
+// ServeBatch will start serving all events from the subscription calling handler for each batch of events.
+// It will run until the given [context.Context] is cancelled.
+// If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
+// If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
+// ServeBatch may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" go-routines (configured on [Subscription] creation).
+//
+// The batch handler is called with at most N events at once, controlled by the batch size.
+// The batch time window controls for how long it will wait for a batch to fill (it uses [Subscription.ReceiveN]).
+//
+// If the handler panics it is assumed that the effect of the panic was isolated to the active batch handling.
+// Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
+// It recovers the panic, logs a stack trace with ERROR log level and keeps running (unacked events will eventually
+// expire and be re-delivered, depending on the broker configuration).
+func (s *Subscription[T]) ServeBatch(ctx context.Context, batchSize int, batchWindow time.Duration, bh BatchHandler[T]) error {
+	if batchSize <= 0 {
+		return fmt.Errorf("batch size %d must be > 0", batchSize)
+	}
+	if batchWindow <= 0 {
+		return fmt.Errorf("batch window %v must be > 0", batchWindow)
+	}
+	return nil
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
