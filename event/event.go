@@ -97,7 +97,19 @@ type (
 	}
 
 	// MessageHandler is responsible for handling messages from a [MessageSubscription].
+	// If an error is returned it sends a nack.
+	// If error is nil ack is sent.
 	MessageHandler func(Message) error
+
+	// AckerNackerMsg is a [Message] that implements [AckerNacker]. It is used when handling batches.
+	AckerNackerMsg struct {
+		Message
+		AckerNacker
+	}
+
+	// MessageBatchHandler is responsible for handling a batch of N messages from a [MessageSubscription] at once.
+	// No [Message] from the batch is acked or nacked, the handler is responsible for sending ack/nack for each message (allows partial processing).
+	MessageBatchHandler func(context.Context, []AckerNackerMsg)
 )
 
 // ErrUnrecoverable represents unrecoverable errors, used to deal with ordered publishing errors.
@@ -148,24 +160,6 @@ func NewSubscription[T any](name, url string, maxConcurrency int) (*Subscription
 	return &Subscription[T]{
 		name:   name,
 		rawsub: rawsub,
-	}, nil
-}
-
-// NewRawSubscription creates a new raw subscription. It provides messages in a
-// service like manner (serve) and manages concurrent execution, each message
-// is processed in its own go-routines respecting the given maxConcurrency.
-func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, error) {
-	if maxConcurrency <= 0 {
-		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
-	}
-	// FIXME(katcipis): we should accept a context here (so we can cancel when a signal is received/process shutdown).
-	sub, err := pubsub.OpenSubscription(context.Background(), url)
-	if err != nil {
-		return nil, err
-	}
-	return &MessageSubscription{
-		sub:            sub,
-		maxConcurrency: maxConcurrency,
 	}, nil
 }
 
@@ -278,7 +272,12 @@ func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) erro
 // Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
 // It recovers the panic, logs a stack trace with ERROR log level and keeps running (unacked events will eventually
 // expire and be re-delivered, depending on the broker configuration).
-func (s *Subscription[T]) ServeBatch(ctx context.Context, batchSize int, batchWindow time.Duration, bh BatchHandler[T]) error {
+func (s *Subscription[T]) ServeBatch(
+	ctx context.Context,
+	batchSize int,
+	batchWindow time.Duration,
+	bh BatchHandler[T],
+) error {
 	if batchSize <= 0 {
 		return fmt.Errorf("batch size %d must be > 0", batchSize)
 	}
@@ -292,6 +291,24 @@ func (s *Subscription[T]) ServeBatch(ctx context.Context, batchSize int, batchWi
 // The subscription should not be used after this method is called.
 func (s *Subscription[T]) Shutdown(ctx context.Context) error {
 	return s.rawsub.Shutdown(ctx)
+}
+
+// NewRawSubscription creates a new raw subscription. It provides messages in a
+// service like manner (serve) and manages concurrent execution, each message
+// is processed in its own go-routines respecting the given maxConcurrency.
+func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, error) {
+	if maxConcurrency <= 0 {
+		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
+	}
+	// FIXME(katcipis): we should accept a context here (so we can cancel when a signal is received/process shutdown).
+	sub, err := pubsub.OpenSubscription(context.Background(), url)
+	if err != nil {
+		return nil, err
+	}
+	return &MessageSubscription{
+		sub:            sub,
+		maxConcurrency: maxConcurrency,
+	}, nil
 }
 
 // Serve will start serving all messages from the subscription calling handler for each
@@ -345,6 +362,75 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 	}
 }
 
+// ServeBatch will start serving all events from the subscription calling handler for each batch of events.
+// It will run until the given [context.Context] is cancelled.
+// ServeBatch may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" go-routines (configured on [MessageSubscription] creation).
+//
+// The batch handler is called with N events where 0 < N <= batchSize.
+// The batch time window controls for how long it will wait for a batch to fill.
+//
+// If the handler panics it is assumed that the effect of the panic was isolated to the failed batch handling,
+// Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
+// It recovers the panic, logs a stack trace with ERROR log level and keeps running (unacked events will eventually
+// expire and be re-delivered, depending on the broker configuration).
+func (r *MessageSubscription) ServeBatch(
+	ctx context.Context,
+	batchSize int,
+	batchWindow time.Duration,
+	bh MessageBatchHandler,
+) error {
+	if batchSize <= 0 {
+		return fmt.Errorf("batch size %d must be > 0", batchSize)
+	}
+	if batchWindow <= 0 {
+		return fmt.Errorf("batch window %v must be > 0", batchWindow)
+	}
+	semaphore := make(chan struct{}, r.maxConcurrency)
+	for ctx.Err() == nil {
+		semaphore <- struct{}{}
+		rmsgs, err := r.receiveN(ctx, batchSize)
+		if err != nil {
+			// From: https://pkg.go.dev/gocloud.dev@v0.30.0/pubsub#example-Subscription.Receive-Concurrent
+			// Errors from Receive indicate that Receive will no longer succeed.
+			return fmt.Errorf("receiveN from message subscription failed, stopping serving: %w", err)
+		}
+		if len(rmsgs) == 0 {
+			continue
+		}
+		msgs := make([]AckerNackerMsg, len(rmsgs))
+		for i, v := range rmsgs {
+			msgs[i] = AckerNackerMsg{
+				Message:     v.Message,
+				AckerNacker: v,
+			}
+		}
+		go func() {
+			defer func() {
+				<-semaphore
+			}()
+			defer func() {
+				if err := recover(); err != nil {
+					// 64KB, if it is good enough for Go's standard lib it is good enough for us :-)
+					const size = 64 << 10
+					buf := make([]byte, size)
+					buf = buf[:runtime.Stack(buf, false)]
+					// We might have partial results, we cant ack/nack any message, just log.
+					slog.Error("panic: message subscription: handling message",
+						"error", err,
+						"messages_total", len(rmsgs),
+						"batch_size", batchSize,
+						"batch_window", batchWindow,
+						"stack_trace", string(buf))
+				}
+			}()
+
+			bh(ctx, msgs)
+		}()
+	}
+	return nil
+}
+
 // Shutdown will shutdown the subscriber, stopping any calls to [MessageSubscription.Serve].
 // The subscription should not be used after this method is called.
 func (r *MessageSubscription) Shutdown(ctx context.Context) error {
@@ -373,6 +459,27 @@ func (r *MessageSubscription) receive(ctx context.Context) (*message, error) {
 		},
 		msg: gocloudMsg,
 	}, nil
+}
+
+func (r *MessageSubscription) receiveN(ctx context.Context, n int) ([]*message, error) {
+	if n < 0 {
+		panic(fmt.Errorf("n must be >= 0"))
+	}
+	var events []*message
+	for len(events) < n {
+		event, err := r.receive(ctx)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) ||
+				errors.Is(err, context.Canceled) {
+				// Time window reached/canceled, returning current batch/N
+				return events, nil
+			}
+			// Some other error happened, normal failure then
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, nil
 }
 
 // Nack this msg (if possible).
