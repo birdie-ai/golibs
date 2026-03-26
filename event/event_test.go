@@ -682,7 +682,9 @@ func TestRawSubscriptionBatchServe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gotBatches := make(chan []*event.AckerNackerMsg)
+	// To simplify the check for no leftover events lets improve our chances to catch all event handler
+	// calls by immediately adding them on the channel (queue).
+	gotBatches := make(chan []*event.AckerNackerMsg, 10_000)
 	servingDone := make(chan struct{})
 	serveCtx, stopServe := context.WithCancel(ctx)
 
