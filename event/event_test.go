@@ -655,7 +655,8 @@ func TestRawSubscriptionBatchServe(t *testing.T) {
 	t.Parallel()
 
 	url := newTopicURL(t)
-	ctx := t.Context()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
 
 	topic, err := pubsub.OpenTopic(ctx, url)
 	if err != nil {
@@ -682,9 +683,7 @@ func TestRawSubscriptionBatchServe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// To simplify the check for no leftover events lets improve our chances to catch all event handler
-	// calls by immediately adding them on the channel (queue).
-	gotBatches := make(chan []*event.AckerNackerMsg, 10_000)
+	gotBatches := make(chan []*event.AckerNackerMsg)
 	servingDone := make(chan struct{})
 	serveCtx, stopServe := context.WithCancel(ctx)
 
@@ -751,7 +750,8 @@ func TestSubscriptionBatchServe(t *testing.T) {
 
 	eventName := t.Name()
 	url := newTopicURL(t)
-	ctx := t.Context()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
 
 	topic, err := pubsub.OpenTopic(ctx, url)
 	if err != nil {
@@ -760,10 +760,16 @@ func TestSubscriptionBatchServe(t *testing.T) {
 	defer func() { _ = topic.Shutdown(ctx) }()
 
 	publisher := event.NewPublisher[eventdata](eventName, topic)
-	sendMsg := func(msg string) {
+	sendEvent := func(msg string) {
 		t.Helper()
 		if err := publisher.Publish(ctx, eventdata{Data: msg}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("publishing event: %v", err)
+		}
+	}
+	sendData := func(msg []byte) {
+		t.Helper()
+		if err := topic.Send(ctx, &pubsub.Message{Body: []byte(msg)}); err != nil {
+			t.Fatalf("publishing message: %v", err)
 		}
 	}
 
@@ -796,7 +802,9 @@ func TestSubscriptionBatchServe(t *testing.T) {
 	for i := range totalEvents {
 		msg := fmt.Sprintf("message[%d]", i)
 		wantMsgs = append(wantMsgs, msg)
-		sendMsg(msg)
+		sendEvent(msg)
+		// piggybacking on the tests to ensure that invalid events will be discared/normal processing goes on.
+		sendData([]byte(`{ "invalid JSON": `))
 	}
 
 	var gotMsgs []string

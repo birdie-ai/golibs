@@ -284,13 +284,20 @@ func (s *Subscription[T]) ServeBatch(
 	return s.rawsub.ServeBatch(ctx, batchSize, batchWindow, func(ctx context.Context, rawbatch []*AckerNackerMsg) {
 		var batch []*Event[T]
 		for _, v := range rawbatch {
-			_, event, _ := createEnvelope[T](ctx, s.name, v.Body)
-			// TODO(katcipis): what to do on errors ?
+			_, event, err := createEnvelope[T](ctx, s.name, v.Body)
+			if err != nil {
+				slog.FromCtx(ctx).Error("golibs: invalid event received, sending nack", "event", v, "error", err)
+				v.Nack()
+				continue
+			}
 			batch = append(batch, &Event[T]{
 				Envelope:    event,
 				AckerNacker: v,
 				Metadata:    v.Metadata,
 			})
+		}
+		if len(batch) == 0 {
+			return
 		}
 		bh(ctx, batch)
 	})
