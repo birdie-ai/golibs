@@ -889,7 +889,7 @@ func TestSubscriptionBatchServeSingleBatch(t *testing.T) {
 	const (
 		batchSize      = 10
 		batchWindow    = time.Second
-		totalEvents    = 9
+		totalEvents    = 10
 		maxConcurrency = 1
 	)
 
