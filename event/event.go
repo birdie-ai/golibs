@@ -66,7 +66,7 @@ type (
 	// to ack/unack individual events.
 	// The context passed to the handler will not have any metadata (opposed to [Handler]) since
 	// each event has its own metadata (different org ID, different trace ID, etc).
-	BatchHandler[T any] func(context.Context, []*Event[T]) error
+	BatchHandler[T any] func(context.Context, []*Event[T])
 
 	// HandlerWithMetadata is responsible for handling events from a [Subscription] with its associated [Metadata].
 	// The context passed to the handler will have the same general metadata as the ones passed to [Handler], like the trace ID,
@@ -206,7 +206,7 @@ func (s *Subscription[T]) Receive(ctx context.Context) (*Event[T], error) {
 	if err != nil {
 		return nil, err
 	}
-	_, envelope, err := createEvent[T](ctx, s.name, m.Body)
+	_, envelope, err := createEnvelope[T](ctx, s.name, m.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (s *Subscription[T]) Receive(ctx context.Context) (*Event[T], error) {
 // which in most event systems will trigger some form of retry).
 func (s *Subscription[T]) Serve(handler Handler[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		ctx, event, err := createEvent[T](context.Background(), s.name, msg.Body)
+		ctx, event, err := createEnvelope[T](context.Background(), s.name, msg.Body)
 		if err != nil {
 			return err
 		}
@@ -251,7 +251,7 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 // run up to "maxConcurrency" go-routines.
 func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		ctx, event, err := createEvent[T](context.Background(), s.name, msg.Body)
+		ctx, event, err := createEnvelope[T](context.Background(), s.name, msg.Body)
 		if err != nil {
 			return err
 		}
@@ -275,16 +275,26 @@ func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) erro
 // Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
 // It recovers the panic, logs a stack trace with ERROR log level and keeps running (unacked events will eventually
 // expire and be re-delivered, depending on the broker configuration).
-//func (s *Subscription[T]) ServeBatch(
-//ctx context.Context,
-//batchSize int,
-//batchWindow time.Duration,
-//bh BatchHandler[T],
-//) error {
-//return s.rawsub.ServeBatch(ctx, batchSize, batchWindow, func(context.Context, []AckerNackerMsg) {
-////TODO
-//})
-//}
+func (s *Subscription[T]) ServeBatch(
+	ctx context.Context,
+	batchSize int,
+	batchWindow time.Duration,
+	bh BatchHandler[T],
+) error {
+	return s.rawsub.ServeBatch(ctx, batchSize, batchWindow, func(ctx context.Context, rawbatch []*AckerNackerMsg) {
+		var batch []*Event[T]
+		for _, v := range rawbatch {
+			_, event, _ := createEnvelope[T](ctx, s.name, v.Body)
+			// TODO(katcipis): what to do on errors ?
+			batch = append(batch, &Event[T]{
+				Envelope:    event,
+				AckerNacker: v,
+				Metadata:    v.Metadata,
+			})
+		}
+		bh(ctx, batch)
+	})
+}
 
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
 // The subscription should not be used after this method is called.
@@ -536,7 +546,7 @@ func serializeEvent[T any](ctx context.Context, eventName string, event T) ([]by
 	})
 }
 
-func createEvent[T any](ctx context.Context, eventName string, data []byte) (context.Context, Envelope[T], error) {
+func createEnvelope[T any](ctx context.Context, eventName string, data []byte) (context.Context, Envelope[T], error) {
 	var event Envelope[T]
 
 	log := slog.Default()

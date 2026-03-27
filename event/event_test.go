@@ -742,6 +742,103 @@ func TestRawSubscriptionBatchServe(t *testing.T) {
 	}
 }
 
+func TestSubscriptionBatchServe(t *testing.T) {
+	t.Parallel()
+
+	type eventdata struct {
+		Data string
+	}
+
+	eventName := t.Name()
+	url := newTopicURL(t)
+	ctx := t.Context()
+
+	topic, err := pubsub.OpenTopic(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = topic.Shutdown(ctx) }()
+
+	publisher := event.NewPublisher[eventdata](eventName, topic)
+	sendMsg := func(msg string) {
+		t.Helper()
+		if err := publisher.Publish(ctx, eventdata{Data: msg}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const (
+		batchSize      = 10
+		batchWindow    = time.Second
+		totalEvents    = 100
+		maxConcurrency = 5
+	)
+
+	subscription, err := event.NewSubscription[eventdata](eventName, url, maxConcurrency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// To simplify the check for no leftover events lets improve our chances to catch all event handler
+	// calls by immediately adding them on the channel (queue).
+	gotBatches := make(chan []*event.Event[eventdata])
+	servingDone := make(chan struct{})
+	serveCtx, stopServe := context.WithCancel(ctx)
+
+	go func() {
+		_ = subscription.ServeBatch(serveCtx, batchSize, batchWindow, func(_ context.Context, batch []*event.Event[eventdata]) {
+			gotBatches <- batch
+		})
+		close(servingDone)
+	}()
+
+	var wantMsgs []string
+	for i := range totalEvents {
+		msg := fmt.Sprintf("message[%d]", i)
+		wantMsgs = append(wantMsgs, msg)
+		sendMsg(msg)
+	}
+
+	var gotMsgs []string
+	for gotBatch := range gotBatches {
+		if len(gotBatch) > batchSize {
+			t.Errorf("batch %v len %d is bigger than %d", gotBatch, len(gotBatch), batchSize)
+		}
+		if len(gotBatch) == 0 {
+			t.Error("got empty batch")
+		}
+		for _, e := range gotBatch {
+			e.Ack()
+			gotMsgs = append(gotMsgs, e.Event.Data)
+		}
+		if len(gotMsgs) >= len(wantMsgs) {
+			break
+		}
+	}
+	slices.Sort(wantMsgs)
+	slices.Sort(gotMsgs)
+	assertEqual(t, gotMsgs, wantMsgs)
+
+	stopServe()
+
+	// Wait for subscription to shutdown
+	select {
+	case <-servingDone:
+		// If any handlers are still running this will panic, which is what we want (they shouldn't)
+		close(gotBatches)
+	case <-ctx.Done():
+		t.Fatalf("subscription ServeBatch didn't exit")
+	}
+
+	select {
+	case v, ok := <-gotBatches:
+		if ok {
+			t.Fatalf("unexpected batch: %v", v)
+		}
+	default:
+	}
+}
+
 func TestSubscriptionServingWithMetadata(t *testing.T) {
 	t.Parallel()
 

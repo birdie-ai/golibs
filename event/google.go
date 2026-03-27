@@ -176,7 +176,7 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 				msg.Nack()
 			}
 		}()
-		ctx, event, err := createEvent[T](ctx, s.eventName, msg.Data)
+		ctx, event, err := createEnvelope[T](ctx, s.eventName, msg.Data)
 		if err != nil {
 			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
 			msg.Nack()
@@ -275,7 +275,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 		s.sub.ReceiveSettings.MaxOutstandingMessages = s.batchSize
 
 		err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
-			ctx, event, err := createEvent[T](ctx, s.eventName, msg.Data)
+			ctx, event, err := createEnvelope[T](ctx, s.eventName, msg.Data)
 			if err != nil {
 				slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
 				msg.Nack()
