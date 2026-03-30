@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/pubsub/apiv1/pubsubpb"
@@ -60,6 +61,13 @@ type (
 	// by using [slog.FromCtx].
 	Handler[T any] func(context.Context, T) error
 
+	// BatchHandler is responsible for handling N events at once.
+	// Since it is usual for partial results to happen it is the responsibility of the handler
+	// to ack/unack individual events.
+	// The context passed to the handler will not have any metadata (opposed to [Handler]) since
+	// each event has its own metadata (different org ID, different trace ID, etc).
+	BatchHandler[T any] func(context.Context, []*Event[T])
+
 	// HandlerWithMetadata is responsible for handling events from a [Subscription] with its associated [Metadata].
 	// The context passed to the handler will have the same general metadata as the ones passed to [Handler], like the trace ID,
 	// and extra metadata that is more event specific as defined by [Metadata].
@@ -90,7 +98,19 @@ type (
 	}
 
 	// MessageHandler is responsible for handling messages from a [MessageSubscription].
+	// If an error is returned it sends a nack.
+	// If error is nil ack is sent.
 	MessageHandler func(Message) error
+
+	// AckerNackerMsg is a [Message] that implements [AckerNacker]. It is used when handling batches.
+	AckerNackerMsg struct {
+		Message
+		AckerNacker
+	}
+
+	// MessageBatchHandler is responsible for handling a batch of N messages from a [MessageSubscription] at once.
+	// No [Message] from the batch is acked or nacked, the handler is responsible for sending ack/nack for each message (allows partial processing).
+	MessageBatchHandler func(context.Context, []*AckerNackerMsg)
 )
 
 // ErrUnrecoverable represents unrecoverable errors, used to deal with ordered publishing errors.
@@ -144,24 +164,6 @@ func NewSubscription[T any](name, url string, maxConcurrency int) (*Subscription
 	}, nil
 }
 
-// NewRawSubscription creates a new raw subscription. It provides messages in a
-// service like manner (serve) and manages concurrent execution, each message
-// is processed in its own go-routines respecting the given maxConcurrency.
-func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, error) {
-	if maxConcurrency <= 0 {
-		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
-	}
-	// We don't want the subscription to expire, so we use the background context.
-	sub, err := pubsub.OpenSubscription(context.Background(), url)
-	if err != nil {
-		return nil, err
-	}
-	return &MessageSubscription{
-		sub:            sub,
-		maxConcurrency: maxConcurrency,
-	}, nil
-}
-
 // Name returns the name of the event.
 func (s *Subscription[T]) Name() string {
 	return s.name
@@ -204,7 +206,7 @@ func (s *Subscription[T]) Receive(ctx context.Context) (*Event[T], error) {
 	if err != nil {
 		return nil, err
 	}
-	_, envelope, err := createEvent[T](ctx, s.name, m.Body)
+	_, envelope, err := createEnvelope[T](ctx, s.name, m.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +232,7 @@ func (s *Subscription[T]) Receive(ctx context.Context) (*Event[T], error) {
 // which in most event systems will trigger some form of retry).
 func (s *Subscription[T]) Serve(handler Handler[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		ctx, event, err := createEvent[T](context.Background(), s.name, msg.Body)
+		ctx, event, err := createEnvelope[T](context.Background(), s.name, msg.Body)
 		if err != nil {
 			return err
 		}
@@ -249,7 +251,7 @@ func (s *Subscription[T]) Serve(handler Handler[T]) error {
 // run up to "maxConcurrency" go-routines.
 func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) error {
 	return s.rawsub.Serve(SampledMessageHandler(s.name, func(msg Message) error {
-		ctx, event, err := createEvent[T](context.Background(), s.name, msg.Body)
+		ctx, event, err := createEnvelope[T](context.Background(), s.name, msg.Body)
 		if err != nil {
 			return err
 		}
@@ -257,10 +259,72 @@ func (s *Subscription[T]) ServeWithMetadata(handler HandlerWithMetadata[T]) erro
 	}))
 }
 
+// ServeBatch will start serving all events from the subscription calling handler for each batch of events.
+// It will run until the given [context.Context] is cancelled.
+// If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
+// If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
+// ServeBatch may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" go-routines (configured on [Subscription] creation).
+//
+// The batch handler is called with N events where 0 < N <= batchSize.
+// The batch time window controls for how long it will wait for a batch to fill.
+// The [context.Context] might not have any deadline enforced on it (it is the overall batch run one),
+// it is responsibility of handlers to create a new child context with an explicit/clean deadline for the event handling.
+//
+// If the handler panics it is assumed that the effect of the panic was isolated to the failed batch handling,
+// Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
+// It recovers the panic, logs a stack trace with ERROR log level and keeps running (unacked events will eventually
+// expire and be re-delivered, depending on the broker configuration).
+func (s *Subscription[T]) ServeBatch(
+	ctx context.Context,
+	batchSize int,
+	batchWindow time.Duration,
+	bh BatchHandler[T],
+) error {
+	return s.rawsub.ServeBatch(ctx, batchSize, batchWindow, func(ctx context.Context, rawbatch []*AckerNackerMsg) {
+		var batch []*Event[T]
+		for _, v := range rawbatch {
+			_, event, err := createEnvelope[T](ctx, s.name, v.Body)
+			if err != nil {
+				slog.FromCtx(ctx).Error("golibs: invalid event received, sending nack", "event", v, "error", err)
+				v.Nack()
+				continue
+			}
+			batch = append(batch, &Event[T]{
+				Envelope:    event,
+				AckerNacker: v,
+				Metadata:    v.Metadata,
+			})
+		}
+		if len(batch) == 0 {
+			return
+		}
+		bh(ctx, batch)
+	})
+}
+
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
 // The subscription should not be used after this method is called.
 func (s *Subscription[T]) Shutdown(ctx context.Context) error {
 	return s.rawsub.Shutdown(ctx)
+}
+
+// NewRawSubscription creates a new raw subscription. It provides messages in a
+// service like manner (serve) and manages concurrent execution, each message
+// is processed in its own go-routines respecting the given maxConcurrency.
+func NewRawSubscription(url string, maxConcurrency int) (*MessageSubscription, error) {
+	if maxConcurrency <= 0 {
+		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrency)
+	}
+	// FIXME(katcipis): we should accept a context here (so we can cancel when a signal is received/process shutdown).
+	sub, err := pubsub.OpenSubscription(context.Background(), url)
+	if err != nil {
+		return nil, err
+	}
+	return &MessageSubscription{
+		sub:            sub,
+		maxConcurrency: maxConcurrency,
+	}, nil
 }
 
 // Serve will start serving all messages from the subscription calling handler for each
@@ -314,10 +378,108 @@ func (r *MessageSubscription) Serve(handler MessageHandler) error {
 	}
 }
 
+// ServeBatch will start serving all events from the subscription calling handler for each batch of events.
+// It will run until the given [context.Context] is cancelled. When the context is cancelled
+// it will wait for all handlers to finish before returning. Handlers receive the same context
+// as a parameter and must respect its cancellation.
+// The [context.Context] might not have any deadline enforced on it (it is the overall batch run one),
+// it is responsibility of handlers to create a new child context with an explicit/clean deadline for the event handling.
+//
+// ServeBatch may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" go-routines (configured on [MessageSubscription] creation).
+//
+// The batch handler is called with N events where 0 < N <= batchSize.
+// The batch time window controls for how long it will wait for a batch to fill.
+//
+// If the handler panics it is assumed that the effect of the panic was isolated to the failed batch handling,
+// Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
+// It recovers the panic, logs a stack trace with ERROR log level and keeps running (unacked events will eventually
+// expire and be re-delivered, depending on the broker configuration).
+func (r *MessageSubscription) ServeBatch(
+	ctx context.Context,
+	batchSize int,
+	batchWindow time.Duration,
+	bh MessageBatchHandler,
+) error {
+	if batchSize <= 0 {
+		return fmt.Errorf("batch size %d must be > 0", batchSize)
+	}
+	if batchWindow <= 0 {
+		return fmt.Errorf("batch window %v must be > 0", batchWindow)
+	}
+
+	semaphore := make(chan struct{}, r.maxConcurrency)
+	fatalErr := make(chan error)
+	var wg sync.WaitGroup
+
+	for ctx.Err() == nil {
+		select {
+		case semaphore <- struct{}{}:
+		case err := <-fatalErr:
+			wg.Wait()
+			return err
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		}
+		wg.Go(func() {
+			defer func() {
+				<-semaphore
+			}()
+
+			rcvCtx, cancel := context.WithTimeout(ctx, batchWindow)
+			rmsgs, err := r.receiveN(rcvCtx, batchSize)
+			cancel()
+			if err != nil {
+				// From: https://pkg.go.dev/gocloud.dev@v0.30.0/pubsub#example-Subscription.Receive-Concurrent
+				// Errors from Receive indicate that Receive will no longer succeed.
+				fatalErr <- err
+				return
+			}
+			if len(rmsgs) == 0 {
+				return
+			}
+			msgs := make([]*AckerNackerMsg, len(rmsgs))
+			for i, v := range rmsgs {
+				msgs[i] = &AckerNackerMsg{
+					Message:     v.Message,
+					AckerNacker: v,
+				}
+			}
+			// We only handle panics from the handler, the core logic shouldn't panic and
+			// should abort if a panic happens.
+			defer func() {
+				if err := recover(); err != nil {
+					// 64KB, if it is good enough for Go's standard lib it is good enough for us :-)
+					const size = 64 << 10
+					buf := make([]byte, size)
+					buf = buf[:runtime.Stack(buf, false)]
+					// We might have partial results, we cant ack/nack any message, just log.
+					slog.Error("panic: message subscription: handling message",
+						"error", err,
+						"messages_total", len(rmsgs),
+						"batch_size", batchSize,
+						"batch_window", batchWindow,
+						"stack_trace", string(buf))
+				}
+			}()
+
+			bh(ctx, msgs)
+		})
+	}
+	wg.Wait()
+	return ctx.Err()
+}
+
 // Shutdown will shutdown the subscriber, stopping any calls to [MessageSubscription.Serve].
 // The subscription should not be used after this method is called.
 func (r *MessageSubscription) Shutdown(ctx context.Context) error {
 	return r.sub.Shutdown(ctx)
+}
+
+type message struct {
+	Message
+	msg *pubsub.Message
 }
 
 func (r *MessageSubscription) receive(ctx context.Context) (*message, error) {
@@ -339,9 +501,25 @@ func (r *MessageSubscription) receive(ctx context.Context) (*message, error) {
 	}, nil
 }
 
-type message struct {
-	Message
-	msg *pubsub.Message
+func (r *MessageSubscription) receiveN(ctx context.Context, n int) ([]*message, error) {
+	if n < 0 {
+		panic(fmt.Errorf("n must be >= 0"))
+	}
+	var events []*message
+	for len(events) < n {
+		event, err := r.receive(ctx)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) ||
+				errors.Is(err, context.Canceled) {
+				// Time window reached/canceled, returning current batch/N
+				return events, nil
+			}
+			// Some other error happened, normal failure then
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, nil
 }
 
 // Nack this msg (if possible).
@@ -375,7 +553,7 @@ func serializeEvent[T any](ctx context.Context, eventName string, event T) ([]by
 	})
 }
 
-func createEvent[T any](ctx context.Context, eventName string, data []byte) (context.Context, Envelope[T], error) {
+func createEnvelope[T any](ctx context.Context, eventName string, data []byte) (context.Context, Envelope[T], error) {
 	var event Envelope[T]
 
 	log := slog.Default()

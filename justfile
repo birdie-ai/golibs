@@ -5,7 +5,7 @@ covreport := "coverage.txt"
 
 # run tests
 test:
-    go test ./... -timeout 10s -race -shuffle on
+    go test ./... -timeout 15s -race -shuffle on
 
 # run tests and generate coverage report
 test-coverage:
