@@ -53,6 +53,10 @@ func sampleProcess(name string, elapsed time.Duration, bodyLen float64, err erro
 	if err != nil {
 		status = "error"
 	}
+	sampleProcessStatus(name, elapsed, bodyLen, status)
+}
+
+func sampleProcessStatus(name string, elapsed time.Duration, bodyLen float64, status string) {
 	labels := prometheus.Labels{
 		"status": status,
 		"name":   name,

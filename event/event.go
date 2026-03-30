@@ -291,9 +291,17 @@ func (s *Subscription[T]) ServeBatch(
 				continue
 			}
 			batch = append(batch, &Event[T]{
-				Envelope:    event,
-				AckerNacker: v,
-				Metadata:    v.Metadata,
+				Envelope: event,
+				AckerNacker: &sampledAckerNacker{
+					name:    s.name,
+					bodyLen: len(v.Body),
+					// We measure process time as time spent on handler/processing.
+					// It does not include idle wait time from batch time window.
+					// We might need a different metric/information for that.
+					start:       time.Now(),
+					ackerNacker: v,
+				},
+				Metadata: v.Metadata,
 			})
 		}
 		if len(batch) == 0 {
@@ -301,6 +309,23 @@ func (s *Subscription[T]) ServeBatch(
 		}
 		bh(ctx, batch)
 	})
+}
+
+type sampledAckerNacker struct {
+	name        string
+	bodyLen     int
+	start       time.Time
+	ackerNacker AckerNacker
+}
+
+func (s *sampledAckerNacker) Ack() {
+	s.ackerNacker.Ack()
+	sampleProcessStatus(s.name, time.Since(s.start), float64(s.bodyLen), "ok")
+}
+
+func (s *sampledAckerNacker) Nack() {
+	s.ackerNacker.Nack()
+	sampleProcessStatus(s.name, time.Since(s.start), float64(s.bodyLen), "error")
 }
 
 // Shutdown will shutdown the subscriber, stopping any calls to [Subscription.Serve].
