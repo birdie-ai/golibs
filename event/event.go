@@ -299,6 +299,7 @@ func (s *Subscription[T]) ServeBatch(
 		if len(batch) == 0 {
 			return
 		}
+		sampleBatchSize(s.name, len(batch))
 		bh(ctx, batch)
 	})
 }

@@ -62,6 +62,11 @@ func sampleProcess(name string, elapsed time.Duration, bodyLen float64, err erro
 	processCounter.With(labels).Inc()
 }
 
+func sampleBatchSize(name string, size int) {
+	labels := prometheus.Labels{"name": name}
+	processBatchSize.With(labels).Observe(float64(size))
+}
+
 var (
 	// GCP max message size is 10mb
 	bodySizeBuckets    = prometheus.ExponentialBucketsRange(256, 1024*1024*10, 30)
