@@ -10,7 +10,7 @@ import (
 // If metrics with the same name already exist no the register this function will panic.
 func MustRegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(publishMsgBodySize, publishDuration, publishCounter,
-		processMsgBodySize, processCounter, processDuration)
+		processMsgBodySize, processCounter, processDuration, processBatchSize)
 }
 
 // SampledMessageHandler will instrument the given MessageHandler returning a new one
@@ -53,6 +53,10 @@ func sampleProcess(name string, elapsed time.Duration, bodyLen float64, err erro
 	if err != nil {
 		status = "error"
 	}
+	sampleProcessStatus(name, elapsed, bodyLen, status)
+}
+
+func sampleProcessStatus(name string, elapsed time.Duration, bodyLen float64, status string) {
 	labels := prometheus.Labels{
 		"status": status,
 		"name":   name,
@@ -60,6 +64,11 @@ func sampleProcess(name string, elapsed time.Duration, bodyLen float64, err erro
 	processMsgBodySize.With(labels).Observe(bodyLen)
 	processDuration.With(labels).Observe(elapsed.Seconds())
 	processCounter.With(labels).Inc()
+}
+
+func sampleBatchSize(name string, size int) {
+	labels := prometheus.Labels{"name": name}
+	processBatchSize.With(labels).Observe(float64(size))
 }
 
 var (
@@ -112,6 +121,23 @@ var (
 			Buckets: bodySizeBuckets,
 		},
 		[]string{"status", "name"},
+	)
+	processBatchSize = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "event_process_batch_size",
+			Help: "Size of each batch when using batching (ServeBatch)",
+			Buckets: []float64{
+				1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90,
+				100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950,
+				1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900,
+				2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000, 7500, 8000, 8500, 9000, 9500,
+				10_000, 11_000, 12_000, 13_000, 15_000, 16_000, 17_000, 18_000, 19_000,
+				20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000, 90_000,
+				100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000, 900_000,
+				1_000_000,
+			},
+		},
+		[]string{"name"},
 	)
 	processCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
