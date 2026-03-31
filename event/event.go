@@ -409,7 +409,9 @@ func (r *MessageSubscription) ServeBatch(
 	}
 
 	semaphore := make(chan struct{}, r.maxConcurrency)
-	fatalErr := make(chan error)
+	// When N goroutines fail we need to ensure they are not blocked waiting for a receive
+	// since the receive side will also wait for all goroutines to finish before returning/exiting with the error.
+	fatalErr := make(chan error, r.maxConcurrency)
 	var wg sync.WaitGroup
 
 	for ctx.Err() == nil {
