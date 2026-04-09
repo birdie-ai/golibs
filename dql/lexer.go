@@ -71,6 +71,7 @@ func (l *lexer) Next() (tokval, error) {
 }
 
 func (l *lexer) lexIdent(r rune, pos Pos) tokval {
+	// keywords are ident but lexically different!
 	ident := make([]rune, 1, 6)
 	ident[0] = r
 	for {
@@ -84,9 +85,15 @@ func (l *lexer) lexIdent(r rune, pos Pos) tokval {
 		l.eat(r, width)
 		ident = append(ident, r)
 	}
-	return newtokat(identToken, string(ident), pos)
+	str := string(ident)
+	if _, ok := keywords[str]; ok {
+		return newtokat(keywordToken, str, pos)
+	}
+	return newtokat(identToken, str, pos)
 }
 
+// TODO(i4k): handle float. Maybe there should be benefits if we distinguish integer and float
+// at the lexer level... still thinking about this.
 func (l *lexer) lexNumber(r rune, pos Pos) tokval {
 	number := make([]rune, 1, 10)
 	number[0] = r

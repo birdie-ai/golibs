@@ -2,11 +2,18 @@ package dql
 
 // basic statement shape
 type (
+	// Program is the parsed script.
+	Program struct {
+		Stmts  Stmts
+		Return Return
+	}
+
+	// Stmt is a dql statement node.
 	Stmt struct {
 		Name    string
 		Entity  string
-		Fields  map[string]any
-		Where   map[string]any
+		Fields  []Expr
+		Where   Expr
 		Limit   int
 		OrderBy OrderBy
 		Aggs    map[string]Agg
@@ -14,15 +21,19 @@ type (
 		// TODO(i4k): add Span
 	}
 
+	// Return is a dql RETURN node.
+	// The should be only one RETURN node per script.
 	Return struct {
 		Format string
 		Expr   Expr
 	}
 
+	// Expr is an expression tree.
 	Expr interface {
 		Variables() []VarExpr
 	}
 
+	//
 	Agg struct {
 		By       any
 		Size     int
@@ -70,7 +81,7 @@ type (
 		Items []Expr
 	}
 
-	FloatExpr struct {
+	NumberExpr struct {
 		Value float64
 	}
 

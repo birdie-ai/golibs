@@ -21,6 +21,7 @@ const (
 	eofToken toktype = -1
 	invalid  toktype = iota
 	identToken
+	keywordToken
 	stringToken
 	numberToken
 	lparenToken    // (
@@ -36,9 +37,22 @@ const (
 	equalToken     // =
 )
 
+var keywords map[string]struct{} = map[string]struct{}{
+	"AS":     {},
+	"SEARCH": {},
+	"WHERE":  {},
+	"ORDER":  {},
+	"BY":     {},
+	"LIMIT":  {},
+	"AGGS":   {},
+	"WITH":   {},
+	"CURSOR": {},
+	"AFTER":  {},
+}
+
 func (t tokval) String() string {
 	switch t.Type {
-	case identToken, stringToken, numberToken:
+	case identToken, keywordToken, stringToken, numberToken:
 		return fmt.Sprintf(`%s(%s)`, t.Type.String(), t.Value)
 	default:
 		return t.Type.String()
@@ -51,6 +65,8 @@ func (tt toktype) String() string {
 		return "EOF"
 	case identToken:
 		return "Ident"
+	case keywordToken:
+		return "Keyword"
 	case numberToken:
 		return "Number"
 	case lparenToken:

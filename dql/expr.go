@@ -9,12 +9,25 @@ import (
 var (
 	_ Expr = ObjectExpr{}
 	_ Expr = ListExpr{}
-	_ Expr = FloatExpr{}
+	_ Expr = NumberExpr{}
 	_ Expr = BoolExpr{}
 	_ Expr = StringExpr{}
 	_ Expr = FncallExpr{}
 	_ Expr = VarExpr{}
 )
+
+func NewVarExpr(name string) VarExpr { return VarExpr{Value: name} }
+
+func NewFncallExpr(fn string, args ...Expr) FncallExpr {
+	return FncallExpr{
+		Name: fn,
+		Args: args,
+	}
+}
+
+func NewNumberExpr(v float64) NumberExpr { return NumberExpr{Value: v} }
+
+func NewStringExpr(s string) StringExpr { return StringExpr{Value: s} }
 
 func (e ObjectExpr) Variables() (vars []VarExpr) {
 	for _, k := range slices.Sorted(maps.Keys(e.Keyvals)) {
@@ -40,6 +53,6 @@ func (e FncallExpr) Variables() (vars []VarExpr) {
 func (e VarExpr) Variables() []VarExpr { return []VarExpr{e} }
 
 // literals
-func (e FloatExpr) Variables() []VarExpr  { return nil }
+func (e NumberExpr) Variables() []VarExpr { return nil }
 func (e BoolExpr) Variables() []VarExpr   { return nil }
 func (e StringExpr) Variables() []VarExpr { return nil }
