@@ -47,6 +47,8 @@ func (l *lexer) Next() (tokval, error) {
 		return newtokat(lbraceToken, "{", curpos), nil
 	case '}':
 		return newtokat(rbraceToken, "}", curpos), nil
+	case '.':
+		return newtokat(dotToken, ".", curpos), nil
 	case ':':
 		return newtokat(colonToken, ":", curpos), nil
 	case ',':

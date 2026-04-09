@@ -29,6 +29,7 @@ const (
 	rbrackToken    // ]
 	lbraceToken    // {
 	rbraceToken    // }
+	dotToken       // .
 	colonToken     // :
 	commaToken     // ,
 	semicolonToken // ;
@@ -64,6 +65,8 @@ func (tt toktype) String() string {
 		return "LBrace"
 	case rbraceToken:
 		return "RBrace"
+	case dotToken:
+		return "."
 	case colonToken:
 		return ":"
 	case commaToken:
