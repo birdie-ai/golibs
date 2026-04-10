@@ -13,13 +13,15 @@ type (
 		Name    string
 		Entity  string
 		Fields  []Expr
-		Where   Expr
+		Where   *Query
 		Limit   int
 		OrderBy OrderBy
 		Aggs    map[string]Agg
 
 		// TODO(i4k): add Span
 	}
+
+	Stmts []Stmt
 
 	// Return is a dql RETURN node.
 	// The should be only one RETURN node per script.
@@ -33,7 +35,21 @@ type (
 		Variables() []VarExpr
 	}
 
-	//
+	Query struct {
+		Type QueryNode
+
+		// NOTE(i4k): uses a pointer because query rewriting heavily depends on appends
+		// and then otherwise it copies too much the Query struct.
+		Children []*Query
+		LHS      string
+		RHS      Expr
+		OP       Predicate
+	}
+
+	QueryNode int
+
+	Predicate int
+
 	Agg struct {
 		By       any
 		Size     int
@@ -46,8 +62,6 @@ type (
 	}
 
 	Sort string
-
-	Stmts []Stmt
 )
 
 // aggs nodes
@@ -107,4 +121,21 @@ type (
 const (
 	ASC  Sort = "ASC"
 	DESC Sort = "DESC"
+)
+
+// Query nodes
+const (
+	predicate QueryNode = iota
+	OR
+	AND
+)
+
+// predicates
+const (
+	Eq Predicate = iota
+	Match
+	Gte
+	Gt
+	Lte
+	Lt
 )

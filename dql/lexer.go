@@ -12,6 +12,8 @@ type lexer struct {
 	pos  int
 	line int // start at zero
 	col  int
+
+	lookahead []tokval
 }
 
 // lexer errors
@@ -27,10 +29,45 @@ func newlexer(in string) *lexer {
 	}
 }
 
+func (l *lexer) Peek() (tokval, error) {
+	if len(l.lookahead) > 0 {
+		return l.lookahead[0], nil
+	}
+	return l.PeekNext()
+}
+
+func (l *lexer) PeekNext() (tokval, error) {
+	tok, err := l.next()
+	if err != nil {
+		return tokval{}, err
+	}
+	l.lookahead = append(l.lookahead, tok)
+	if size := len(l.lookahead); size > 2 {
+		panic(fmt.Sprintf("unexpected lookahead size: %d", size))
+	}
+	return tok, nil
+}
+
+func (l *lexer) Eat(n int) {
+	if size := len(l.lookahead); size < n {
+		panic(fmt.Sprintf("unexpected eat(%d) call... only %d lookahead items", n, size))
+	}
+	l.lookahead = l.lookahead[n:]
+}
+
 func (l *lexer) Next() (tokval, error) {
+	if len(l.lookahead) > 0 {
+		tok := l.lookahead[0]
+		l.Eat(1)
+		return tok, nil
+	}
+	return l.next()
+}
+
+func (l *lexer) next() (tokval, error) {
 	l.skipblank()
 	curpos := Pos{Byte: l.pos, Line: l.line, Column: l.col}
-	r := l.next()
+	r := l.nextRune()
 	if r == eof {
 		return l.newtok(eofToken, ""), nil
 	}
@@ -164,7 +201,7 @@ func (l *lexer) peek() (rune, int) {
 	return r, width
 }
 
-func (l *lexer) next() (r rune) {
+func (l *lexer) nextRune() (r rune) {
 	r, width := l.peek()
 	if r == eof {
 		return r

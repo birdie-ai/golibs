@@ -55,9 +55,25 @@ func TestParser(t *testing.T) {
 							dql.NewVarExpr("id"),
 							dql.NewFncallExpr("UPPER", dql.NewVarExpr("text")),
 						},
-						Where: map[string]dql.Expr{
-							"id":   dql.NewNumberExpr(1),
-							"text": dql.NewStringExpr("value"),
+						Where: &dql.Query{
+							Type: dql.OR,
+							Children: []*dql.Query{
+								{
+									Type: dql.AND,
+									Children: []*dql.Query{
+										{
+											LHS: "id",
+											RHS: dql.NewNumberExpr(1),
+											OP:  dql.Eq,
+										},
+										{
+											LHS: "text",
+											RHS: dql.NewStringExpr("value"),
+											OP:  dql.Eq,
+										},
+									},
+								},
+							},
 						},
 					},
 				},

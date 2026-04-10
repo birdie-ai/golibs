@@ -2,6 +2,7 @@ package dql
 
 import (
 	"errors"
+	"strconv"
 )
 
 // parser errors
@@ -15,7 +16,7 @@ func Parse(in string) (Program, error) {
 	prog := Program{}
 
 	for {
-		tok, err := l.Next()
+		tok, err := l.Peek()
 		if err != nil {
 			return Program{}, err
 		}
@@ -28,7 +29,7 @@ func Parse(in string) (Program, error) {
 		case keywordToken:
 			switch tok.Value {
 			case "AS", "SEARCH":
-				stmt, err := parseStmt(l, tok)
+				stmt, err := parseStmt(l)
 				if err != nil {
 					return Program{}, err
 				}
@@ -43,8 +44,12 @@ func Parse(in string) (Program, error) {
 	}
 }
 
-func parseStmt(l *lexer, tok tokval) (Stmt, error) {
+func parseStmt(l *lexer) (Stmt, error) {
 	stmt := Stmt{}
+	tok, err := l.Next()
+	if err != nil {
+		return Stmt{}, err
+	}
 	if tok.Value == "AS" {
 		nametok, err := l.Next()
 		if err != nil {
@@ -63,7 +68,7 @@ func parseStmt(l *lexer, tok tokval) (Stmt, error) {
 		}
 		// fall below
 	}
-	tok, err := l.Next()
+	tok, err = l.Next()
 	if err != nil {
 		return Stmt{}, err
 	}
@@ -72,33 +77,36 @@ func parseStmt(l *lexer, tok tokval) (Stmt, error) {
 	}
 	stmt.Entity = tok.Value
 
-	tok, err = l.Next()
+	tok, err = l.Peek()
 	if err != nil {
 		return Stmt{}, err
 	}
 
 	if tok.Type == semicolonToken {
+		l.Eat(1)
 		return stmt, nil
 	}
 
-	next := tok
-	if next.Type != keywordToken {
-		stmt.Fields, next, err = parseExprList(l, next)
+	if tok.Type != keywordToken {
+		stmt.Fields, err = parseExprList(l)
 		if err != nil {
 			return Stmt{}, err
 		}
 	}
 
-	if next.Type == semicolonToken {
+	tok, err = l.Peek()
+	if tok.Type == semicolonToken {
+		l.Eat(1)
 		return stmt, nil
 	}
 
-	if next.Type == keywordToken {
-		switch next.Value {
+	if tok.Type == keywordToken {
+		switch tok.Value {
 		default:
-			return Stmt{}, errUnexpectedToken(next, "WHERE | ORDER BY | LIMIT | AGGS | WITH CURSOR | AFTER | ;")
+			return Stmt{}, errUnexpectedToken(tok, "WHERE | ORDER BY | LIMIT | AGGS | WITH CURSOR | AFTER | ;")
 		case "WHERE":
-			stmt.Where, next, err = parseWhere(l, next)
+			l.Eat(1)
+			stmt.Where, err = parseWhere(l)
 			if err != nil {
 				return Stmt{}, err
 			}
@@ -117,95 +125,180 @@ func parseStmt(l *lexer, tok tokval) (Stmt, error) {
 	return stmt, nil
 }
 
-func parseExprList(l *lexer, first tokval) (exprs []Expr, next tokval, err error) {
-	expr, next, err := parseExpr(l, first)
+func parseExprList(l *lexer) (exprs []Expr, err error) {
+	expr, err := parseExpr(l)
 	if err != nil {
-		return nil, tokval{}, err
+		return nil, err
 	}
 	exprs = append(exprs, expr)
+	next, err := l.Peek()
+	if err != nil {
+		return nil, err
+	}
 	for next.Type == commaToken {
-		tok, err := l.Next()
+		l.Eat(1)
+		expr, err = parseExpr(l)
 		if err != nil {
-			return nil, tokval{}, err
-		}
-		expr, next, err = parseExpr(l, tok)
-		if err != nil {
-			return nil, tokval{}, err
+			return nil, err
 		}
 		exprs = append(exprs, expr)
+		next, err = l.Peek()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return exprs, next, nil
+	return exprs, nil
 }
 
-func parseExpr(l *lexer, first tokval) (expr Expr, next tokval, err error) {
-	switch first.Type {
+func parseExpr(l *lexer) (expr Expr, err error) {
+	tok, err := l.Peek()
+	if err != nil {
+		return nil, err
+	}
+	switch tok.Type {
 	default:
-		return nil, tokval{}, errUnexpectedToken(first, "IDENT(expr)|NUMBER|STRING|{|[")
+		return nil, errUnexpectedToken(tok, "IDENT(expr)|NUMBER|STRING|{|[")
+	case numberToken:
+		return parseNumberExpr(l)
+	case stringToken:
+		return parseStringExpr(l)
 	case identToken:
-		next, err = l.Next()
+		next, err := l.PeekNext()
 		if err != nil {
-			return nil, tokval{}, err
+			return nil, err
 		}
 		if next.Type == lparenToken {
-			return parseFncallExpr(l, first.Value)
+			return parseFncallExpr(l)
 		}
+		l.Eat(1)
 		// TODO(i4k): handle path traversals, indexing, etc
-		return NewVarExpr(first.Value), next, nil
+		return NewVarExpr(tok.Value), nil
 	}
 }
 
-func parseFncallExpr(l *lexer, name string) (fn FncallExpr, next tokval, err error) {
-	fn.Name = name
-	next, err = l.Next()
+func parseFncallExpr(l *lexer) (fn FncallExpr, err error) {
+	nametok, err := l.Next()
 	if err != nil {
-		return FncallExpr{}, tokval{}, err
+		return FncallExpr{}, err
 	}
-	fn.Args, next, err = parseExprList(l, next)
+	fn.Name = nametok.Value
+	l.Eat(1) // skip `(`
+	fn.Args, err = parseExprList(l)
 	if err != nil {
-		return FncallExpr{}, tokval{}, err
+		return FncallExpr{}, err
+	}
+	next, err := l.Next()
+	if err != nil {
+		return FncallExpr{}, err
 	}
 	if next.Type != rparenToken {
-		return FncallExpr{}, tokval{}, errUnexpected(next, `")"`)
+		return FncallExpr{}, errUnexpectedToken(next, `")"`)
 	}
-	next, err = l.Next()
-	if err != nil {
-		return FncallExpr{}, tokval{}, err
-	}
-	return fn, next, nil
+	return fn, nil
 }
 
-func parseWhere(l *lexer) (where Expr, next tokval, err error) {
-	where = map[string]Expr{}
-	next, err = l.Next()
+func parseNumberExpr(l *lexer) (NumberExpr, error) {
+	tok, err := l.Next()
 	if err != nil {
-		return nil, tokval{}, err
+		return NumberExpr{}, err
 	}
-	if next.Type == lbraceToken {
-		return parseObjectExpr(l)
+	// TODO(i4k): parse number as float64
+	val, err := strconv.Atoi(tok.Value)
+	if err != nil {
+		return NumberExpr{}, err
 	}
-	if next.Type != identToken {
-		return nil, tokval{}, errUnexpectedToken(next, "IDENT | {")
+	return NewNumberExpr(float64(val)), nil
+}
+
+func parseStringExpr(l *lexer) (StringExpr, error) {
+	tok, err := l.Next()
+	if err != nil {
+		return StringExpr{}, err
 	}
-	var isFlatClauses bool
-	var obj ObjectExpr
-	for {
-		ident := next
-		next, err = l.Next()
+	return NewStringExpr(tok.Value), nil
+}
+
+func parseWhere(l *lexer) (where *Query, err error) {
+	tok, err := l.Peek()
+	if err != nil {
+		return nil, err
+	}
+	if tok.Type == lbraceToken {
+		return parseLegacyQuery(l)
+	}
+	if tok.Type != identToken {
+		return nil, errUnexpectedToken(tok, "IDENT | {")
+	}
+	where = &Query{
+		Type: OR,
+	}
+
+	left, err := parsePredicate(l)
+	if err != nil {
+		return nil, err
+	}
+	next, err := l.Peek()
+	if err != nil {
+		return nil, err
+	}
+	if next.Type != keywordToken {
+		where.Children = append(where.Children, left)
+		return where, nil
+	}
+	switch next.Value {
+	default:
+		where.Children = append(where.Children, left)
+	case "AND":
+		l.Next()
+		qand := &Query{
+			Type: AND,
+		}
+		right, err := parsePredicate(l)
 		if err != nil {
-			return nil, tokval{}, err
+			return nil, err
 		}
-		if !isFlatClauses && next.Type == lparenToken {
-			return parseFncallExpr(l, ident.Value)
-		}
-		isFlatClauses = true
-		if next.Type != equalToken {
-			return nil, tokval{}, errUnexpectedToken(next, "EXPR")
-		}
-		next, err = l.Next()
+		qand.Children = append(qand.Children, left, right)
+		where.Children = append(where.Children, qand)
+	case "OR":
+		l.Next()
+		right, err := parsePredicate(l)
 		if err != nil {
-			return nil, tokval{}, err
+			return nil, err
 		}
+		where.Children = append(where.Children, left, right)
 	}
+	return where, nil
+}
+
+func parsePredicate(l *lexer) (*Query, error) {
+	tok, err := l.Next()
+	if err != nil {
+		return nil, err
+	}
+	if tok.Type != identToken {
+		return nil, errUnexpectedToken(tok, "IDENT(field)")
+	}
+	op, err := l.Next()
+	if err != nil {
+		return nil, err
+	}
+	if op.Type != equalToken {
+		return nil, errUnexpectedToken(op, "=")
+	}
+	predicate := Eq
+	valexpr, err := parseExpr(l)
+	if err != nil {
+		return nil, err
+	}
+	return &Query{
+		LHS: tok.Value,
+		RHS: valexpr,
+		OP:  predicate,
+	}, nil
+}
+
+func parseLegacyQuery(_ *lexer) (query *Query, err error) {
+	panic("not yet")
 }
 
 func errUnexpectedToken(tok tokval, expected string) error {
