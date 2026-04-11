@@ -41,10 +41,12 @@ type (
 		// NOTE(i4k): uses a pointer because query rewriting heavily depends on appends
 		// and then otherwise it copies too much the Query struct.
 		Children []*Query
-		LHS      string
+		LHS      StaticPath
 		RHS      Expr
 		OP       Predicate
 	}
+
+	StaticPath []string
 
 	QueryNode int
 
@@ -115,6 +117,23 @@ type (
 		Name string
 		Args []Expr
 	}
+
+	PathExpr struct {
+		Base  Expr
+		Steps PathSteps
+	}
+
+	// tagged union for performance reasons
+
+	PathStep struct {
+		Type  StepType
+		Field string // .<field_name>
+		Index Expr   // [<expr>]
+	}
+
+	StepType int
+
+	PathSteps []PathStep
 )
 
 // Sort values
@@ -138,4 +157,11 @@ const (
 	Gt
 	Lte
 	Lt
+)
+
+// path steps
+const (
+	invalidStep StepType = iota
+	FieldStep
+	IndexStep
 )

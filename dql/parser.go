@@ -130,11 +130,11 @@ func parseExprList(l *lexer) (exprs []Expr, err error) {
 	if err != nil {
 		return nil, err
 	}
-	exprs = append(exprs, expr)
 	next, err := l.Peek()
 	if err != nil {
 		return nil, err
 	}
+	exprs = append(exprs, expr)
 	for next.Type == commaToken {
 		l.Eat(1)
 		expr, err = parseExpr(l)
@@ -159,21 +159,37 @@ func parseExpr(l *lexer) (expr Expr, err error) {
 	default:
 		return nil, errUnexpectedToken(tok, "IDENT(expr)|NUMBER|STRING|{|[")
 	case numberToken:
-		return parseNumberExpr(l)
+		expr, err = parseNumberExpr(l)
 	case stringToken:
-		return parseStringExpr(l)
+		expr, err = parseStringExpr(l)
 	case identToken:
 		next, err := l.PeekNext()
 		if err != nil {
 			return nil, err
 		}
 		if next.Type == lparenToken {
-			return parseFncallExpr(l)
+			expr, err = parseFncallExpr(l)
+		} else {
+			l.Eat(1)
+			// TODO(i4k): handle path traversals, indexing, etc
+			expr = NewVarExpr(tok.Value)
 		}
-		l.Eat(1)
-		// TODO(i4k): handle path traversals, indexing, etc
-		return NewVarExpr(tok.Value), nil
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	// we have to check if the expr is succeded by DOT because if so it's a PathExpr.
+	next, err := l.Peek()
+	if err != nil {
+		return nil, err
+	}
+	if next.Type != dotToken {
+		return expr, nil
+	}
+
+	// PathExpr
+	return parsePathExpr(l, expr)
 }
 
 func parseFncallExpr(l *lexer) (fn FncallExpr, err error) {
@@ -195,6 +211,48 @@ func parseFncallExpr(l *lexer) (fn FncallExpr, err error) {
 		return FncallExpr{}, errUnexpectedToken(next, `")"`)
 	}
 	return fn, nil
+}
+
+func parsePathExpr(l *lexer, base Expr) (path PathExpr, err error) {
+	path.Base = base
+
+	for {
+		next, err := l.Peek()
+		if err != nil {
+			return PathExpr{}, err
+		}
+		// in the first iteration it's always DOT
+		if next.Type != dotToken {
+			break
+		}
+		l.Eat(1)
+		next, err = l.Peek()
+		if err != nil {
+			return PathExpr{}, err
+		}
+		switch next.Type {
+		default:
+			return PathExpr{}, errUnexpectedToken(next, "IDENT(field) | `[`")
+		case identToken:
+			l.Eat(1)
+			path.Steps = append(path.Steps, NewFieldStep(next.Value))
+		case lbrackToken:
+			l.Eat(1)
+			expr, err := parseExpr(l)
+			if err != nil {
+				return PathExpr{}, err
+			}
+			path.Steps = append(path.Steps, NewIndexStep(expr))
+			next, err := l.Next()
+			if err != nil {
+				return PathExpr{}, err
+			}
+			if next.Type != rbrackToken {
+				return PathExpr{}, errUnexpectedToken(next, "`]`")
+			}
+		}
+	}
+	return path, nil
 }
 
 func parseNumberExpr(l *lexer) (NumberExpr, error) {
@@ -278,6 +336,26 @@ func parsePredicate(l *lexer) (*Query, error) {
 	if tok.Type != identToken {
 		return nil, errUnexpectedToken(tok, "IDENT(field)")
 	}
+	lhs := StaticPath{tok.Value}
+	for {
+		next, err := l.Peek()
+		if err != nil {
+			return nil, err
+		}
+		if next.Type != dotToken {
+			break
+		}
+		l.Eat(1)
+		next, err = l.Peek()
+		if err != nil {
+			return nil, err
+		}
+		if next.Type != identToken {
+			return nil, errUnexpectedToken(next, "IDENT(path)")
+		}
+		lhs = append(lhs, next.Value)
+		l.Eat(1)
+	}
 	op, err := l.Next()
 	if err != nil {
 		return nil, err
@@ -291,7 +369,7 @@ func parsePredicate(l *lexer) (*Query, error) {
 		return nil, err
 	}
 	return &Query{
-		LHS: tok.Value,
+		LHS: lhs,
 		RHS: valexpr,
 		OP:  predicate,
 	}, nil

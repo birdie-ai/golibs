@@ -62,16 +62,42 @@ func TestParser(t *testing.T) {
 									Type: dql.AND,
 									Children: []*dql.Query{
 										{
-											LHS: "id",
+											LHS: dql.Path("id"),
 											RHS: dql.NewNumberExpr(1),
 											OP:  dql.Eq,
 										},
 										{
-											LHS: "text",
+											LHS: dql.Path("text"),
 											RHS: dql.NewStringExpr("value"),
 											OP:  dql.Eq,
 										},
 									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "stmt dot-traversal paths",
+			in:   `SEARCH orders id, feedbacks.id, feedbacks.text WHERE feedbacks.text="value";`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "orders",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+							dql.NewPathExpr(dql.NewVarExpr("feedbacks"), dql.NewFieldStep("id")),
+							dql.NewPathExpr(dql.NewVarExpr("feedbacks"), dql.NewFieldStep("text")),
+						},
+						Where: &dql.Query{
+							Type: dql.OR,
+							Children: []*dql.Query{
+								{
+									LHS: dql.Path("feedbacks", "text"),
+									RHS: dql.NewStringExpr("value"),
+									OP:  dql.Eq,
 								},
 							},
 						},
