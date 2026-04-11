@@ -147,6 +147,7 @@ const (
 	predicate QueryNode = iota
 	OR
 	AND
+	NOT
 )
 
 // predicates

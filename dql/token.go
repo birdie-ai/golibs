@@ -50,6 +50,8 @@ var keywords map[string]struct{} = map[string]struct{}{
 	"AFTER":  {},
 	"AND":    {},
 	"OR":     {},
+	"true":   {},
+	"false":  {},
 }
 
 func (t tokval) String() string {

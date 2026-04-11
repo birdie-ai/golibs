@@ -30,6 +30,8 @@ func NewNumberExpr(v float64) NumberExpr { return NumberExpr{Value: v} }
 
 func NewStringExpr(s string) StringExpr { return StringExpr{Value: s} }
 
+func NewBoolExpr(b bool) BoolExpr { return BoolExpr{Value: b} }
+
 func NewPathExpr(base Expr, steps ...PathStep) PathExpr {
 	return PathExpr{
 		Base:  base,

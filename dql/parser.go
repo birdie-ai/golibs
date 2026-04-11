@@ -361,7 +361,7 @@ func parsePredicate(l *lexer) (*Query, error) {
 		return nil, err
 	}
 	if op.Type != equalToken {
-		return nil, errUnexpectedToken(op, "=")
+		return nil, errUnexpectedToken(op, `"="`)
 	}
 	predicate := Eq
 	valexpr, err := parseExpr(l)
@@ -373,10 +373,6 @@ func parsePredicate(l *lexer) (*Query, error) {
 		RHS: valexpr,
 		OP:  predicate,
 	}, nil
-}
-
-func parseLegacyQuery(_ *lexer) (query *Query, err error) {
-	panic("not yet")
 }
 
 func errUnexpectedToken(tok tokval, expected string) error {
