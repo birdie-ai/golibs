@@ -35,6 +35,8 @@ const (
 	commaToken     // ,
 	semicolonToken // ;
 	equalToken     // =
+
+	// TODO(i4k): add comment tokens
 )
 
 var keywords map[string]struct{} = map[string]struct{}{

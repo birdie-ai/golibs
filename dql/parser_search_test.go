@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestParser(t *testing.T) {
+func TestParserSearch(t *testing.T) {
 	type testcase struct {
 		name string
 		in   string
@@ -24,6 +24,20 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity: "feedbacks",
+					},
+				},
+			},
+		},
+		{
+			name: "multiple stmts",
+			in:   `SEARCH feedbacks; SEARCH orders;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+					},
+					{
+						Entity: "orders",
 					},
 				},
 			},
@@ -55,12 +69,12 @@ func TestParser(t *testing.T) {
 							dql.NewVarExpr("id"),
 							dql.NewFncallExpr("UPPER", dql.NewVarExpr("text")),
 						},
-						Where: &dql.Query{
+						Where: &dql.QueryExpr{
 							Type: dql.OR,
-							Children: []*dql.Query{
+							Children: []*dql.QueryExpr{
 								{
 									Type: dql.AND,
-									Children: []*dql.Query{
+									Children: []*dql.QueryExpr{
 										{
 											LHS: dql.Path("id"),
 											RHS: dql.NewNumberExpr(1),
@@ -91,9 +105,9 @@ func TestParser(t *testing.T) {
 							dql.NewPathExpr(dql.NewVarExpr("feedbacks"), dql.NewFieldStep("id")),
 							dql.NewPathExpr(dql.NewVarExpr("feedbacks"), dql.NewFieldStep("text")),
 						},
-						Where: &dql.Query{
+						Where: &dql.QueryExpr{
 							Type: dql.OR,
-							Children: []*dql.Query{
+							Children: []*dql.QueryExpr{
 								{
 									LHS: dql.Path("feedbacks", "text"),
 									RHS: dql.NewStringExpr("value"),
@@ -120,9 +134,9 @@ func TestParser(t *testing.T) {
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
 						},
-						Where: &dql.Query{
+						Where: &dql.QueryExpr{
 							Type: dql.AND,
-							Children: []*dql.Query{
+							Children: []*dql.QueryExpr{
 								{
 									LHS: dql.Path("feedbacks", "text"),
 									RHS: dql.NewStringExpr("value"),
@@ -157,9 +171,9 @@ func TestParser(t *testing.T) {
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
 						},
-						Where: &dql.Query{
+						Where: &dql.QueryExpr{
 							Type: dql.OR,
-							Children: []*dql.Query{
+							Children: []*dql.QueryExpr{
 								{
 									LHS: dql.Path("feedbacks", "text"),
 									RHS: dql.NewStringExpr("value"),
@@ -167,7 +181,7 @@ func TestParser(t *testing.T) {
 								},
 								{
 									Type: dql.AND,
-									Children: []*dql.Query{
+									Children: []*dql.QueryExpr{
 										{
 											LHS: dql.Path("custom_fields", "abc"),
 											RHS: dql.NewStringExpr("test"),

@@ -15,6 +15,7 @@ var (
 	_ Expr = FncallExpr{}
 	_ Expr = VarExpr{}
 	_ Expr = PathExpr{}
+	_ Expr = QueryExpr{}
 )
 
 func NewVarExpr(name string) VarExpr { return VarExpr{Value: name} }
@@ -70,6 +71,16 @@ func (e ListExpr) Variables() (vars []VarExpr) {
 func (e FncallExpr) Variables() (vars []VarExpr) {
 	for _, arg := range e.Args {
 		vars = append(vars, arg.Variables()...)
+	}
+	return vars
+}
+
+func (e QueryExpr) Variables() (vars []VarExpr) {
+	if e.Type == predicate {
+		return e.RHS.Variables()
+	}
+	for _, children := range e.Children {
+		vars = append(vars, children.Variables()...)
 	}
 	return vars
 }

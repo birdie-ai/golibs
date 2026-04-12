@@ -8,9 +8,9 @@ var clauseMap = map[string]QueryNode{
 	"$not": NOT,
 }
 
-func parseLegacyQuery(l *lexer) (query *Query, err error) {
+func parseLegacyQuery(l *lexer) (query *QueryExpr, err error) {
 	l.Eat(1) // {
-	query = &Query{
+	query = &QueryExpr{
 		Type: OR,
 	}
 	next, err := l.Next()
@@ -59,7 +59,7 @@ func parseLegacyQuery(l *lexer) (query *Query, err error) {
 	}
 }
 
-func parseLegacyPredicateList(l *lexer) (qlist []*Query, err error) {
+func parseLegacyPredicateList(l *lexer) (qlist []*QueryExpr, err error) {
 	l.Eat(1) // [
 	for {
 		next, err := l.Peek()
@@ -87,7 +87,7 @@ func parseLegacyPredicateList(l *lexer) (qlist []*Query, err error) {
 	}
 }
 
-func parseLegacyPredicate(l *lexer) (*Query, error) {
+func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 	next, err := l.Peek()
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func parseLegacyPredicate(l *lexer) (*Query, error) {
 		return parseLegacyQuery(l)
 	}
 	l.Eat(2)
-	q := &Query{
+	q := &QueryExpr{
 		LHS: Path(strings.Split(next.Value, ".")...),
 	}
 	next, err = l.Next()

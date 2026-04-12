@@ -2,6 +2,7 @@ package dql
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 )
 
@@ -107,6 +108,12 @@ func parseStmt(l *lexer) (Stmt, error) {
 		case "WHERE":
 			l.Eat(1)
 			stmt.Where, err = parseWhere(l)
+			if err != nil {
+				return Stmt{}, err
+			}
+		case "AGGS":
+			l.Eat(1)
+			stmt.Aggs, err = parseAggs(l)
 			if err != nil {
 				return Stmt{}, err
 			}
@@ -276,7 +283,7 @@ func parseStringExpr(l *lexer) (StringExpr, error) {
 	return NewStringExpr(tok.Value), nil
 }
 
-func parseWhere(l *lexer) (where *Query, err error) {
+func parseWhere(l *lexer) (where *QueryExpr, err error) {
 	tok, err := l.Peek()
 	if err != nil {
 		return nil, err
@@ -287,7 +294,7 @@ func parseWhere(l *lexer) (where *Query, err error) {
 	if tok.Type != identToken {
 		return nil, errUnexpectedToken(tok, "IDENT | {")
 	}
-	where = &Query{
+	where = &QueryExpr{
 		Type: OR,
 	}
 
@@ -308,7 +315,7 @@ func parseWhere(l *lexer) (where *Query, err error) {
 		where.Children = append(where.Children, left)
 	case "AND":
 		l.Next()
-		qand := &Query{
+		qand := &QueryExpr{
 			Type: AND,
 		}
 		right, err := parsePredicate(l)
@@ -328,7 +335,7 @@ func parseWhere(l *lexer) (where *Query, err error) {
 	return where, nil
 }
 
-func parsePredicate(l *lexer) (*Query, error) {
+func parsePredicate(l *lexer) (*QueryExpr, error) {
 	tok, err := l.Next()
 	if err != nil {
 		return nil, err
@@ -368,11 +375,15 @@ func parsePredicate(l *lexer) (*Query, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Query{
+	return &QueryExpr{
 		LHS: lhs,
 		RHS: valexpr,
 		OP:  predicate,
 	}, nil
+}
+
+func anyof(typ toktype, targets ...toktype) bool {
+	return slices.Contains(targets, typ)
 }
 
 func errUnexpectedToken(tok tokval, expected string) error {

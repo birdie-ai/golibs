@@ -13,15 +13,16 @@ type (
 		Name    string
 		Entity  string
 		Fields  []Expr
-		Where   *Query
+		Where   *QueryExpr
 		Limit   int
 		OrderBy OrderBy
-		Aggs    map[string]Agg
+		Aggs    Aggs
 
 		// TODO(i4k): add Span
 	}
 
 	Stmts []Stmt
+	Aggs  map[string]Agg
 
 	// Return is a dql RETURN node.
 	// The should be only one RETURN node per script.
@@ -35,27 +36,21 @@ type (
 		Variables() []VarExpr
 	}
 
-	Query struct {
-		Type QueryNode
-
-		// NOTE(i4k): uses a pointer because query rewriting heavily depends on appends
-		// and then otherwise it copies too much the Query struct.
-		Children []*Query
-		LHS      StaticPath
-		RHS      Expr
-		OP       Predicate
-	}
-
 	StaticPath []string
 
 	QueryNode int
 
 	Predicate int
 
+	// tagged union for performande reasons.
 	Agg struct {
-		By       any
-		Size     int
-		Children map[string]Agg
+		Name    string
+		Func    FncallExpr
+		Limit   *int
+		After   string // base64 cursor
+		OrderBy []OrderBy
+
+		Children Aggs
 	}
 
 	OrderBy struct {
@@ -64,25 +59,6 @@ type (
 	}
 
 	Sort string
-)
-
-// aggs nodes
-type (
-	// DistinctAgg maps to either `SELECT DISTINCT(...)` or `ES terms(...)`.
-	DistinctAgg struct {
-		Field string
-	}
-
-	FilterAgg struct {
-		Where map[string]any
-	}
-
-	HistogramAgg struct {
-		Field    string
-		Interval int
-	}
-
-	// TODO(i4k): add other aggs.
 )
 
 // Expr nodes
@@ -116,6 +92,17 @@ type (
 	FncallExpr struct {
 		Name string
 		Args []Expr
+	}
+
+	QueryExpr struct {
+		Type QueryNode
+
+		// NOTE(i4k): uses a pointer because query rewriting heavily depends on appends
+		// and then otherwise it copies too much the Query struct.
+		Children []*QueryExpr
+		LHS      StaticPath
+		RHS      Expr
+		OP       Predicate
 	}
 
 	PathExpr struct {
