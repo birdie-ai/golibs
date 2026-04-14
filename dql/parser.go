@@ -294,10 +294,6 @@ func parseWhere(l *lexer) (where *QueryExpr, err error) {
 	if tok.Type != identToken {
 		return nil, errUnexpectedToken(tok, "IDENT | {")
 	}
-	where = &QueryExpr{
-		Type: OR,
-	}
-
 	left, err := parsePredicate(l)
 	if err != nil {
 		return nil, err
@@ -306,33 +302,24 @@ func parseWhere(l *lexer) (where *QueryExpr, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if next.Type != keywordToken {
-		where.Children = append(where.Children, left)
-		return where, nil
+	if next.Type != keywordToken || (next.Value != "AND" && next.Value != "OR") {
+		return left, nil
 	}
-	switch next.Value {
-	default:
-		where.Children = append(where.Children, left)
-	case "AND":
-		l.Next()
-		qand := &QueryExpr{
-			Type: AND,
-		}
-		right, err := parsePredicate(l)
-		if err != nil {
-			return nil, err
-		}
-		qand.Children = append(qand.Children, left, right)
-		where.Children = append(where.Children, qand)
-	case "OR":
-		l.Next()
-		right, err := parsePredicate(l)
-		if err != nil {
-			return nil, err
-		}
-		where.Children = append(where.Children, left, right)
+	l.Next()
+	right, err := parsePredicate(l)
+	if err != nil {
+		return nil, err
 	}
-	return where, nil
+	var logicalop QueryNode
+	if next.Value == "AND" {
+		logicalop = AND
+	} else {
+		logicalop = OR
+	}
+	return &QueryExpr{
+		Type:     logicalop,
+		Children: []*QueryExpr{left, right},
+	}, nil
 }
 
 func parsePredicate(l *lexer) (*QueryExpr, error) {

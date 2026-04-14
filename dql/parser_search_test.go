@@ -70,22 +70,17 @@ func TestParserSearch(t *testing.T) {
 							dql.NewFncallExpr("UPPER", dql.NewVarExpr("text")),
 						},
 						Where: &dql.QueryExpr{
-							Type: dql.OR,
+							Type: dql.AND,
 							Children: []*dql.QueryExpr{
 								{
-									Type: dql.AND,
-									Children: []*dql.QueryExpr{
-										{
-											LHS: dql.Path("id"),
-											RHS: dql.NewNumberExpr(1),
-											OP:  dql.Eq,
-										},
-										{
-											LHS: dql.Path("text"),
-											RHS: dql.NewStringExpr("value"),
-											OP:  dql.Eq,
-										},
-									},
+									LHS: dql.Path("id"),
+									RHS: dql.NewNumberExpr(1),
+									OP:  dql.Eq,
+								},
+								{
+									LHS: dql.Path("text"),
+									RHS: dql.NewStringExpr("value"),
+									OP:  dql.Eq,
 								},
 							},
 						},
@@ -106,14 +101,9 @@ func TestParserSearch(t *testing.T) {
 							dql.NewPathExpr(dql.NewVarExpr("feedbacks"), dql.NewFieldStep("text")),
 						},
 						Where: &dql.QueryExpr{
-							Type: dql.OR,
-							Children: []*dql.QueryExpr{
-								{
-									LHS: dql.Path("feedbacks", "text"),
-									RHS: dql.NewStringExpr("value"),
-									OP:  dql.Eq,
-								},
-							},
+							LHS: dql.Path("feedbacks", "text"),
+							RHS: dql.NewStringExpr("value"),
+							OP:  dql.Eq,
 						},
 					},
 				},
