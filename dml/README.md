@@ -142,7 +142,7 @@ SET operating_systems
 			},
 			"phil-winterbottom": {
 				"id": "phil-winterbottom",
-				"name":"Phil Winterbotton"
+				"name": "Phil Winterbotton"
 			}
 		}
 	}
@@ -192,7 +192,7 @@ Once statement above executes, the persisted entity will be:
 			},
 			"phil-winterbottom": {
 				"id": "phil-winterbottom",
-				"name":"Phil Winterbotton"
+				"name": "Phil Winterbotton"
 			}
 		}
 	}
@@ -254,7 +254,7 @@ The final object must be:
 			},
 			"phil-winterbottom": {
 				"id": "phil-winterbottom",
-				"name":"Phil Winterbotton"
+				"name": "Phil Winterbotton"
 			}
 		}
 	}
@@ -332,7 +332,7 @@ If you followed all steps, then the final object is:
 			},
 			"phil-winterbottom": {
 				"id": "phil-winterbottom",
-				"name":"Phil Winterbotton"
+				"name": "Phil Winterbotton"
 			},
 			"russ-cox": {
 				"id": "russ-cox",
