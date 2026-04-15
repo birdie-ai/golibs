@@ -117,6 +117,19 @@ func parseStmt(l *lexer) (Stmt, error) {
 			if err != nil {
 				return Stmt{}, err
 			}
+		case "LIMIT":
+			l.Eat(1)
+			tok, err := l.Next()
+			if err != nil {
+				return Stmt{}, err
+			}
+			if tok.Type != numberToken {
+				return Stmt{}, errUnexpectedToken(tok, `NUMBER`)
+			}
+			stmt.Limit, err = strconv.Atoi(tok.Value)
+			if err != nil {
+				return Stmt{}, err
+			}
 		}
 	}
 

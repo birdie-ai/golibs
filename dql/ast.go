@@ -15,7 +15,7 @@ type (
 		Fields  []Expr
 		Where   *QueryExpr
 		Limit   int
-		OrderBy OrderBy
+		OrderBy []OrderBy
 		Aggs    Aggs
 
 		// TODO(i4k): add Span

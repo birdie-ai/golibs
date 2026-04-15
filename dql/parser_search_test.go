@@ -29,6 +29,18 @@ func TestParserSearch(t *testing.T) {
 			},
 		},
 		{
+			name: "minimal stmt",
+			in:   `SEARCH feedbacks LIMIT 10;`, // valid stmt
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Limit:  10,
+					},
+				},
+			},
+		},
+		{
 			name: "multiple stmts",
 			in:   `SEARCH feedbacks; SEARCH orders;`,
 			out: dql.Program{
