@@ -62,7 +62,8 @@ func validate(stmt Stmt) error {
 	if stmt.Entity != empty && !isIdent(stmt.Entity.Value()) {
 		errs = append(errs, fmt.Errorf("invalid entity %s: %w", stmt.Entity.Value(), ErrNotIdent))
 	}
-	if len(stmt.Assign) == 0 && stmt.Op != DELETE {
+	assignLen := len(stmt.Assign) + len(stmt.Inner)
+	if assignLen == 0 && stmt.Op != DELETE {
 		errs = append(errs, ErrMissingAssign)
 	}
 	keys := slices.Sorted(maps.Keys(stmt.Assign))
@@ -76,7 +77,7 @@ func validate(stmt Stmt) error {
 			errs = append(errs, v.validate())
 		}
 	}
-	if hasdot && len(stmt.Assign) > 1 {
+	if hasdot && assignLen > 1 {
 		errs = append(errs, ErrInvalidDotAssign)
 	}
 	if len(stmt.Where) == 0 {
@@ -87,7 +88,9 @@ func validate(stmt Stmt) error {
 			errs = append(errs, fmt.Errorf("clause with invalid field %s: %w", k, ErrNotIdent))
 		}
 	}
-
+	for _, innerStmt := range stmt.Inner {
+		errs = append(errs, validate(innerStmt))
+	}
 	// other validations happens at encoding phase.
 	return errors.Join(errs...)
 }
@@ -100,6 +103,26 @@ func encode(w io.Writer, stmt Stmt) error {
 	err = encodeAssign(w, stmt.Op, stmt.Assign)
 	if err != nil {
 		return err
+	}
+	for i, inner := range stmt.Inner {
+		err = write(w, "(")
+		if err != nil {
+			return err
+		}
+		err = encode(w, inner)
+		if err != nil {
+			return err
+		}
+		err = write(w, ")")
+		if err != nil {
+			return err
+		}
+		if i+1 < len(stmt.Inner) {
+			err = write(w, ",")
+			if err != nil {
+				return err
+			}
+		}
 	}
 	err = write(w, " WHERE ")
 	if err != nil {
