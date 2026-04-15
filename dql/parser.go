@@ -96,6 +96,9 @@ func parseStmt(l *lexer) (Stmt, error) {
 	}
 
 	tok, err = l.Peek()
+	if err != nil {
+		return Stmt{}, err
+	}
 	if tok.Type == semicolonToken {
 		l.Eat(1)
 		return stmt, nil
@@ -105,19 +108,32 @@ func parseStmt(l *lexer) (Stmt, error) {
 		switch tok.Value {
 		default:
 			return Stmt{}, errUnexpectedToken(tok, "WHERE | ORDER BY | LIMIT | AGGS | WITH CURSOR | AFTER | ;")
-		case "WHERE":
+		case "WHERE", "AGGS", "LIMIT", "ORDER", "WITH":
+		}
+
+		if tok.Value == "WHERE" {
 			l.Eat(1)
 			stmt.Where, err = parseWhere(l)
 			if err != nil {
 				return Stmt{}, err
 			}
-		case "AGGS":
+			tok, err = l.Peek()
+			if err != nil {
+				return Stmt{}, err
+			}
+		}
+		if tok.Value == "AGGS" {
 			l.Eat(1)
 			stmt.Aggs, err = parseAggs(l)
 			if err != nil {
 				return Stmt{}, err
 			}
-		case "LIMIT":
+			tok, err = l.Peek()
+			if err != nil {
+				return Stmt{}, err
+			}
+		}
+		if tok.Value == "LIMIT" {
 			l.Eat(1)
 			tok, err := l.Next()
 			if err != nil {
@@ -130,7 +146,13 @@ func parseStmt(l *lexer) (Stmt, error) {
 			if err != nil {
 				return Stmt{}, err
 			}
+			tok, err = l.Peek()
+			if err != nil {
+				return Stmt{}, err
+			}
 		}
+
+		// TODO(i4k): ORDER BY, WITH CURSOR, etc
 	}
 
 	// TODO(i4k): rest

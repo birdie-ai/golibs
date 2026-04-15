@@ -29,8 +29,8 @@ func TestParserSearch(t *testing.T) {
 			},
 		},
 		{
-			name: "minimal stmt",
-			in:   `SEARCH feedbacks LIMIT 10;`, // valid stmt
+			name: "minimal stmt with LIMIT",
+			in:   `SEARCH feedbacks LIMIT 10;`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
@@ -96,6 +96,36 @@ func TestParserSearch(t *testing.T) {
 								},
 							},
 						},
+					},
+				},
+			},
+		},
+		{
+			name: "WHERE clause with LIMIT",
+			in:   `SEARCH feedbacks id WHERE id=1 AND text="value" LIMIT 10;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.AND,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("id"),
+									RHS: dql.NewNumberExpr(1),
+									OP:  dql.Eq,
+								},
+								{
+									LHS: dql.Path("text"),
+									RHS: dql.NewStringExpr("value"),
+									OP:  dql.Eq,
+								},
+							},
+						},
+						Limit: 10,
 					},
 				},
 			},
