@@ -342,6 +342,7 @@ If you followed all steps, then the final object is:
 		}
 	}
 }
+```
 
 See more examples below:
 
