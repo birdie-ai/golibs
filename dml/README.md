@@ -12,6 +12,339 @@ primarily for three reasons:
 2. The ability to funnel data change events from different sources into a common language that allows for ease de-duplication and other optimizations.
 3. Separate higher level business logic (mostly data transformation) from lower level storage modifications.
 
+## Concepts
+
+The DML works on top of the document-based data abstraction, which means
+data is represented as an hierarchical data structure (like a JSON) and
+then DML operations change internal parts of the documents.
+The user doesn't need to know the details of the storage engine, if data
+is stored as tables or files on disk, it doesn't matter and the only
+surfacing concept is that documents are hierarchical and its constituint
+parts are a subset of the JSON spec:
+
+Primitive types:
+- Number
+- String
+- Boolean
+
+**NOTE: `null` is not supported, use DELETE operations for that**
+
+Collection types:
+- Array
+- Object
+
+Given that, let's say you have an entity called `operating_systems` which is defined as:
+
+```json
+{
+	(name): (operating_system),
+}
+```
+
+and `operating_system` has schema below:
+```json
+{
+	"name": (string, pk=true),
+	"description": (string, optional=true),
+	"released_at": (date),
+	"languages": [(string, set=true)], // a "set" means it has unique elements
+	"authors": {
+		(string): (author)
+	}
+}
+```
+Note that `authors` is not an array because we don't want duplicates, so author `name` is the primary key of this related entity.
+ 
+Then schemas above means `operating_systems` is a map of `name` *->* `operating_system`.
+The `author` has the schema below:
+```json
+{
+	"id": (string, pk=true),
+	"name": (string),
+	"country": (string, optional=true)
+}
+```
+
+Given the above, let's say we have this entity persisted with just the data below:
+
+```json
+{
+	"EDSAC": {
+		"name": "edsac",
+		"languages": ["assembly"],
+		"released_at": "1949-05-06",
+		"authors": {
+			"maurice-wilkes": {
+				"id": "maurice-wilkes",
+				"name": "Maurice Wilkes",
+				"country": "United Kingdom"
+			}
+		}
+	}
+}
+```
+
+and user wants to update the _description_ that was not initially saved, then the DML statement
+below can be used:
+
+```sql
+SET operating_systems
+	description = "The Electronic Delay Storage Automatic Calculator (EDSAC) was an early British computer. Inspired by John von Neumann's seminal First Draft of a Report on the EDVAC, the machine was constructed by Maurice Wilkes and his team at the University of Cambridge Mathematical Laboratory in England to provide a service to the university.",
+WHERE
+	name="edsac";
+```
+
+Notice that `WHERE` clauses *must* address all fields marked as `pk` in the schema.
+
+The current object is:
+```json
+{
+	"edsac": {
+		"name": "edsac",
+		"description": "The Electronic Delay Storage Automatic Calculator (EDSAC) was an early British computer. Inspired by John von Neumann's seminal First Draft of a Report on the EDVAC, the machine was constructed by Maurice Wilkes and his team at the University of Cambridge Mathematical Laboratory in England to provide a service to the university.",
+		"languages": ["assembly"],
+		"released_at": "1949-05-06",
+		"authors": {
+			"maurice-wilkes": {
+				"id": "maurice-wilkes",
+				"name": "Maurice Wilkes",
+				"country": "United Kingdom"
+			}
+		}
+	}
+}
+```
+
+Now let's say you want to add new operating systems, you can set whole objects at once with the `dot-assign` syntax, like the example below:
+
+```
+SET operating_systems
+	.={
+		"name": "plan9",
+		"description": "Plan 9 from Bell Labs is an operating system designed by the Computing Science Research Center (CSRC) at Bell Labs in the mid-1980s, built on the UNIX concepts first developed there in the late 1960s. Since 2000, Plan 9 has been free and open-source. The final official release was in early 2015.",
+		"languages": ["C"],
+		"released_at": "1992-09-21",
+		"authors": {
+			"rob-pike": {
+				"id": "rob-pike",
+				"name": "Rob Pike",
+				"country": "United States"
+			},
+			"ken-thompson": {
+				"id": "ken-thompson",
+				"name": "Ken Thompson",
+				"country": "United States"
+			},
+			"dave-presotto": {
+				"id": "dave-presotto",
+				"name": "Dave Presotto",
+				"country": "United States"
+			},
+			"phil-winterbottom": {
+				"id": "phil-winterbottom",
+				"name":"Phil Winterbotton"
+			}
+		}
+	}
+WHERE name="plan9";
+```
+
+The reason that we do a `SET` for both *inserting* and *updating* is because all DML statements
+are *idempotent* and this is a very important property of the Birdie data change events.
+
+Once statement above executes, the persisted entity will be:
+
+```json
+{
+	"edsac": {
+		"name": "edsac",
+		"description": "The Electronic Delay Storage Automatic Calculator (EDSAC) was an early British computer. Inspired by John von Neumann's seminal First Draft of a Report on the EDVAC, the machine was constructed by Maurice Wilkes and his team at the University of Cambridge Mathematical Laboratory in England to provide a service to the university.",
+		"languages": ["assembly"],
+		"released_at": "1949-05-06",
+		"authors": {
+			"maurice-wilkes": {
+				"id": "maurice-wilkes",
+				"name": "Maurice Wilkes",
+				"country": "United Kingdom"
+			}
+		}
+	},
+	"plan9": {
+		"name": "plan9",
+		"description": "Plan 9 from Bell Labs is an operating system designed by the Computing Science Research Center (CSRC) at Bell Labs in the mid-1980s, built on the UNIX concepts first developed there in the late 1960s. Since 2000, Plan 9 has been free and open-source. The final official release was in early 2015.",
+		"languages": ["C"],
+		"released_at": "1992-09-21",
+		"authors": {
+			"rob-pike": {
+				"id": "rob-pike",
+				"name": "Rob Pike",
+				"country": "United States"
+			},
+			"ken-thompson": {
+				"id": "ken-thompson",
+				"name": "Ken Thompson",
+				"country": "United States"
+			},
+			"dave-presotto": {
+				"id": "dave-presotto",
+				"name": "Dave Presotto",
+				"country": "United States"
+			},
+			"phil-winterbottom": {
+				"id": "phil-winterbottom",
+				"name":"Phil Winterbotton"
+			}
+		}
+	}
+}
+```
+
+If you are an afficionado about UNIX/Bell-Labs/Plan9 history you should notice an error in the
+data above: Rob Pike was born in Canada...
+
+To fix that, we have to fix an entry inside the nested "authors" entity, and for that we have to introduce the concept of *nested DML statements*. 
+
+```sql
+SET operating_systems
+	(
+		SET authors country="Canada" WHERE name="rob-pike"
+	)
+WHERE name="plan9";
+```
+
+The *stmt* is recursive and children statement works inside the relationships.
+This way its `WHERE` clauses are clear and **unambiguous**.
+
+The final object must be:
+```json
+{
+	"edsac": {
+		"name": "edsac",
+		"description": "The Electronic Delay Storage Automatic Calculator (EDSAC) was an early British computer. Inspired by John von Neumann's seminal First Draft of a Report on the EDVAC, the machine was constructed by Maurice Wilkes and his team at the University of Cambridge Mathematical Laboratory in England to provide a service to the university.",
+		"languages": ["assembly"],
+		"released_at": "1949-05-06",
+		"authors": {
+			"maurice-wilkes": {
+				"id": "maurice-wilkes",
+				"name": "Maurice Wilkes",
+				"country": "United Kingdom"
+			}
+		}
+	},
+	"plan9": {
+		"name": "plan9",
+		"description": "Plan 9 from Bell Labs is an operating system designed by the Computing Science Research Center (CSRC) at Bell Labs in the mid-1980s, built on the UNIX concepts first developed there in the late 1960s. Since 2000, Plan 9 has been free and open-source. The final official release was in early 2015.",
+		"languages": ["C"],
+		"released_at": "1992-09-21",
+		"authors": {
+			"rob-pike": {
+				"id": "rob-pike",
+				"name": "Rob Pike",
+				"country": "United States"
+			},
+			"ken-thompson": {
+				"id": "ken-thompson",
+				"name": "Ken Thompson",
+				"country": "United States"
+			},
+			"dave-presotto": {
+				"id": "dave-presotto",
+				"name": "Dave Presotto",
+				"country": "United States"
+			},
+			"phil-winterbottom": {
+				"id": "phil-winterbottom",
+				"name":"Phil Winterbotton"
+			}
+		}
+	}
+}
+```
+
+As we all know, _Russ Cox_ had an important role in the evolution of _Plan9_, then it's fair to
+add him to the authors. Additionally, we know that Plan9 also has parts of the kernel written
+in assembly, so let's append it to the languages *set* as well:
+
+```
+SET operating_systems
+	languages=...["assembly"],
+	"authors.russ-cox"={
+		"id": "russ-cox",
+		"name": "Russ Cox",
+		"country": "United States"
+	}
+WHERE name="plan9";
+```
+
+Alternatively, the statement above can be expressed as:
+```
+SET operating_systems
+	languages=...["assembly"],
+	(
+		SET authors
+			.={
+				"id": "russ-cox",
+				"name": "Russ Cox",
+				"country": "United States"
+			}
+		WHERE id="russ-cox"
+	}
+WHERE name="plan9";
+```
+
+If you followed all steps, then the final object is:
+
+```json
+{
+	"edsac": {
+		"name": "edsac",
+		"description": "The Electronic Delay Storage Automatic Calculator (EDSAC) was an early British computer. Inspired by John von Neumann's seminal First Draft of a Report on the EDVAC, the machine was constructed by Maurice Wilkes and his team at the University of Cambridge Mathematical Laboratory in England to provide a service to the university.",
+		"languages": ["assembly"],
+		"released_at": "1949-05-06",
+		"authors": {
+			"maurice-wilkes": {
+				"id": "maurice-wilkes",
+				"name": "Maurice Wilkes",
+				"country": "United Kingdom"
+			}
+		}
+	},
+	"plan9": {
+		"name": "plan9",
+		"description": "Plan 9 from Bell Labs is an operating system designed by the Computing Science Research Center (CSRC) at Bell Labs in the mid-1980s, built on the UNIX concepts first developed there in the late 1960s. Since 2000, Plan 9 has been free and open-source. The final official release was in early 2015.",
+		"languages": ["assembly", "C"],
+		"released_at": "1992-09-21",
+		"authors": {
+			"rob-pike": {
+				"id": "rob-pike",
+				"name": "Rob Pike",
+				"country": "United States"
+			},
+			"ken-thompson": {
+				"id": "ken-thompson",
+				"name": "Ken Thompson",
+				"country": "United States"
+			},
+			"dave-presotto": {
+				"id": "dave-presotto",
+				"name": "Dave Presotto",
+				"country": "United States"
+			},
+			"phil-winterbottom": {
+				"id": "phil-winterbottom",
+				"name":"Phil Winterbotton"
+			},
+			"russ-cox": {
+				"id": "russ-cox",
+				"name": "Russ Cox",
+				"country": "United States"
+			}
+		}
+	}
+}
+
+See more examples below:
+
 ## Examples
 
 ### Update data
@@ -141,6 +474,18 @@ DELETE conversations
 	labels[_] as l : l="label-1",
 WHERE id="abc";
 ```
+
+## Nested Stmts
+
+In high-level terms, an entity is usually an array of documents.
+
+```
+SET feedbacks
+	(
+		SET accounts
+			name="new name"
+		
+	)
 
 ## Syntax
 
