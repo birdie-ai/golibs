@@ -207,7 +207,7 @@ To fix that, we have to fix an entry inside the nested "authors" entity, and for
 ```sql
 SET operating_systems
 	(
-		SET authors country="Canada" WHERE name="rob-pike"
+		SET authors country="Canada" WHERE id="rob-pike"
 	)
 WHERE name="plan9";
 ```
