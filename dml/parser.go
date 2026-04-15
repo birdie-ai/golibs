@@ -155,19 +155,29 @@ func parseSetAssigns(in []byte) (Assign, Stmts, []byte, error) {
 			if in[0] != ')' {
 				return nil, nil, nil, fmt.Errorf("%w: inner stmt missing closing ')'", ErrSyntax)
 			}
-			in = in[1:]
+			in = skipblank(in[1:])
+			if len(in) == 0 {
+				return nil, nil, nil, errUnexpectedEOF()
+			}
 			inner = append(inner, stmt)
-			continue
+			if in[0] == ',' {
+				in = in[1:]
+				continue
+			}
+			if len(assign) == 0 {
+				assign = nil
+			}
+			return assign, inner, in, nil
 		}
 		key, val, in, err = parseAssign(in)
 		if err != nil {
-			return Assign{}, nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		assign[key] = val
 		in = skipblank(in)
 		if len(in) == 0 {
-			return Assign{}, nil, nil, errUnexpectedEOF()
+			return nil, nil, nil, errUnexpectedEOF()
 		}
 		if in[0] == ',' {
 			// only one "." assign
@@ -256,7 +266,7 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 		return "", nil, nil, errUnexpectedEOF()
 	}
 	if in[0] != '=' {
-		return "", nil, nil, fmt.Errorf("%w: expected 'b='", ErrSyntax)
+		return "", nil, nil, fmt.Errorf("%w: expected '=' but got '%s'", ErrSyntax, in[:])
 	}
 	in = skipblank(in[1:])
 	if len(in) == 0 {
