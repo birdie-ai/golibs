@@ -233,7 +233,7 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 			return "", nil, nil, errUnexpectedEOF()
 		}
 		if in[0] != '=' {
-			return "", nil, nil, fmt.Errorf("%w: expected 'a=' token", ErrSyntax)
+			return "", nil, nil, fmt.Errorf("%w: expected '=' token", ErrSyntax)
 		}
 		in = in[1:]
 		in = skipblank(in)
