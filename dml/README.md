@@ -478,15 +478,17 @@ WHERE id="abc";
 
 ## Nested Stmts
 
-In high-level terms, an entity is usually an array of documents.
+Set `feedbacks.text` inside the `orders` entity:
 
 ```
-SET feedbacks
+SET orders
 	(
-		SET accounts
-			name="new name"
-		
+		SET feedbacks
+			text="some text",
+		WHERE id="abc"
 	)
+WHERE id="order_id";
+```
 
 ## Syntax
 
