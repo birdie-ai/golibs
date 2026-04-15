@@ -500,16 +500,19 @@ validate the syntax definition by providing good/bad examples.
 dml {
   Stmts = 
     Stmt*
-
+    
   Stmt =
-    SetStmt   -- setstmt
-    | DelStmt -- delstmt
+  	DMLExpr ";"
+    
+  DMLExpr = 
+  	SetExpr
+    | DelExpr
 
-  SetStmt = 
-    Set ident AssignList Where Condition ";"
+  SetExpr = 
+    Set ident AssignList Where Condition
 
-  DelStmt =
-    Delete ident DeleteFilter? Where Condition ";"
+  DelExpr =
+    Delete ident DeleteFilter? Where Condition
 
   Set = 
     caseInsensitive<"SET">
@@ -530,7 +533,13 @@ dml {
     Assign ("," AssignList)?
 
   Assign = 
-    LFS "=" RFS
+    NamedAssign | NestedStmt
+    
+  NamedAssign =
+  	LFS "=" RFS
+    
+  NestedStmt = 
+  	"(" DMLExpr ")"
     
   DeleteFilter =
   	LFS (KeyDecl VarDecl? ":" Condition)?
