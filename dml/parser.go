@@ -33,9 +33,6 @@ func Parse(in []byte) (Stmts, error) {
 		if err == errEOF {
 			break
 		}
-		if err == errEOF {
-			break
-		}
 		if err != nil {
 			return nil, err
 		}
