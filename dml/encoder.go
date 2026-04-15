@@ -104,9 +104,17 @@ func encodeStmtExpr(w io.Writer, stmt Stmt) error {
 	if err != nil {
 		return err
 	}
-	err = encodeAssign(w, stmt.Op, stmt.Assign)
-	if err != nil {
-		return err
+	if len(stmt.Assign) > 0 {
+		err = encodeAssign(w, stmt.Op, stmt.Assign)
+		if err != nil {
+			return err
+		}
+		if len(stmt.Inner) > 0 {
+			err = write(w, ",")
+			if err != nil {
+				return err
+			}
+		}
 	}
 	for i, inner := range stmt.Inner {
 		err = write(w, "(")

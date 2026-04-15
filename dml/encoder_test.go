@@ -596,6 +596,44 @@ func TestEncode(t *testing.T) {
 			want: `SET orders (SET feedbacks text="test" WHERE id="abc") WHERE id="order_id";`,
 		},
 		{
+			name: "stmt with mixed assign and inner stmts",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("orders"),
+					Assign: dml.Assign{
+						"name": "test",
+					},
+					Inner: dml.Stmts{
+						{
+							Op:     dml.SET,
+							Entity: u("feedbacks"),
+							Assign: dml.Assign{
+								"text": "test",
+							},
+							Where: dml.Where{
+								"id": "abc",
+							},
+						},
+						{
+							Op:     dml.SET,
+							Entity: u("feedbacks"),
+							Assign: dml.Assign{
+								"text2": "test",
+							},
+							Where: dml.Where{
+								"id": "abc2",
+							},
+						},
+					},
+					Where: dml.Where{
+						"id": "order_id",
+					},
+				},
+			},
+			want: `SET orders name="test",(SET feedbacks text="test" WHERE id="abc"),(SET feedbacks text2="test" WHERE id="abc2") WHERE id="order_id";`,
+		},
+		{
 			name: "append missing values",
 			ast: dml.Stmts{
 				{
