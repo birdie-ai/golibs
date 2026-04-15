@@ -40,7 +40,11 @@ func Encode(w io.Writer, stmts Stmts) error {
 		if err != nil {
 			return err
 		}
-		err = encode(w, stmt)
+		err = encodeStmtExpr(w, stmt)
+		if err != nil {
+			return err
+		}
+		err = write(w, ";")
 		if err != nil {
 			return err
 		}
@@ -95,7 +99,7 @@ func validate(stmt Stmt) error {
 	return errors.Join(errs...)
 }
 
-func encode(w io.Writer, stmt Stmt) error {
+func encodeStmtExpr(w io.Writer, stmt Stmt) error {
 	err := encodePreamble(w, stmt)
 	if err != nil {
 		return err
@@ -109,7 +113,7 @@ func encode(w io.Writer, stmt Stmt) error {
 		if err != nil {
 			return err
 		}
-		err = encode(w, inner)
+		err = encodeStmtExpr(w, inner)
 		if err != nil {
 			return err
 		}
@@ -132,7 +136,7 @@ func encode(w io.Writer, stmt Stmt) error {
 	if err != nil {
 		return err
 	}
-	return write(w, ";")
+	return nil
 }
 
 func encodePreamble(w io.Writer, stmt Stmt) error {

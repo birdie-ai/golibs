@@ -33,6 +33,9 @@ func Parse(in []byte) (Stmts, error) {
 		if err == errEOF {
 			break
 		}
+		if err == errEOF {
+			break
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -46,6 +49,22 @@ func Parse(in []byte) (Stmts, error) {
 }
 
 func parseStmt(in []byte) (Stmt, []byte, error) {
+	stmt, in, err := parseStmtExpr(in)
+	if err != nil {
+		return Stmt{}, nil, err
+	}
+	in = skipblank(in)
+	if len(in) == 0 {
+		return Stmt{}, nil, errUnexpectedEOF()
+	}
+	if in[0] != ';' {
+		return Stmt{}, nil, ErrSyntax
+	}
+	in = in[1:]
+	return stmt, in, nil
+}
+
+func parseStmtExpr(in []byte) (Stmt, []byte, error) {
 	in = skipblank(in)
 	if len(in) == 0 {
 		return Stmt{}, nil, errEOF
@@ -80,7 +99,7 @@ func parseStmt(in []byte) (Stmt, []byte, error) {
 	}
 
 	if stmt.Op == SET {
-		stmt.Assign, in, err = parseSetAssigns(in)
+		stmt.Assign, stmt.Inner, in, err = parseSetAssigns(in)
 	} else {
 		stmt.Assign, in, err = parseDelAssigns(in)
 	}
@@ -106,49 +125,64 @@ func parseStmt(in []byte) (Stmt, []byte, error) {
 	if err != nil {
 		return Stmt{}, nil, err
 	}
-	in = skipblank(in)
-	if len(in) == 0 {
-		return Stmt{}, nil, errUnexpectedEOF()
-	}
-	if in[0] != ';' {
-		return Stmt{}, nil, ErrSyntax
-	}
-	in = in[1:]
 	return stmt, in, nil
 }
 
-func parseSetAssigns(in []byte) (Assign, []byte, error) {
+// also handles inner stmts (they are like assignment in another entity)
+func parseSetAssigns(in []byte) (Assign, Stmts, []byte, error) {
 	assign := Assign{}
+	var inner Stmts
 	for len(in) > 0 {
 		var (
 			key string
 			val any
 			err error
 		)
+		in = skipblank(in)
+		if len(in) == 0 {
+			return nil, nil, nil, errUnexpectedEOF()
+		}
+		if in[0] == '(' {
+			var stmt Stmt
+			stmt, in, err = parseStmtExpr(in[1:])
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			in = skipblank(in)
+			if len(in) == 0 {
+				return nil, nil, nil, errUnexpectedEOF()
+			}
+			if in[0] != ')' {
+				return nil, nil, nil, fmt.Errorf("%w: inner stmt missing closing ')'", ErrSyntax)
+			}
+			in = in[1:]
+			inner = append(inner, stmt)
+			continue
+		}
 		key, val, in, err = parseAssign(in)
 		if err != nil {
-			return Assign{}, nil, err
+			return Assign{}, nil, nil, err
 		}
 
 		assign[key] = val
 		in = skipblank(in)
 		if len(in) == 0 {
-			return Assign{}, nil, errUnexpectedEOF()
+			return Assign{}, nil, nil, errUnexpectedEOF()
 		}
 		if in[0] == ',' {
 			// only one "." assign
 			if _, ok := assign["."]; ok {
-				return Assign{}, nil, fmt.Errorf("%w: only one '.' assignment is permitted. Unexpected ','", ErrSyntax)
+				return Assign{}, nil, nil, fmt.Errorf("%w: only one '.' assignment is permitted. Unexpected ','", ErrSyntax)
 			}
 			in = skipblank(in[1:])
 			if len(in) == 0 {
-				return Assign{}, nil, errUnexpectedEOF()
+				return Assign{}, nil, nil, errUnexpectedEOF()
 			}
 			continue
 		}
 		break
 	}
-	return assign, in, nil
+	return assign, inner, in, nil
 }
 
 func parseDelAssigns(in []byte) (Assign, []byte, error) {
@@ -189,7 +223,7 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 			return "", nil, nil, errUnexpectedEOF()
 		}
 		if in[0] != '=' {
-			return "", nil, nil, fmt.Errorf("%w: expected '=' token", ErrSyntax)
+			return "", nil, nil, fmt.Errorf("%w: expected 'a=' token", ErrSyntax)
 		}
 		in = in[1:]
 		in = skipblank(in)
@@ -222,7 +256,7 @@ func parseAssign(in []byte) (string, any, []byte, error) {
 		return "", nil, nil, errUnexpectedEOF()
 	}
 	if in[0] != '=' {
-		return "", nil, nil, fmt.Errorf("%w: expected '='", ErrSyntax)
+		return "", nil, nil, fmt.Errorf("%w: expected 'b='", ErrSyntax)
 	}
 	in = skipblank(in[1:])
 	if len(in) == 0 {

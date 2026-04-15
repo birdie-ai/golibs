@@ -571,7 +571,32 @@ func TestEncode(t *testing.T) {
 			want: `SET feedbacks d=1,i.j.k=...[1,2,3],s.t.r.a=["a","b","c"]... WHERE {"id":"abc","org_id":"xyz"};`,
 		},
 		{
-			name: "append of floats",
+			name: "stmt with single inner stmt",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("orders"),
+					Inner: dml.Stmts{
+						{
+							Op:     dml.SET,
+							Entity: u("feedbacks"),
+							Assign: dml.Assign{
+								"text": "test",
+							},
+							Where: dml.Where{
+								"id": "abc",
+							},
+						},
+					},
+					Where: dml.Where{
+						"id": "order_id",
+					},
+				},
+			},
+			want: `SET orders (SET feedbacks text="test" WHERE id="abc") WHERE id="order_id";`,
+		},
+		{
+			name: "append missing values",
 			ast: dml.Stmts{
 				{
 					Op:     dml.SET,
@@ -588,7 +613,7 @@ func TestEncode(t *testing.T) {
 			err: dml.ErrMissingArrayValues,
 		},
 		{
-			name: "prepend using path traversal",
+			name: "prepend missing values",
 			ast: dml.Stmts{
 				{
 					Op:     dml.SET,
