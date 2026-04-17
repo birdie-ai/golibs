@@ -8,6 +8,15 @@ var clauseMap = map[string]QueryNode{
 	"$not": NOT,
 }
 
+var opMap = map[string]Predicate{
+	"$eq":    Eq,
+	"$match": Match,
+	"$gte":   Gte,
+	"$gt":    Gt,
+	"$lte":   Lte,
+	"$lt":    Lt,
+}
+
 func parseLegacyQuery(l *lexer) (query *QueryExpr, err error) {
 	l.Eat(1) // {
 	query = &QueryExpr{
@@ -120,36 +129,79 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch next.Type {
-	default:
-		return nil, errUnexpectedToken(next, `"{" | "[" | STRING | NUMBER | true | false`)
-	case stringToken:
-		val, err := parseStringExpr(l)
+	if next.Type == lbraceToken {
+		l.Eat(1)
+		tok, err := l.Next()
 		if err != nil {
 			return nil, err
 		}
-		q.RHS = val
-		q.OP = Eq
-	case numberToken:
-		val, err := parseNumberExpr(l)
+		if tok.Type != stringToken {
+			return nil, errUnexpectedToken(tok, `STRING`)
+		}
+		op, ok := opMap[tok.Value]
+		if !ok {
+			return nil, errUnexpectedToken(tok, `$eq|$gte|$gt|$lte|$lt`)
+		}
+		q.OP = op
+		tok, err = l.Next()
 		if err != nil {
 			return nil, err
 		}
-		q.RHS = val
-		q.OP = Eq
-	case keywordToken:
-		if next.Value != "true" && next.Value != "false" {
-			return nil, errUnexpectedToken(next, `"{" | "[" | STRING | NUMBER | true | false`)
+		if tok.Type != colonToken {
+			return nil, errUnexpectedToken(tok, `:`)
 		}
-		q.RHS = NewBoolExpr(next.Value == "true")
-		q.OP = Eq
+		q.RHS, err = parsePredicateRHS(l)
+		if err != nil {
+			return nil, err
+		}
+		tok, err = l.Next()
+		if err != nil {
+			return nil, err
+		}
+		if tok.Type != rbraceToken {
+			return nil, errUnexpectedToken(tok, `}`)
+		}
+		tok, err = l.Next()
+		if err != nil {
+			return nil, err
+		}
+		if tok.Type != rbraceToken {
+			return nil, errUnexpectedToken(tok, `"}"`)
+		}
+		return q, nil
 	}
-	next, err = l.Next()
+	q.RHS, err = parsePredicateRHS(l)
 	if err != nil {
 		return nil, err
 	}
-	if next.Type != rbraceToken {
-		return nil, errUnexpectedToken(next, `"}"`)
+	q.OP = Eq
+	tok, err := l.Next()
+	if err != nil {
+		return nil, err
+	}
+	if tok.Type != rbraceToken {
+		return nil, errUnexpectedToken(tok, `}`)
 	}
 	return q, nil
+}
+
+func parsePredicateRHS(l *lexer) (Expr, error) {
+	tok, err := l.Peek()
+	if err != nil {
+		return nil, err
+	}
+	switch tok.Type {
+	default:
+		return nil, errUnexpectedToken(tok, `"[" | STRING | NUMBER | true | false`)
+	case stringToken:
+		return parseStringExpr(l)
+	case numberToken:
+		return parseNumberExpr(l)
+	case keywordToken:
+		if tok.Value != "true" && tok.Value != "false" {
+			return nil, errUnexpectedToken(tok, `"{" | "[" | STRING | NUMBER | true | false`)
+		}
+		l.Eat(1)
+		return NewBoolExpr(tok.Value == "true"), nil
+	}
 }

@@ -255,6 +255,48 @@ func TestParserSearch(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "stmt with range query",
+			in: `SEARCH feedbacks id WHERE {
+				"$and": [
+					{
+    					"posted_at": {
+        					"$gte": "2022-08-12T15:30:00Z"
+    					}
+					},
+					{
+    					"posted_at": {
+        					"$lt": "2026-08-12T15:30:00Z"
+    					}
+					}
+				]
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.AND,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("posted_at"),
+									OP:  dql.Gte,
+									RHS: dql.NewStringExpr("2022-08-12T15:30:00Z"),
+								},
+								{
+									LHS: dql.Path("posted_at"),
+									OP:  dql.Lt,
+									RHS: dql.NewStringExpr("2026-08-12T15:30:00Z"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := dql.Parse(tc.in)
