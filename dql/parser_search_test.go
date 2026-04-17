@@ -131,6 +131,29 @@ func TestParserSearch(t *testing.T) {
 			},
 		},
 		{
+			name: "stmt with single WHERE predicate must avoid logical predicate",
+			in: `SEARCH feedbacks
+					id
+				 WHERE id="abc"
+				 LIMIT 10;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							LHS: dql.Path("id"),
+							RHS: dql.NewStringExpr("abc"),
+							OP:  dql.Eq,
+						},
+						Limit: 10,
+					},
+				},
+			},
+		},
+		{
 			name: "stmt dot-traversal paths",
 			in:   `SEARCH orders id, feedbacks.id, feedbacks.text WHERE feedbacks.text="value";`,
 			out: dql.Program{

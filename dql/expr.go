@@ -33,6 +33,8 @@ func NewStringExpr(s string) StringExpr { return StringExpr{Value: s} }
 
 func NewBoolExpr(b bool) BoolExpr { return BoolExpr{Value: b} }
 
+func NewListExpr(vals []Expr) ListExpr { return ListExpr{Items: vals} }
+
 func NewPathExpr(base Expr, steps ...PathStep) PathExpr {
 	return PathExpr{
 		Base:  base,
