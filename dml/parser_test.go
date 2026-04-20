@@ -545,6 +545,108 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			text: `SET orders (SET feedbacks .={} WHERE id="abc") WHERE id="test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("orders"),
+					Inner: dml.Stmts{
+						{
+							Op:     dml.SET,
+							Entity: u("feedbacks"),
+							Assign: dml.Assign{
+								".": map[string]any{},
+							},
+							Where: dml.Where{
+								"id": "abc",
+							},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			text: `SET orders a=1,b=2,(SET feedbacks .={} WHERE id="abc"),(SET feedbacks text="test" WHERE id="abc2") WHERE id="test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("orders"),
+					Assign: dml.Assign{
+						"a": float64(1),
+						"b": float64(2),
+					},
+					Inner: dml.Stmts{
+						{
+							Op:     dml.SET,
+							Entity: u("feedbacks"),
+							Assign: dml.Assign{
+								".": map[string]any{},
+							},
+							Where: dml.Where{
+								"id": "abc",
+							},
+						},
+						{
+							Op:     dml.SET,
+							Entity: u("feedbacks"),
+							Assign: dml.Assign{
+								"text": "test",
+							},
+							Where: dml.Where{
+								"id": "abc2",
+							},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `SET orders a=1,(SET feedbacks .={} WHERE id="abc"),b=2,(SET feedbacks text="test" WHERE id="abc2"),c=3 WHERE id="test";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("orders"),
+					Assign: dml.Assign{
+						"a": float64(1),
+						"b": float64(2),
+						"c": float64(3),
+					},
+					Inner: dml.Stmts{
+						{
+							Op:     dml.SET,
+							Entity: u("feedbacks"),
+							Assign: dml.Assign{
+								".": map[string]any{},
+							},
+							Where: dml.Where{
+								"id": "abc",
+							},
+						},
+						{
+							Op:     dml.SET,
+							Entity: u("feedbacks"),
+							Assign: dml.Assign{
+								"text": "test",
+							},
+							Where: dml.Where{
+								"id": "abc2",
+							},
+						},
+					},
+					Where: dml.Where{
+						"id": "test",
+					},
+				},
+			},
+		},
+		{
 			text: `DELETE feedbacks . WHERE id="abc";`,
 			want: dml.Stmts{
 				{

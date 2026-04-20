@@ -9,10 +9,13 @@ type (
 	// Stmt is a single dml statement.
 	// A statement manipulates fields of a single entity row.
 	// The [Stmt.Assign] assigns data manipulation operations to individual fields.
+	// The [Stmt.Inner] are data manipulations in the inner relationships of the outer entity.
+	// All stmts in the [Stmt.Inner] are restricted by the `WHERE` clause in the outer stmt.
 	Stmt struct {
 		Entity unique.Handle[string]
 		Op     OpKind
 		Assign Assign
+		Inner  Stmts
 		Where  Where
 	}
 
