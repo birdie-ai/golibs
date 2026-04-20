@@ -138,6 +138,8 @@ func (e *Encoder) expr(expr Expr, retfield bool) error {
 	switch v := expr.(type) {
 	default:
 		panic("unreachable")
+	case PathExpr:
+		return e.pathExpr(v, retfield)
 	case ObjectExpr:
 		return e.objExpr(v, retfield)
 	case ListExpr:
@@ -230,6 +232,44 @@ func (e *Encoder) varExpr(v VarExpr, retfield bool) error {
 		return e.slot(v)
 	}
 	return e.emit(v.Value)
+}
+
+func (e *Encoder) pathExpr(v PathExpr, retfield bool) error {
+	if e.onlyShape && !retfield {
+		return e.slot(v)
+	}
+	err := e.expr(v.Base, retfield)
+	if err != nil {
+		return err
+	}
+	if len(v.Steps) == 0 {
+		return fmt.Errorf("path expr %v has no steps", v)
+	}
+	for _, step := range v.Steps {
+		switch step.Type {
+		default:
+			return fmt.Errorf("unexpected step type %v", step)
+		case FieldStep:
+			err := e.emit("." + step.Field)
+			if err != nil {
+				return err
+			}
+		case IndexStep:
+			err := e.emit("[")
+			if err != nil {
+				return err
+			}
+			err = e.expr(step.Index, retfield)
+			if err != nil {
+				return err
+			}
+			err = e.emit("]")
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (e *Encoder) boolExpr(v BoolExpr, retfield bool) error {

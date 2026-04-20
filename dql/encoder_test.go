@@ -45,6 +45,7 @@ func TestEncoder(t *testing.T) {
 						Entity: "test",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
+							dql.NewPathExpr(dql.NewVarExpr("feedbacks"), dql.NewFieldStep("text")),
 							dql.NewStringExpr("test"),
 							dql.NewBoolExpr(false),
 							dql.NewListExpr([]dql.Expr{dql.NewStringExpr("test")}),
@@ -52,8 +53,8 @@ func TestEncoder(t *testing.T) {
 					},
 				},
 			},
-			out:   `SEARCH test id,"test",false,["test"] LIMIT 0;`,
-			shape: `SEARCH test id,"test",false,["test"] LIMIT 0;`,
+			out:   `SEARCH test id,feedbacks.text,"test",false,["test"] LIMIT 0;`,
+			shape: `SEARCH test id,feedbacks.text,"test",false,["test"] LIMIT 0;`,
 		},
 		{
 			name: "stmt with simple WHERE",
