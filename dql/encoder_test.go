@@ -109,14 +109,19 @@ func TestEncoder(t *testing.T) {
 									Type: dql.OR,
 									Children: []*dql.QueryExpr{
 										{
-											LHS: dql.Path("author"),
+											LHS: dql.Path("author", "name"),
 											OP:  dql.Eq,
 											RHS: dql.NewStringExpr("Rob Pike"),
 										},
 										{
-											LHS: dql.Path("author"),
+											LHS: dql.Path("author", "name"),
 											OP:  dql.Eq,
 											RHS: dql.NewStringExpr("Ken Thompson"),
+										},
+										{
+											LHS: dql.Path("author", "name"),
+											OP:  dql.Eq,
+											RHS: dql.NewPathExpr(dql.NewVarExpr("other"), dql.NewFieldStep("name")),
 										},
 									},
 								},
@@ -125,14 +130,15 @@ func TestEncoder(t *testing.T) {
 					},
 				},
 			},
-			out:   `SEARCH operating_systems WHERE {"$and":[{"$not":[{"type":"unix"}]},{"active":false},{"kernel":"hybrid"},{"$or":[{"author":"Rob Pike"},{"author":"Ken Thompson"}]}]} LIMIT 0;`,
-			shape: `SEARCH operating_systems WHERE {"$and":[{"$not":[{"type":$1}]},{"active":$2},{"kernel":$3},{"$or":[{"author":$4},{"author":$5}]}]} LIMIT 0;`,
+			out:   `SEARCH operating_systems WHERE {"$and":[{"$not":[{"type":"unix"}]},{"active":false},{"kernel":"hybrid"},{"$or":[{"author.name":"Rob Pike"},{"author.name":"Ken Thompson"},{"author.name":other.name}]}]} LIMIT 0;`,
+			shape: `SEARCH operating_systems WHERE {"$and":[{"$not":[{"type":$1}]},{"active":$2},{"kernel":$3},{"$or":[{"author.name":$4},{"author.name":$5},{"author.name":$6}]}]} LIMIT 0;`,
 			values: []dql.Expr{
 				dql.NewStringExpr("unix"),
 				dql.NewBoolExpr(false),
 				dql.NewStringExpr("hybrid"),
 				dql.NewStringExpr("Rob Pike"),
 				dql.NewStringExpr("Ken Thompson"),
+				dql.NewPathExpr(dql.NewVarExpr("other"), dql.NewFieldStep("name")),
 			},
 		},
 		{
