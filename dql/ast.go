@@ -1,5 +1,7 @@
 package dql
 
+import "fmt"
+
 // basic statement shape
 type (
 	// Program is the parsed script.
@@ -38,9 +40,15 @@ type (
 
 	StaticPath []string
 
-	QueryNode int
+	Bound struct {
+		// OP can be any number/date Predicate **except** Range.
+		OP  Predicate
+		Val Expr
+		Set bool // indicates whether this bound exists (optional)
+	}
 
-	Predicate int
+	QueryNode uint8
+	Predicate uint8
 
 	// tagged union for performande reasons.
 	Agg struct {
@@ -100,9 +108,16 @@ type (
 		// NOTE(i4k): uses a pointer because query rewriting heavily depends on appends
 		// and then otherwise it copies too much the Query struct.
 		Children []*QueryExpr
-		LHS      StaticPath
-		RHS      Expr
-		OP       Predicate
+
+		// Fields below are only set if QueryType == predicate
+
+		LHS StaticPath
+		RHS Expr
+		OP  Predicate
+
+		// For Range predicate, use bounds (only one of these two is required)
+		Lower Bound
+		Upper Bound
 	}
 
 	PathExpr struct {
@@ -141,6 +156,7 @@ const (
 const (
 	Eq Predicate = iota
 	Match
+	Range
 	Gte
 	Gt
 	Lte
@@ -153,3 +169,33 @@ const (
 	FieldStep
 	IndexStep
 )
+
+func (op Predicate) IsRange() bool {
+	switch op {
+	case Gte, Gt, Lte, Lt:
+		return true
+	default:
+		return false
+	}
+}
+
+func (op Predicate) String() string {
+	switch op {
+	default:
+		return fmt.Sprintf("<unknown predicate %d>", op)
+	case Eq:
+		return "$eq"
+	case Match:
+		return "$match"
+	case Range:
+		return "$range"
+	case Gte:
+		return "$gte"
+	case Gt:
+		return "$gt"
+	case Lte:
+		return "$lte"
+	case Lt:
+		return "$lt"
+	}
+}

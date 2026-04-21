@@ -256,7 +256,7 @@ func TestParserSearch(t *testing.T) {
 			},
 		},
 		{
-			name: "stmt with range query",
+			name: "stmt with range individual range queries",
 			in: `SEARCH feedbacks id WHERE {
 				"$and": [
 					{
@@ -283,14 +283,55 @@ func TestParserSearch(t *testing.T) {
 							Children: []*dql.QueryExpr{
 								{
 									LHS: dql.Path("posted_at"),
-									OP:  dql.Gte,
-									RHS: dql.NewStringExpr("2022-08-12T15:30:00Z"),
+									OP:  dql.Range,
+									Lower: dql.Bound{
+										Set: true,
+										OP:  dql.Gte,
+										Val: dql.NewStringExpr("2022-08-12T15:30:00Z"),
+									},
 								},
 								{
 									LHS: dql.Path("posted_at"),
-									OP:  dql.Lt,
-									RHS: dql.NewStringExpr("2026-08-12T15:30:00Z"),
+									OP:  dql.Range,
+									Upper: dql.Bound{
+										Set: true,
+										OP:  dql.Lt,
+										Val: dql.NewStringExpr("2026-08-12T15:30:00Z"),
+									},
 								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "stmt with range query",
+			in: `SEARCH feedbacks id WHERE {
+    			"posted_at": {
+        			"$gte": "2022-08-12T15:30:00Z",
+					"$lt": "2026-08-12T15:30:00Z"
+    			}
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							LHS: dql.Path("posted_at"),
+							OP:  dql.Range,
+							Lower: dql.Bound{
+								Set: true,
+								OP:  dql.Gte,
+								Val: dql.NewStringExpr("2022-08-12T15:30:00Z"),
+							},
+							Upper: dql.Bound{
+								Set: true,
+								OP:  dql.Lt,
+								Val: dql.NewStringExpr("2026-08-12T15:30:00Z"),
 							},
 						},
 					},

@@ -1,6 +1,9 @@
 package dql
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 var clauseMap = map[string]QueryNode{
 	"$and": AND,
@@ -11,10 +14,13 @@ var clauseMap = map[string]QueryNode{
 var opMap = map[string]Predicate{
 	"$eq":    Eq,
 	"$match": Match,
-	"$gte":   Gte,
-	"$gt":    Gt,
-	"$lte":   Lte,
-	"$lt":    Lt,
+}
+
+var opBoundMap = map[string]Predicate{
+	"$gte": Gte,
+	"$gt":  Gt,
+	"$lte": Lte,
+	"$lt":  Lt,
 }
 
 func parseLegacyQuery(l *lexer) (query *QueryExpr, err error) {
@@ -138,11 +144,13 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 		if tok.Type != stringToken {
 			return nil, errUnexpectedToken(tok, `STRING`)
 		}
-		op, ok := opMap[tok.Value]
+		op1, ok := opMap[tok.Value]
 		if !ok {
-			return nil, errUnexpectedToken(tok, `$eq|$gte|$gt|$lte|$lt`)
+			op1, ok = opBoundMap[tok.Value]
+			if !ok {
+				return nil, errUnexpectedToken(tok, `$eq|$gte|$gt|$lte|$lt`)
+			}
 		}
-		q.OP = op
 		tok, err = l.Next()
 		if err != nil {
 			return nil, err
@@ -150,13 +158,54 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 		if tok.Type != colonToken {
 			return nil, errUnexpectedToken(tok, `:`)
 		}
-		q.RHS, err = parsePredicateRHS(l)
+		rhs1, err := parsePredicateRHS(l)
 		if err != nil {
 			return nil, err
 		}
 		tok, err = l.Next()
 		if err != nil {
 			return nil, err
+		}
+		if tok.Type == commaToken {
+			tok, err := l.Next()
+			if err != nil {
+				return nil, err
+			}
+			if tok.Type != stringToken {
+				return nil, errUnexpectedToken(tok, `STRING`)
+			}
+			op2, ok := opBoundMap[tok.Value]
+			if !ok {
+				return nil, errUnexpectedToken(tok, `$gte|$gt|$lte|$lt`)
+			}
+			tok, err = l.Next()
+			if err != nil {
+				return nil, err
+			}
+			if tok.Type != colonToken {
+				return nil, errUnexpectedToken(tok, `:`)
+			}
+			rhs2, err := parsePredicateRHS(l)
+			if err != nil {
+				return nil, err
+			}
+			if !op1.IsRange() {
+				return nil, fmt.Errorf("%w: %s used with range predicate", ErrSyntax, op1)
+			}
+			q.OP = Range
+			setBound(q, op1, rhs1)
+			setBound(q, op2, rhs2)
+			tok, err = l.Next()
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			if op1.IsRange() {
+				setBound(q, op1, rhs1)
+			} else {
+				q.OP = op1
+				q.RHS = rhs1
+			}
 		}
 		if tok.Type != rbraceToken {
 			return nil, errUnexpectedToken(tok, `}`)
@@ -183,6 +232,23 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 		return nil, errUnexpectedToken(tok, `}`)
 	}
 	return q, nil
+}
+
+func setBound(q *QueryExpr, op Predicate, val Expr) {
+	q.OP = Range
+	if op == Gte || op == Gt {
+		q.Lower = Bound{
+			Set: true,
+			OP:  op,
+			Val: val,
+		}
+	} else {
+		q.Upper = Bound{
+			Set: true,
+			OP:  op,
+			Val: val,
+		}
+	}
 }
 
 func parsePredicateRHS(l *lexer) (Expr, error) {
