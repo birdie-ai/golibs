@@ -79,7 +79,20 @@ func (e FncallExpr) Variables() (vars []VarExpr) {
 
 func (e QueryExpr) Variables() (vars []VarExpr) {
 	if e.Type == predicate {
-		return e.RHS.Variables()
+		switch e.OP {
+		case Eq, Match:
+			return e.RHS.Variables()
+		case Range:
+			if e.Lower.Set {
+				vars = append(vars, e.Lower.Val.Variables()...)
+			}
+			if e.Upper.Set {
+				vars = append(vars, e.Upper.Val.Variables()...)
+			}
+			return vars
+		default:
+			panic(e.OP)
+		}
 	}
 	for _, children := range e.Children {
 		vars = append(vars, children.Variables()...)
