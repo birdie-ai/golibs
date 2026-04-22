@@ -204,6 +204,8 @@ func parseExpr(l *lexer) (expr Expr, err error) {
 		expr, err = parseNumberExpr(l)
 	case stringToken:
 		expr, err = parseStringExpr(l)
+	case lbraceToken:
+		expr, err = parseObjectExpr(l)
 	case identToken:
 		next, err := l.PeekNext()
 		if err != nil {
@@ -316,6 +318,52 @@ func parseStringExpr(l *lexer) (StringExpr, error) {
 		return StringExpr{}, err
 	}
 	return NewStringExpr(tok.Value), nil
+}
+
+func parseObjectExpr(l *lexer) (ObjectExpr, error) {
+	l.Eat(1) // {
+	keyvals := map[string]Expr{}
+	for {
+		next, err := l.Next()
+		if err != nil {
+			return ObjectExpr{}, err
+		}
+		var key string
+		switch next.Type {
+		default:
+			return ObjectExpr{}, errUnexpectedToken(next, `STRING | IDENT | }`)
+		case stringToken, identToken:
+			key = next.Value
+		}
+		next, err = l.Next()
+		if err != nil {
+			return ObjectExpr{}, err
+		}
+		if next.Type != colonToken {
+			return ObjectExpr{}, errUnexpectedToken(next, `:`)
+		}
+		expr, err := parseExpr(l)
+		if err != nil {
+			return ObjectExpr{}, err
+		}
+		keyvals[key] = expr
+		next, err = l.Peek()
+		if err != nil {
+			return ObjectExpr{}, err
+		}
+		if next.Type != commaToken {
+			break
+		}
+		l.Eat(1)
+	}
+	next, err := l.Next()
+	if err != nil {
+		return ObjectExpr{}, err
+	}
+	if next.Type != rbraceToken {
+		return ObjectExpr{}, errUnexpectedToken(next, `}`)
+	}
+	return NewObjectExpr(keyvals), nil
 }
 
 func parseWhere(l *lexer) (where *QueryExpr, err error) {

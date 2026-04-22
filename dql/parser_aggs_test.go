@@ -49,6 +49,7 @@ func TestParserAggs(t *testing.T) {
 				sample_id: terms("sample_id") {
 					nested: terms("labels")
 				},
+				by_month: date_histogram(posted_at, {"interval": "month"})
 			};`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
@@ -72,6 +73,12 @@ func TestParserAggs(t *testing.T) {
 										Func: dql.NewFncallExpr("terms", dql.NewStringExpr("labels")),
 									},
 								},
+							},
+							"by_month": {
+								Name: "by_month",
+								Func: dql.NewFncallExpr("date_histogram", dql.NewVarExpr("posted_at"), dql.NewObjectExpr(map[string]dql.Expr{
+									"interval": dql.NewStringExpr("month"),
+								})),
 							},
 						},
 					},
