@@ -30,6 +30,18 @@ func TestParserAggs(t *testing.T) {
 			},
 		},
 		{
+			name: "empty aggs with LIMIT",
+			in:   `SEARCH feedbacks LIMIT 0 AGGS {};`, // valid stmt
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Aggs:   dql.Aggs{},
+					},
+				},
+			},
+		},
+		{
 			name: "multiple aggs",
 			in: `SEARCH feedbacks AGGS {
 				labels: terms("labels"),
