@@ -43,7 +43,7 @@ func (l *lexer) PeekNext() (tokval, error) {
 	}
 	l.lookahead = append(l.lookahead, tok)
 	if size := len(l.lookahead); size > 2 {
-		panic(fmt.Sprintf("unexpected lookahead size: %d", size))
+		panic(fmt.Sprintf("unexpected lookahead size: %d (%+v)", size, l.lookahead))
 	}
 	return tok, nil
 }

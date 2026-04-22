@@ -108,7 +108,7 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 		return nil, err
 	}
 	if next.Type != lbraceToken {
-		return nil, err
+		return nil, errUnexpectedToken(next, `{`)
 	}
 	next, err = l.PeekNext()
 	if err != nil {
@@ -167,7 +167,7 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 			return nil, err
 		}
 		if tok.Type == commaToken {
-			tok, err := l.Next()
+			tok, err = l.Next()
 			if err != nil {
 				return nil, err
 			}
@@ -208,7 +208,7 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 			}
 		}
 		if tok.Type != rbraceToken {
-			return nil, errUnexpectedToken(tok, `}`)
+			return nil, errUnexpectedToken(tok, "}")
 		}
 		tok, err = l.Next()
 		if err != nil {
