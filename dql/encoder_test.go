@@ -70,8 +70,8 @@ func TestEncoder(t *testing.T) {
 					},
 				},
 			},
-			out:   `SEARCH test WHERE {"text":"test"} LIMIT 0;`,
-			shape: `SEARCH test WHERE {"text":$1} LIMIT 0;`,
+			out:   `SEARCH test WHERE {"text":{"$eq":"test"}} LIMIT 0;`,
+			shape: `SEARCH test WHERE {"text":{"$eq":$1}} LIMIT 0;`,
 			values: []dql.Expr{
 				dql.NewStringExpr("test"),
 			},
@@ -106,6 +106,24 @@ func TestEncoder(t *testing.T) {
 									RHS: dql.NewStringExpr("hybrid"),
 								},
 								{
+									LHS: dql.Path("release_date"),
+									OP:  dql.Range,
+									Lower: dql.Bound{
+										Set: true,
+										OP:  dql.Gte,
+										Val: dql.NewStringExpr("1990-01-01"),
+									},
+								},
+								{
+									LHS: dql.Path("release_date"),
+									OP:  dql.Range,
+									Upper: dql.Bound{
+										Set: true,
+										OP:  dql.Lte,
+										Val: dql.NewStringExpr("1991-01-01"),
+									},
+								},
+								{
 									Type: dql.OR,
 									Children: []*dql.QueryExpr{
 										{
@@ -123,6 +141,20 @@ func TestEncoder(t *testing.T) {
 											OP:  dql.Eq,
 											RHS: dql.NewPathExpr(dql.NewVarExpr("other"), dql.NewFieldStep("name")),
 										},
+										{
+											LHS: dql.Path("release_date"),
+											OP:  dql.Range,
+											Lower: dql.Bound{
+												Set: true,
+												OP:  dql.Gte,
+												Val: dql.NewStringExpr("1990-01-01"),
+											},
+											Upper: dql.Bound{
+												Set: true,
+												OP:  dql.Lte,
+												Val: dql.NewStringExpr("1991-01-01"),
+											},
+										},
 									},
 								},
 							},
@@ -130,15 +162,19 @@ func TestEncoder(t *testing.T) {
 					},
 				},
 			},
-			out:   `SEARCH operating_systems WHERE {"$and":[{"$not":[{"type":"unix"}]},{"active":false},{"kernel":"hybrid"},{"$or":[{"author.name":"Rob Pike"},{"author.name":"Ken Thompson"},{"author.name":other.name}]}]} LIMIT 0;`,
-			shape: `SEARCH operating_systems WHERE {"$and":[{"$not":[{"type":$1}]},{"active":$2},{"kernel":$3},{"$or":[{"author.name":$4},{"author.name":$5},{"author.name":$6}]}]} LIMIT 0;`,
+			out:   `SEARCH operating_systems WHERE {"$and":[{"$not":[{"type":{"$eq":"unix"}}]},{"active":{"$eq":false}},{"kernel":{"$eq":"hybrid"}},{"release_date":{"$gte":"1990-01-01"}},{"release_date":{"$lte":"1991-01-01"}},{"$or":[{"author.name":{"$eq":"Rob Pike"}},{"author.name":{"$eq":"Ken Thompson"}},{"author.name":{"$eq":other.name}},{"release_date":{"$gte":"1990-01-01","$lte":"1991-01-01"}}]}]} LIMIT 0;`,
+			shape: `SEARCH operating_systems WHERE {"$and":[{"$not":[{"type":{"$eq":$1}}]},{"active":{"$eq":$2}},{"kernel":{"$eq":$3}},{"release_date":{"$gte":$4}},{"release_date":{"$lte":$5}},{"$or":[{"author.name":{"$eq":$6}},{"author.name":{"$eq":$7}},{"author.name":{"$eq":$8}},{"release_date":{"$gte":$9,"$lte":$10}}]}]} LIMIT 0;`,
 			values: []dql.Expr{
 				dql.NewStringExpr("unix"),
 				dql.NewBoolExpr(false),
 				dql.NewStringExpr("hybrid"),
+				dql.NewStringExpr("1990-01-01"),
+				dql.NewStringExpr("1991-01-01"),
 				dql.NewStringExpr("Rob Pike"),
 				dql.NewStringExpr("Ken Thompson"),
 				dql.NewPathExpr(dql.NewVarExpr("other"), dql.NewFieldStep("name")),
+				dql.NewStringExpr("1990-01-01"),
+				dql.NewStringExpr("1991-01-01"),
 			},
 		},
 		{
@@ -156,8 +192,8 @@ func TestEncoder(t *testing.T) {
 					},
 				},
 			},
-			out:   `SEARCH test WHERE {"text":"test"} LIMIT 100;`,
-			shape: `SEARCH test WHERE {"text":$1} LIMIT 100;`,
+			out:   `SEARCH test WHERE {"text":{"$eq":"test"}} LIMIT 100;`,
+			shape: `SEARCH test WHERE {"text":{"$eq":$1}} LIMIT 100;`,
 			values: []dql.Expr{
 				dql.NewStringExpr("test"),
 			},

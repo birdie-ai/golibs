@@ -137,7 +137,7 @@ func (e *Encoder) where(q *QueryExpr) error {
 func (e *Encoder) expr(expr Expr, retfield bool) error {
 	switch v := expr.(type) {
 	default:
-		panic("unreachable")
+		panic(expr)
 	case PathExpr:
 		return e.pathExpr(v, retfield)
 	case ObjectExpr:
@@ -177,15 +177,56 @@ func (e *Encoder) predicateExpr(q *QueryExpr, retfield bool) error {
 	if err != nil {
 		return err
 	}
-	err = e.emit(":")
+	err = e.emit(":{")
 	if err != nil {
 		return err
 	}
-	err = e.expr(q.RHS, retfield)
-	if err != nil {
-		return err
+	switch q.OP {
+	case Eq:
+		fallthrough
+	case Match:
+		err = e.json(q.OP.String())
+		if err != nil {
+			return err
+		}
+		err = e.emit(":")
+		if err != nil {
+			return err
+		}
+		err = e.expr(q.RHS, retfield)
+		if err != nil {
+			return err
+		}
+	case Range:
+		bounds := make([]Bound, 0, 2)
+		if q.Lower.Set {
+			bounds = append(bounds, q.Lower)
+		}
+		if q.Upper.Set {
+			bounds = append(bounds, q.Upper)
+		}
+		for i, bound := range bounds {
+			if i > 0 {
+				err = e.emit(",")
+				if err != nil {
+					return err
+				}
+			}
+			err = e.json(bound.OP.String())
+			if err != nil {
+				return err
+			}
+			err = e.emit(":")
+			if err != nil {
+				return err
+			}
+			err = e.expr(bound.Val, retfield)
+			if err != nil {
+				return err
+			}
+		}
 	}
-	return e.emit("}")
+	return e.emit("}}")
 }
 
 func (e *Encoder) logicalExpr(q *QueryExpr, retfield bool) error {
