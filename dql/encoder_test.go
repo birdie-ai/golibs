@@ -202,8 +202,8 @@ func TestEncoder(t *testing.T) {
 		// normal encoding
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			enc := dql.NewEncoder(&buf, tc.in)
-			err := enc.Encode()
+			enc := dql.NewEncoder(&buf)
+			err := enc.Encode(tc.in)
 			if !errors.Is(err, tc.err) {
 				t.Fatalf("err mismatch want [%v] != expected [%v]", tc.err, err)
 				return
@@ -220,8 +220,8 @@ func TestEncoder(t *testing.T) {
 		// shape encoding
 		t.Run(tc.name+"(shape)", func(t *testing.T) {
 			var buf bytes.Buffer
-			enc := dql.NewEncoder(&buf, tc.in, dql.OnlyShape())
-			err := enc.Encode()
+			enc := dql.NewEncoder(&buf, dql.OnlyShape())
+			err := enc.Encode(tc.in)
 			if !errors.Is(err, tc.err) {
 				t.Fatalf("err mismatch want [%v] != expected [%v]", tc.err, err)
 				return

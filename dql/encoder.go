@@ -15,7 +15,6 @@ type (
 	EncoderOption func(e *Encoder)
 
 	Encoder struct {
-		in             Program
 		buf            io.Writer
 		skipValidation bool
 		onlyShape      bool
@@ -42,9 +41,8 @@ func OnlyShape() EncoderOption {
 	}
 }
 
-func NewEncoder(w io.Writer, program Program, opts ...EncoderOption) *Encoder {
+func NewEncoder(w io.Writer, opts ...EncoderOption) *Encoder {
 	enc := &Encoder{
-		in:  program,
 		buf: w,
 	}
 	for _, opt := range opts {
@@ -53,20 +51,24 @@ func NewEncoder(w io.Writer, program Program, opts ...EncoderOption) *Encoder {
 	return enc
 }
 
-func (e *Encoder) Encode() error {
-	for _, stmt := range e.in.Stmts {
-		if !e.skipValidation {
-			err := validateStmt(stmt)
-			if err != nil {
-				return err
-			}
-			err = e.stmt(stmt)
-			if err != nil {
-				return err
-			}
+func (e *Encoder) Encode(in Program) error {
+	for _, stmt := range in.Stmts {
+		err := e.EncodeStmt(stmt)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func (e *Encoder) EncodeStmt(in Stmt) error {
+	if !e.skipValidation {
+		err := validateStmt(in)
+		if err != nil {
+			return err
+		}
+	}
+	return e.stmt(in)
 }
 
 // Values collected if [OnlyShape] option was provided.
