@@ -256,6 +256,53 @@ func TestParserSearch(t *testing.T) {
 			},
 		},
 		{
+			name: "stmt with NOT and advanced legacy query",
+			in: `SEARCH orders id WHERE {
+				"$not": [
+					{"feedbacks.text": "value"},
+					{"$and": [
+						{"custom_fields.abc": "test"},
+						{"test": 1}
+					]}
+				]
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "orders",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.NOT,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("feedbacks", "text"),
+									RHS: dql.NewStringExpr("value"),
+									OP:  dql.Eq,
+								},
+								{
+									Type: dql.AND,
+									Children: []*dql.QueryExpr{
+										{
+											LHS: dql.Path("custom_fields", "abc"),
+											RHS: dql.NewStringExpr("test"),
+											OP:  dql.Eq,
+										},
+										{
+											LHS: dql.Path("test"),
+											RHS: dql.NewNumberExpr(1),
+											OP:  dql.Eq,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "stmt with range individual range queries",
 			in: `SEARCH feedbacks id WHERE {
 				"$and": [
