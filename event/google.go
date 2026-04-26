@@ -272,7 +272,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 		s.sub.ReceiveSettings.MaxExtension = maxExtension
 		s.sub.ReceiveSettings.MinExtensionPeriod = 10 * time.Minute
 		s.sub.ReceiveSettings.MaxExtensionPeriod = 10 * time.Minute
-		s.sub.ReceiveSettings.MaxOutstandingMessages = s.batchSize
+		s.sub.ReceiveSettings.MaxOutstandingMessages = 2 * s.batchSize
 
 		err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 			ctx, event, err := createEnvelope[T](ctx, s.eventName, msg.Data)
