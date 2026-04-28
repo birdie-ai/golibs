@@ -50,6 +50,7 @@ type (
 		prefetch int
 	}
 
+	// SubscriptionSettingOption is an option for setting up the subscription settings.
 	SubscriptionSettingOption func(settings *subscriptionSettings)
 )
 
