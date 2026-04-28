@@ -41,6 +41,13 @@ type (
 		batchSize     int
 		numGoroutines int
 	}
+
+	subscriptionSettings struct {
+		prefetch int
+	}
+
+	// SubscriptionSettingOption is an option for setting up the subscription settings.
+	SubscriptionSettingOption func(settings *subscriptionSettings)
 )
 
 // NewOrderedGooglePublisher creates a new ordered Google Cloud event publisher for the given project/topic/event name.
