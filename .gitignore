@@ -1,2 +1,8 @@
 go.work
 coverage.txt
+
+# Just as we don't version IDEs files we don't version specific AI tooling files
+# Today is Claude, tomorrow will be Antonio's Coding and next month will be Charles The Programmer.
+# None will be versioned here. And using these systems in an infrastructure project ? Maybe not the best idea.
+AGENTS.md
+CLAUDE.md
