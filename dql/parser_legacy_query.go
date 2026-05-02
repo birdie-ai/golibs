@@ -11,9 +11,13 @@ var clauseMap = map[string]QueryNode{
 	"$not": NOT,
 }
 
-var opMap = map[string]Predicate{
+var binOpMap = map[string]Predicate{
 	"$eq":    Eq,
 	"$match": Match,
+}
+
+var unaryOpMap = map[string]Predicate{
+	"$exists": Exists,
 }
 
 var opBoundMap = map[string]Predicate{
@@ -121,9 +125,12 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 		return parseLegacyQuery(l)
 	}
 	l.Eat(2)
+
+	lhs := next.Value
 	q := &QueryExpr{
-		LHS: Path(strings.Split(next.Value, ".")...),
+		LHS: strings.Split(lhs, "."),
 	}
+
 	next, err = l.Next()
 	if err != nil {
 		return nil, err
@@ -135,7 +142,23 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	if next.Type == lbraceToken {
+	if op, ok := unaryOpMap[lhs]; ok {
+		if next.Type != stringToken {
+			return nil, errUnexpectedToken(next, `STRING`)
+		}
+		q.LHS = strings.Split(next.Value, ".")
+		q.OP = op
+		l.Eat(1)
+
+		tok, err := l.Next()
+		if err != nil {
+			return nil, err
+		}
+		if tok.Type != rbraceToken {
+			return nil, errUnexpectedToken(tok, `}`)
+		}
+		return q, nil
+	} else if next.Type == lbraceToken {
 		l.Eat(1)
 		tok, err := l.Next()
 		if err != nil {
@@ -144,7 +167,7 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 		if tok.Type != stringToken {
 			return nil, errUnexpectedToken(tok, `STRING`)
 		}
-		op1, ok := opMap[tok.Value]
+		op1, ok := binOpMap[tok.Value]
 		if !ok {
 			op1, ok = opBoundMap[tok.Value]
 			if !ok {

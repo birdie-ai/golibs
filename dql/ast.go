@@ -156,6 +156,7 @@ const (
 const (
 	Eq Predicate = iota
 	Match
+	Exists
 	Range
 	Gte
 	Gt

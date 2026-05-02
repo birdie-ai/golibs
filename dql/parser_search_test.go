@@ -209,6 +209,59 @@ func TestParserSearch(t *testing.T) {
 			},
 		},
 		{
+			name: "exists query",
+			in: `SEARCH orders id WHERE {
+				"$and": [
+					{"$exists": "some.field"},
+					{"other": 1},
+					{
+						"$or": [
+							{"other": 1},
+							{"$exists": "some.thing"}
+						]
+					}
+				]
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "orders",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.AND,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("some", "field"),
+									OP:  dql.Exists,
+								},
+								{
+									LHS: dql.Path("other"),
+									RHS: dql.NewNumberExpr(1),
+									OP:  dql.Eq,
+								},
+								&dql.QueryExpr{
+									Type: dql.OR,
+									Children: []*dql.QueryExpr{
+										{
+											LHS: dql.Path("other"),
+											RHS: dql.NewNumberExpr(1),
+											OP:  dql.Eq,
+										},
+										{
+											LHS: dql.Path("some", "thing"),
+											OP:  dql.Exists,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "stmt with advanced legacy query",
 			in: `SEARCH orders id WHERE {
 				"$or": [
