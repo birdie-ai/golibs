@@ -341,6 +341,36 @@ func TestParserSearch(t *testing.T) {
 			},
 		},
 		{
+			name: "explicit op=$in",
+			in: `SEARCH orders id WHERE {
+				"$and": [
+					{"id": {
+						"$in": myvar.docs
+					}}
+				]
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "orders",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.AND,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("id"),
+									OP:  dql.In,
+									RHS: dql.NewPathExpr(dql.NewVarExpr("myvar"), dql.NewFieldStep("docs")),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "stmt with NOT and advanced legacy query",
 			in: `SEARCH orders id WHERE {
 				"$not": [

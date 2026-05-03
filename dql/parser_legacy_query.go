@@ -207,7 +207,7 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 		if !ok {
 			op1, ok = opBoundMap[tok.Value]
 			if !ok {
-				return nil, errUnexpectedToken(tok, `$eq|$gte|$gt|$lte|$lt`)
+				return nil, errUnexpectedToken(tok, `$eq|$in|$gte|$gt|$lte|$lt`)
 			}
 		}
 		tok, err = l.Next()
@@ -311,22 +311,5 @@ func setBound(q *QueryExpr, op Predicate, val Expr) {
 }
 
 func parsePredicateRHS(l *lexer) (Expr, error) {
-	tok, err := l.Peek()
-	if err != nil {
-		return nil, err
-	}
-	switch tok.Type {
-	default:
-		return nil, errUnexpectedToken(tok, `"[" | STRING | NUMBER | true | false`)
-	case stringToken:
-		return parseStringExpr(l)
-	case numberToken:
-		return parseNumberExpr(l)
-	case keywordToken:
-		if tok.Value != "true" && tok.Value != "false" {
-			return nil, errUnexpectedToken(tok, `"{" | "[" | STRING | NUMBER | true | false`)
-		}
-		l.Eat(1)
-		return NewBoolExpr(tok.Value == "true"), nil
-	}
+	return parseExpr(l)
 }
