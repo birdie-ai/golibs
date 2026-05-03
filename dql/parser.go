@@ -572,7 +572,7 @@ func parseWhere(l *lexer) (where *QueryExpr, err error) {
 	if next.Type != keywordToken || (next.Value != "AND" && next.Value != "OR") {
 		return left, nil
 	}
-	l.Next()
+	l.Eat(1)
 	right, err := parsePredicate(l)
 	if err != nil {
 		return nil, err
