@@ -241,7 +241,7 @@ func TestParserSearch(t *testing.T) {
 									RHS: dql.NewNumberExpr(1),
 									OP:  dql.Eq,
 								},
-								&dql.QueryExpr{
+								{
 									Type: dql.OR,
 									Children: []*dql.QueryExpr{
 										{
@@ -252,6 +252,60 @@ func TestParserSearch(t *testing.T) {
 										{
 											LHS: dql.Path("some", "thing"),
 											OP:  dql.Exists,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+
+			name: "$missing query",
+			in: `SEARCH orders id WHERE {
+				"$and": [
+					{"$missing": "some.field"},
+					{"other": 1},
+					{
+						"$or": [
+							{"other": 1},
+							{"$missing": "some.thing"}
+						]
+					}
+				]
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "orders",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.AND,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("some", "field"),
+									OP:  dql.Missing,
+								},
+								{
+									LHS: dql.Path("other"),
+									RHS: dql.NewNumberExpr(1),
+									OP:  dql.Eq,
+								},
+								{
+									Type: dql.OR,
+									Children: []*dql.QueryExpr{
+										{
+											LHS: dql.Path("other"),
+											RHS: dql.NewNumberExpr(1),
+											OP:  dql.Eq,
+										},
+										{
+											LHS: dql.Path("some", "thing"),
+											OP:  dql.Missing,
 										},
 									},
 								},

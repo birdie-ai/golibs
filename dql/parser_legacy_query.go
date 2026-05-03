@@ -18,7 +18,8 @@ var binOpMap = map[string]Predicate{
 }
 
 var unaryOpMap = map[string]Predicate{
-	"$exists": Exists,
+	"$exists":  Exists,
+	"$missing": Missing,
 }
 
 var opBoundMap = map[string]Predicate{

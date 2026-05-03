@@ -158,6 +158,7 @@ const (
 	Match
 	In
 	Exists
+	Missing
 	Range
 	Gte
 	Gt
@@ -191,6 +192,8 @@ func (op Predicate) String() string {
 		return "$in"
 	case Exists:
 		return "$exists"
+	case Missing:
+		return "$missing"
 	case Match:
 		return "$match"
 	case Range:
