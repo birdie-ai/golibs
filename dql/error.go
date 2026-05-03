@@ -16,6 +16,7 @@ func (e Error) Error() string {
 	return fmt.Sprintf(`%d:%d %s`, e.Line, e.Column, e.err.Error())
 }
 
+// Is tells if target is the same error.
 func (e Error) Is(target error) bool {
 	return errors.Is(e.err, target)
 }
