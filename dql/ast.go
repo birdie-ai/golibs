@@ -5,7 +5,6 @@ import (
 	"strings"
 )
 
-// basic statement shape
 type (
 	// Program is the parsed script.
 	Program struct {
@@ -28,11 +27,14 @@ type (
 		// TODO(i4k): add Span
 	}
 
+	// Stmts is a list of stmt.
 	Stmts []Stmt
-	Aggs  map[string]Agg
+
+	// Aggs is a map of aggregations.
+	Aggs map[string]Agg
 
 	// Return is a dql RETURN node.
-	// The should be only one RETURN node per script.
+	// There should be only one RETURN node per script.
 	Return struct {
 		Format string
 		Expr   Expr
@@ -43,8 +45,10 @@ type (
 		Variables() []VarExpr
 	}
 
+	// StaticPath is an evaluated path expression.
 	StaticPath []string
 
+	// Bound represents a boundary of a range interval.
 	Bound struct {
 		// OP can be any number/date Predicate **except** Range.
 		OP  Predicate
@@ -52,9 +56,13 @@ type (
 		Set bool // indicates whether this bound exists (optional)
 	}
 
-	QueryNode uint8
+	// QueryType is the type of the query node.
+	QueryType uint8
+
+	// Predicate operation.
 	Predicate uint8
 
+	// Agg is an aggregation node.
 	Agg struct {
 		Name    string
 		Func    FncallExpr
@@ -65,11 +73,14 @@ type (
 		Children Aggs
 	}
 
+	// OrderBy clause.
 	OrderBy struct {
 		Field StaticPath
 		Sort  Sort
 	}
 
+	// Sort of the order by clause.
+	// See [ASC] and [DESC].
 	Sort int
 )
 
@@ -107,7 +118,7 @@ type (
 	}
 
 	QueryExpr struct {
-		Type QueryNode
+		Type QueryType
 
 		// NOTE(i4k): uses a pointer because query rewriting heavily depends on appends
 		// and then otherwise it copies too much the Query struct.
@@ -150,7 +161,7 @@ const (
 
 // Query nodes
 const (
-	predicate QueryNode = iota
+	predicate QueryType = iota
 	OR
 	AND
 	NOT

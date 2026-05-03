@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-var clauseMap = map[string]QueryNode{
+var clauseMap = map[string]QueryType{
 	"$and": AND,
 	"$or":  OR,
 	"$not": NOT,

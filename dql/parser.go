@@ -344,7 +344,7 @@ func parseExpr(l *lexer) (expr Expr, err error) {
 		return nil, err
 	}
 
-	// we have to check if the expr is succeeded by DOT because if so it's a PathExpr.
+	// we have to check if the expr is succeded by DOT because if so it's a PathExpr.
 	next, err := l.Peek()
 	if err != nil {
 		return nil, err
@@ -581,7 +581,7 @@ func parseWhere(l *lexer) (where *QueryExpr, err error) {
 	if err != nil {
 		return nil, err
 	}
-	var logicalop QueryNode
+	var logicalop QueryType
 	if next.Value == "AND" {
 		logicalop = AND
 	} else {
