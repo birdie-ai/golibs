@@ -309,6 +309,38 @@ func TestParserSearch(t *testing.T) {
 			},
 		},
 		{
+			name: "lists in RHS become OP=In",
+			in: `SEARCH orders id WHERE {
+				"$and": [
+					{"id": [1, 2, 3]}
+				]
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "orders",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.AND,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("id"),
+									OP:  dql.In,
+									RHS: dql.NewListExpr([]dql.Expr{
+										dql.NewNumberExpr(1),
+										dql.NewNumberExpr(2),
+										dql.NewNumberExpr(3),
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "stmt with NOT and advanced legacy query",
 			in: `SEARCH orders id WHERE {
 				"$not": [

@@ -156,6 +156,7 @@ const (
 const (
 	Eq Predicate = iota
 	Match
+	In
 	Exists
 	Range
 	Gte
@@ -186,6 +187,10 @@ func (op Predicate) String() string {
 		return fmt.Sprintf("<unknown predicate %d>", op)
 	case Eq:
 		return "$eq"
+	case In:
+		return "$in"
+	case Exists:
+		return "$exists"
 	case Match:
 		return "$match"
 	case Range:

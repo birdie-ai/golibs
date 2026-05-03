@@ -14,6 +14,7 @@ var clauseMap = map[string]QueryNode{
 var binOpMap = map[string]Predicate{
 	"$eq":    Eq,
 	"$match": Match,
+	"$in":    In,
 }
 
 var unaryOpMap = map[string]Predicate{
@@ -151,6 +152,41 @@ func parseLegacyPredicate(l *lexer) (*QueryExpr, error) {
 		l.Eat(1)
 
 		tok, err := l.Next()
+		if err != nil {
+			return nil, err
+		}
+		if tok.Type != rbraceToken {
+			return nil, errUnexpectedToken(tok, `}`)
+		}
+		return q, nil
+	} else if next.Type == lbrackToken {
+		l.Eat(1)
+		q.OP = In
+		var vals []Expr
+		for {
+			rhs, err := parsePredicateRHS(l)
+			if err != nil {
+				return nil, err
+			}
+			vals = append(vals, rhs)
+			tok, err := l.Peek()
+			if err != nil {
+				return nil, err
+			}
+			if tok.Type != commaToken {
+				break
+			}
+			l.Eat(1)
+		}
+		q.RHS = NewListExpr(vals)
+		tok, err := l.Next()
+		if err != nil {
+			return nil, err
+		}
+		if tok.Type != rbrackToken {
+			return nil, errUnexpectedToken(tok, `]`)
+		}
+		tok, err = l.Next()
 		if err != nil {
 			return nil, err
 		}
