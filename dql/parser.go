@@ -275,6 +275,9 @@ func parseReturn(l *lexer) (ret Return, err error) {
 		return Return{}, err
 	}
 	next, err := l.Next()
+	if err != nil {
+		return Return{}, err
+	}
 	if next.Type != semicolonToken {
 		return Return{}, errUnexpectedToken(tok, `;`)
 	}
