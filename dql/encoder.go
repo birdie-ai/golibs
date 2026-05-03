@@ -12,8 +12,11 @@ import (
 )
 
 type (
+	// EncoderOption is a type used for configuring the encoder.
+	// See [SkipValidation] as an example.
 	EncoderOption func(e *Encoder)
 
+	// Encoder is a dql encoder.
 	Encoder struct {
 		buf            io.Writer
 		skipValidation bool
@@ -29,18 +32,23 @@ var (
 	ErrInvalidLogicalExpr = errors.New(`invalid logical expression`)
 )
 
+// SkipValidation skips the validation step. This should be used in the case you are encoding
+// previously parsed dql programs or if you can guarantee that the AST is valid.
 func SkipValidation() EncoderOption {
 	return func(e *Encoder) {
 		e.skipValidation = true
 	}
 }
 
+// OnlyShape encodes only the shape of the program, which means all values are extracted and
+// replaced by ordinals. The extracted values are available by the [Encoder.Values] method.
 func OnlyShape() EncoderOption {
 	return func(e *Encoder) {
 		e.onlyShape = true
 	}
 }
 
+// NewEncoder creates a new dql encoder.
 func NewEncoder(w io.Writer, opts ...EncoderOption) *Encoder {
 	enc := &Encoder{
 		buf: w,
@@ -51,6 +59,8 @@ func NewEncoder(w io.Writer, opts ...EncoderOption) *Encoder {
 	return enc
 }
 
+// Encode the in program into its text form, writing the output to the [io.Writer] provided
+// when creating the encoder with [NewEncoder].
 func (e *Encoder) Encode(in Program) error {
 	for _, stmt := range in.Stmts {
 		err := e.EncodeStmt(stmt)
@@ -61,6 +71,7 @@ func (e *Encoder) Encode(in Program) error {
 	return nil
 }
 
+// EncodeStmt encodes the provided statement.
 func (e *Encoder) EncodeStmt(in Stmt) error {
 	if !e.skipValidation {
 		err := validateStmt(in)

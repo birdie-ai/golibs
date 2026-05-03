@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// Error carries details about the source line and column of the error.
 type Error struct {
 	err    error
 	Line   int

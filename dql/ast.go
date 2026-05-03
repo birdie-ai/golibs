@@ -84,39 +84,92 @@ type (
 	Sort int
 )
 
-// Expr nodes
+// In the below `type` group are the Expr nodes.
+//
 // NOTE(i4k): all expr nodes are struct mostly because we would like to add a
-// `SourceRange` or `Span` kind of field containing the range of Pos.
+// `SourceRange` or `Span` kind of field containing the range of Pos. By using structs
+// we can add the source info later with back-compatibility.
+
 type (
+	// ObjectExpr is an object expression. It's a map of string to other expressions, optionally
+	// nested expressions. It can represent fully an JSON object but additionally its leaves can
+	// contain variables, funcalls, etc, any other expression.
+	// Example:
+	//   {
+	//     "result": {
+	//       "average_rating": avg(var1, var2, var3),
+	//       "docs": all(res1.docs, res2.docs, res3.docs)
+	//     }
+	//   }
+	// An ObjectExpr can only be evaluated once all of its expressions are evaluated.
+	// The [Variables] method can be used to return all variable dependencies.
 	ObjectExpr struct {
 		Keyvals map[string]Expr
 	}
 
+	// ListExpr is a list expression. Similarly to [ObjectExpr], the ListExpr is a list of other
+	// expressions and can represent a JSON array but its elements can be variables, funcalls, etc.
 	ListExpr struct {
 		Items []Expr
 	}
 
+	// NumberExpr is a number expression that represents a literal number and always evaluates to a
+	// float64.
 	NumberExpr struct {
 		Value float64
 	}
 
+	// BoolExpr is a boolean expression that represents a literal boolean and always evaluates to
+	// either `true` or `false`.
 	BoolExpr struct {
 		Value bool
 	}
 
+	// StringExpr is a string expression that represents a literal string.
 	StringExpr struct {
 		Value string
 	}
 
+	// VarExpr is a variable expression.
 	VarExpr struct {
 		Value string
 	}
 
+	// FncallExpr is a function expression.
 	FncallExpr struct {
 		Name string
 		Args []Expr
 	}
 
+	// PathExpr is a path traversal expression. It represents the process of accessing/addressing
+	// inner parts of other expressions.
+	// Examples:
+	//   myvar.obj.field.test
+	//   funcall().test
+	//   myvar[0]
+	//   myvar[otherval]
+	//   myvar[otherval].test
+	PathExpr struct {
+		Base  Expr
+		Steps PathSteps
+	}
+
+	// PathStep is a step in a PathExpr. A step can be either of [FieldStep] or [IndexStep] type.
+	// NOTE(i4k): a tagged union is used for performance reasons.
+	PathStep struct {
+		Type  StepType
+		Field string // .<field_name>
+		Index Expr   // [<expr>]
+	}
+
+	// StepType is the type of the path expression step.
+	StepType int
+
+	// PathSteps is a list of path expression steps.
+	PathSteps []PathStep
+
+	// QueryExpr is an expression that represents a query/filter. It's not widely supported
+	// inside other expressions but in specific places like `WHERE` clause and AGGS block.
 	QueryExpr struct {
 		Type QueryType
 
@@ -134,23 +187,6 @@ type (
 		Lower Bound
 		Upper Bound
 	}
-
-	PathExpr struct {
-		Base  Expr
-		Steps PathSteps
-	}
-
-	// tagged union for performance reasons
-
-	PathStep struct {
-		Type  StepType
-		Field string // .<field_name>
-		Index Expr   // [<expr>]
-	}
-
-	StepType int
-
-	PathSteps []PathStep
 )
 
 // Sort values
@@ -188,6 +224,7 @@ const (
 	IndexStep
 )
 
+// IsRange tells if the predicate is a range.
 func (op Predicate) IsRange() bool {
 	switch op {
 	case Gte, Gt, Lte, Lt:

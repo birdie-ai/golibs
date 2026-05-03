@@ -119,3 +119,6 @@ func (e PathExpr) Variables() (vars []VarExpr) {
 func (e BoolExpr) Variables() []VarExpr   { return nil }
 func (e NumberExpr) Variables() []VarExpr { return nil }
 func (e StringExpr) Variables() []VarExpr { return nil }
+
+// Path is an static/evaluated path expression.
+func Path(steps ...string) StaticPath { return StaticPath(steps) }

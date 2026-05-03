@@ -5,9 +5,6 @@ func parseAggs(l *lexer) (Aggs, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tok.Type == keywordToken && tok.Value == "JSON" {
-		return parseAggsJSON(l)
-	}
 	if tok.Type != lbraceToken {
 		return nil, errUnexpectedToken(tok, `"{"`)
 	}
@@ -102,8 +99,4 @@ func parseAgg(l *lexer) (Agg, error) {
 		agg.Children = aggs
 	}
 	return agg, nil
-}
-
-func parseAggsJSON(l *lexer) (Aggs, error) {
-	panic("not yet")
 }

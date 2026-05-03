@@ -9,6 +9,8 @@ type (
 		Value string
 		Pos   Pos
 	}
+
+	// Pos is the position in the input.
 	Pos struct {
 		Byte   int
 		Line   int
@@ -39,7 +41,7 @@ const (
 	// TODO(i4k): add comment tokens
 )
 
-var keywords map[string]struct{} = map[string]struct{}{
+var keywords = map[string]struct{}{
 	"AS":     {},
 	"SEARCH": {},
 	"RETURN": {},
