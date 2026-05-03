@@ -327,7 +327,8 @@ func parseExpr(l *lexer) (expr Expr, err error) {
 	case lbrackToken:
 		expr, err = parseListExpr(l)
 	case identToken:
-		next, err := l.PeekNext()
+		var next tokval
+		next, err = l.PeekNext()
 		if err != nil {
 			return nil, err
 		}
