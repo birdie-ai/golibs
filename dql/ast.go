@@ -55,7 +55,6 @@ type (
 	QueryNode uint8
 	Predicate uint8
 
-	// tagged union for performande reasons.
 	Agg struct {
 		Name    string
 		Func    FncallExpr
