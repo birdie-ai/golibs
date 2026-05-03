@@ -42,6 +42,7 @@ const (
 var keywords map[string]struct{} = map[string]struct{}{
 	"AS":     {},
 	"SEARCH": {},
+	"RETURN": {},
 	"WHERE":  {},
 	"ORDER":  {},
 	"BY":     {},

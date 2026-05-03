@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestParserSearch(t *testing.T) {
+func TestParser(t *testing.T) {
 	type testcase struct {
 		name string
 		in   string
@@ -693,6 +693,115 @@ func TestParserSearch(t *testing.T) {
 			name: "AFTER WITHOUT LIMIT is an error",
 			in:   `SEARCH feedbacks AFTER "test";`,
 			err:  dql.ErrSyntax,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := dql.Parse(tc.in)
+			if !errors.Is(err, tc.err) {
+				t.Fatalf("err mismatch: [%v] != [%v]", err, tc.err)
+			}
+			if tc.err != nil {
+				return
+			}
+			if diff := cmp.Diff(got, tc.out); diff != "" {
+				t.Fatal(diff)
+			}
+		})
+	}
+}
+
+func TestReturn(t *testing.T) {
+	type testcase struct {
+		name string
+		in   string
+		out  dql.Program
+		err  error
+	}
+
+	for _, tc := range []testcase{
+		{
+			name: "return literal",
+			in:   `RETURN 1;`,
+			out: dql.Program{
+				Return: dql.Return{
+					Expr: dql.NewNumberExpr(1),
+				},
+			},
+		},
+		{
+			name: "return literal with format",
+			in:   `RETURN format=json 1;`,
+			out: dql.Program{
+				Return: dql.Return{
+					Format: "json",
+					Expr:   dql.NewNumberExpr(1),
+				},
+			},
+		},
+		{
+			name: "return empty object",
+			in:   `RETURN {};`,
+			out: dql.Program{
+				Return: dql.Return{
+					Expr: dql.NewObjectExpr(map[string]dql.Expr{}),
+				},
+			},
+		},
+		{
+			name: "return object",
+			in: `RETURN {
+				"number": 1,
+				"str": "some string",
+				"list": [1, 2, 3],
+				"obj": {
+					"a": "a",
+					"b": "b"
+				}
+			};`,
+			out: dql.Program{
+				Return: dql.Return{
+					Expr: dql.NewObjectExpr(map[string]dql.Expr{
+						"number": dql.NewNumberExpr(1),
+						"str":    dql.NewStringExpr("some string"),
+						"list": dql.NewListExpr([]dql.Expr{
+							dql.NewNumberExpr(1),
+							dql.NewNumberExpr(2),
+							dql.NewNumberExpr(3),
+						}),
+						"obj": dql.NewObjectExpr(map[string]dql.Expr{
+							"a": dql.NewStringExpr("a"),
+							"b": dql.NewStringExpr("b"),
+						}),
+					}),
+				},
+			},
+		},
+		{
+			name: "return funcall",
+			in:   `RETURN myFunc(1, "test");`,
+			out: dql.Program{
+				Return: dql.Return{
+					Expr: dql.NewFncallExpr("myFunc", dql.NewNumberExpr(1), dql.NewStringExpr("test")),
+				},
+			},
+		},
+		{
+			name: "return mixed",
+			in:   `RETURN myFunc([stmt1.docs, stmt2.docs], stmt3.aggs, {"a": stmt4.aggs});`,
+			out: dql.Program{
+				Return: dql.Return{
+					Expr: dql.NewFncallExpr("myFunc",
+						dql.NewListExpr([]dql.Expr{
+							dql.NewPathExpr(dql.NewVarExpr("stmt1"), dql.NewFieldStep("docs")),
+							dql.NewPathExpr(dql.NewVarExpr("stmt2"), dql.NewFieldStep("docs")),
+						}),
+						dql.NewPathExpr(dql.NewVarExpr("stmt3"), dql.NewFieldStep("aggs")),
+						dql.NewObjectExpr(map[string]dql.Expr{
+							"a": dql.NewPathExpr(dql.NewVarExpr("stmt4"), dql.NewFieldStep("aggs")),
+						}),
+					),
+				},
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

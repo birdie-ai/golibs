@@ -12,6 +12,7 @@ var (
 	ErrSyntax = errors.New("syntax error")
 )
 
+// Parse the input program.
 func Parse(in string) (Program, error) {
 	l := newlexer(in)
 
@@ -37,8 +38,12 @@ func Parse(in string) (Program, error) {
 				}
 				prog.Stmts = append(prog.Stmts, stmt)
 			case "RETURN":
-				// parse return
-				panic(1)
+				l.Eat(1)
+				ret, err := parseReturn(l)
+				if err != nil {
+					return Program{}, err
+				}
+				prog.Return = ret
 			default:
 				return Program{}, errUnexpectedToken(tok, "Keyword(AS)|Keyword(SEARCH)|Keyword(RETURN)")
 			}
@@ -243,6 +248,40 @@ func parseStmt(l *lexer) (Stmt, error) {
 	return stmt, nil
 }
 
+func parseReturn(l *lexer) (ret Return, err error) {
+	tok, err := l.Peek()
+	if err != nil {
+		return Return{}, err
+	}
+	if tok.Type == identToken && tok.Value == "format" {
+		next, err := l.PeekNext()
+		if err != nil {
+			return Return{}, err
+		}
+		if next.Type == equalToken {
+			l.Eat(2)
+			next, err = l.Next()
+			if err != nil {
+				return Return{}, err
+			}
+			if next.Type != identToken {
+				return Return{}, errUnexpectedToken(tok, `IDENT(actual_format)`)
+			}
+			ret.Format = next.Value
+		}
+	}
+	expr, err := parseExpr(l)
+	if err != nil {
+		return Return{}, err
+	}
+	next, err := l.Next()
+	if next.Type != semicolonToken {
+		return Return{}, errUnexpectedToken(tok, `;`)
+	}
+	ret.Expr = expr
+	return ret, nil
+}
+
 func parseExprList(l *lexer) (exprs []Expr, err error) {
 	expr, err := parseExpr(l)
 	if err != nil {
@@ -282,6 +321,8 @@ func parseExpr(l *lexer) (expr Expr, err error) {
 		expr, err = parseStringExpr(l)
 	case lbraceToken:
 		expr, err = parseObjectExpr(l)
+	case lbrackToken:
+		expr, err = parseListExpr(l)
 	case identToken:
 		next, err := l.PeekNext()
 		if err != nil {
@@ -419,9 +460,53 @@ func parseStaticPath(l *lexer) (StaticPath, error) {
 	return path, nil
 }
 
+func parseListExpr(l *lexer) (ListExpr, error) {
+	l.Eat(1) // [
+	vals := make([]Expr, 0, 10)
+	next, err := l.Peek()
+	if err != nil {
+		return ListExpr{}, err
+	}
+	if next.Type == rbrackToken {
+		l.Eat(1)
+		return NewListExpr([]Expr{}), nil
+	}
+	for {
+		expr, err := parseExpr(l)
+		if err != nil {
+			return ListExpr{}, err
+		}
+		vals = append(vals, expr)
+		tok, err := l.Peek()
+		if err != nil {
+			return ListExpr{}, err
+		}
+		if tok.Type != commaToken {
+			break
+		}
+		l.Eat(1)
+	}
+	next, err = l.Next()
+	if err != nil {
+		return ListExpr{}, err
+	}
+	if next.Type != rbrackToken {
+		return ListExpr{}, errUnexpectedToken(next, `]`)
+	}
+	return NewListExpr(vals), nil
+}
+
 func parseObjectExpr(l *lexer) (ObjectExpr, error) {
 	l.Eat(1) // {
 	keyvals := map[string]Expr{}
+	next, err := l.Peek()
+	if err != nil {
+		return ObjectExpr{}, err
+	}
+	if next.Type == rbraceToken {
+		l.Eat(1)
+		return NewObjectExpr(keyvals), nil
+	}
 	for {
 		next, err := l.Next()
 		if err != nil {
@@ -455,7 +540,7 @@ func parseObjectExpr(l *lexer) (ObjectExpr, error) {
 		}
 		l.Eat(1)
 	}
-	next, err := l.Next()
+	next, err = l.Next()
 	if err != nil {
 		return ObjectExpr{}, err
 	}
