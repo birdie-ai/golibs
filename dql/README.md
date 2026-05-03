@@ -231,3 +231,79 @@ Returns:
 	}
 ]
 ```
+
+### Pagination
+
+*Enabling Pagination*
+
+Pagination is explicitly enabled by adding:
+```
+LIMIT <n> WITH CURSOR
+```
+to a `SEARCH` statement.
+
+Example:
+
+```
+SEARCH feedbacks
+	id, text, account
+WHERE {
+	"$and": [
+		{"text": "something"},
+		{"account.ingested_id": ["abc", "xyz"]}
+	]
+}
+LIMIT 1000
+WITH CURSOR;
+```
+
+*Ordering rules*
+
+Pagination requires a *stable and deterministic order*.
+
+If no order is applied, the system implicitly applies:
+```
+ORDER BY id ASC
+```
+or whatever is the entity primary key.
+
+If an order is provided:
+- **it must be deterministic** (a *score* field must never be used).
+- **it must include the primary key** (eg.: `id`) **as the final tiebreaker**.
+
+Example:
+```
+ORDER BY posted_at DESC, id DESC
+```
+
+*Cursor usage*
+
+The response for a paginated query includes a `next_cursor` value (format is opaque and implementation-defined).
+
+To fetch the next page, pass the cursor using the `AFTER` clause:
+
+```
+SEARCH feedbacks
+	id, text, account
+WHERE {
+	"$and": [
+		{"text": "something"},
+		{"account.ingested_id": ["abc", "xyz"]}
+	]
+}
+LIMIT 1000
+AFTER "eyJ2I...";
+```
+
+*Consistency Requirements*
+
+For pagination to be correct, the statement must remain **identical across all pages** except the
+`AFTER` clause. If changing any other information between requests is **undefined behavior** and
+the server implementation can detect such cases and give errors.
+
+*Behavior guarantees*
+
+- Consistent order
+
+For any other guarantees (like *no duplicates* or snapshot-based pagination under concurrent writes)
+check the server documentation.

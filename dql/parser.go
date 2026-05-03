@@ -2,6 +2,7 @@ package dql
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 )
@@ -135,6 +136,81 @@ func parseStmt(l *lexer) (Stmt, error) {
 			if err != nil {
 				return Stmt{}, err
 			}
+			tok, err = l.Peek()
+			if err != nil {
+				return Stmt{}, err
+			}
+		}
+		if tok.Value == "ORDER" {
+			l.Eat(1)
+			tok, err = l.Next()
+			if err != nil {
+				return Stmt{}, err
+			}
+			if tok.Type != keywordToken || tok.Value != "BY" {
+				return Stmt{}, errUnexpectedToken(tok, `BY`)
+			}
+			vals := make([]OrderBy, 0, 1)
+			for {
+				field, err := parseStaticPath(l)
+				if err != nil {
+					return Stmt{}, err
+				}
+				orderBy := OrderBy{Field: field}
+				tok, err = l.Peek()
+				if err != nil {
+					return Stmt{}, err
+				}
+				if tok.Type == keywordToken && (tok.Value == "ASC" || tok.Value == "DESC") {
+					if tok.Value == "DESC" {
+						orderBy.Sort = DESC
+					} else {
+						orderBy.Sort = ASC
+					}
+					l.Eat(1)
+					tok, err = l.Peek()
+					if err != nil {
+						return Stmt{}, err
+					}
+				}
+				vals = append(vals, orderBy)
+				if tok.Type != commaToken {
+					break
+				}
+				l.Eat(1)
+			}
+			stmt.OrderBy = vals
+		}
+		if tok.Value == "WITH" {
+			l.Eat(1)
+			tok, err := l.Next()
+			if err != nil {
+				return Stmt{}, err
+			}
+			if tok.Type != keywordToken || tok.Value != `CURSOR` {
+				return Stmt{}, errUnexpectedToken(tok, `CURSOR`)
+			}
+			if stmt.Limit == 0 {
+				// NOTE(i4k): not sure if this should be here or in a final validation step.
+				return Stmt{}, fmt.Errorf(`%w: "WITH CURSOR" requires a "LIMIT" clause`, ErrSyntax)
+			}
+			stmt.WithCursor = true
+			tok, err = l.Peek()
+			if err != nil {
+				return Stmt{}, err
+			}
+		}
+		if tok.Value == "AFTER" {
+			l.Eat(1)
+			if stmt.Limit == 0 {
+				// NOTE(i4k): not sure if this should be here or in a final validation step.
+				return Stmt{}, fmt.Errorf(`%w: "WITH CURSOR" requires a "LIMIT" clause`, ErrSyntax)
+			}
+			expr, err := parseExpr(l)
+			if err != nil {
+				return Stmt{}, err
+			}
+			stmt.After = expr
 			tok, err = l.Peek()
 			if err != nil {
 				return Stmt{}, err
@@ -318,6 +394,29 @@ func parseStringExpr(l *lexer) (StringExpr, error) {
 		return StringExpr{}, err
 	}
 	return NewStringExpr(tok.Value), nil
+}
+
+func parseStaticPath(l *lexer) (StaticPath, error) {
+	path := make(StaticPath, 0, 1)
+	for {
+		tok, err := l.Next()
+		if err != nil {
+			return nil, err
+		}
+		if tok.Type != identToken {
+			return nil, errUnexpectedToken(tok, `IDENT`)
+		}
+		path = append(path, tok.Value)
+		tok, err = l.Peek()
+		if err != nil {
+			return nil, err
+		}
+		if tok.Type != dotToken {
+			break
+		}
+		l.Eat(1)
+	}
+	return path, nil
 }
 
 func parseObjectExpr(l *lexer) (ObjectExpr, error) {

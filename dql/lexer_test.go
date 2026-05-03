@@ -109,7 +109,7 @@ func TestLexer(t *testing.T) {
 				token(keywordToken, "ORDER", 238, 10, 5),
 				token(keywordToken, "BY", 244, 10, 11),
 				token(identToken, "posted_at", 247, 10, 14),
-				token(identToken, "ASC", 257, 10, 24),
+				token(keywordToken, "ASC", 257, 10, 24),
 				token(keywordToken, "LIMIT", 266, 11, 5),
 				token(numberToken, "10000", 272, 11, 11),
 				token(keywordToken, "AGGS", 283, 12, 5),

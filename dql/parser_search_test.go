@@ -563,6 +563,137 @@ func TestParserSearch(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "WITH CURSOR",
+			in:   `SEARCH feedbacks LIMIT 10 WITH CURSOR;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity:     "feedbacks",
+						Limit:      10,
+						WithCursor: true,
+					},
+				},
+			},
+		},
+		{
+			name: "ORDER BY field",
+			in:   `SEARCH feedbacks LIMIT 10 ORDER BY posted_at WITH CURSOR;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity:     "feedbacks",
+						Limit:      10,
+						WithCursor: true,
+						OrderBy: []dql.OrderBy{
+							{Field: dql.Path("posted_at")},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ORDER BY field DESC",
+			in:   `SEARCH feedbacks LIMIT 10 ORDER BY posted_at DESC WITH CURSOR;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity:     "feedbacks",
+						Limit:      10,
+						WithCursor: true,
+						OrderBy: []dql.OrderBy{
+							{Field: dql.Path("posted_at"), Sort: dql.DESC},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ORDER BY field with path",
+			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC WITH CURSOR;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity:     "orders",
+						Limit:      10,
+						WithCursor: true,
+						OrderBy: []dql.OrderBy{
+							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple ORDER BY clauses",
+			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC, id WITH CURSOR;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity:     "orders",
+						Limit:      10,
+						WithCursor: true,
+						OrderBy: []dql.OrderBy{
+							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
+							{Field: dql.Path("id")},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple ORDER BY clauses with direction",
+			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC, id DESC WITH CURSOR;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity:     "orders",
+						Limit:      10,
+						WithCursor: true,
+						OrderBy: []dql.OrderBy{
+							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
+							{Field: dql.Path("id"), Sort: dql.DESC},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "WITH CURSOR WITHOUT LIMIT is an error",
+			in:   `SEARCH feedbacks WITH CURSOR;`,
+			err:  dql.ErrSyntax,
+		},
+		{
+			name: "AFTER stringExpr",
+			in:   `SEARCH feedbacks LIMIT 10 AFTER "test";`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Limit:  10,
+						After:  dql.NewStringExpr("test"),
+					},
+				},
+			},
+		},
+		{
+			name: "AFTER variable",
+			in:   `SEARCH feedbacks LIMIT 10 AFTER first_page.next_cursor;`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Limit:  10,
+						After:  dql.NewPathExpr(dql.NewVarExpr("first_page"), dql.NewFieldStep("next_cursor")),
+					},
+				},
+			},
+		},
+		{
+			name: "AFTER WITHOUT LIMIT is an error",
+			in:   `SEARCH feedbacks AFTER "test";`,
+			err:  dql.ErrSyntax,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := dql.Parse(tc.in)

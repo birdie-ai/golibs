@@ -1,6 +1,9 @@
 package dql
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // basic statement shape
 type (
@@ -12,13 +15,15 @@ type (
 
 	// Stmt is a dql statement node.
 	Stmt struct {
-		Name    string
-		Entity  string
-		Fields  []Expr
-		Where   *QueryExpr
-		Limit   int
-		OrderBy []OrderBy
-		Aggs    Aggs
+		Name       string
+		Entity     string
+		Fields     []Expr
+		Where      *QueryExpr
+		Limit      int
+		WithCursor bool
+		After      Expr
+		OrderBy    []OrderBy
+		Aggs       Aggs
 
 		// TODO(i4k): add Span
 	}
@@ -62,11 +67,11 @@ type (
 	}
 
 	OrderBy struct {
-		Field string
+		Field StaticPath
 		Sort  Sort
 	}
 
-	Sort string
+	Sort int
 )
 
 // Expr nodes
@@ -140,8 +145,8 @@ type (
 
 // Sort values
 const (
-	ASC  Sort = "ASC"
-	DESC Sort = "DESC"
+	ASC Sort = iota
+	DESC
 )
 
 // Query nodes
@@ -206,5 +211,20 @@ func (op Predicate) String() string {
 		return "$lte"
 	case Lt:
 		return "$lt"
+	}
+}
+
+func (o OrderBy) String() string {
+	return strings.Join(o.Field, ".") + " " + o.Sort.String()
+}
+
+func (s Sort) String() string {
+	switch s {
+	case ASC:
+		return "ASC"
+	case DESC:
+		return "DESC"
+	default:
+		return "<INVALID>"
 	}
 }

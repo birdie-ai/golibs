@@ -46,6 +46,8 @@ var keywords map[string]struct{} = map[string]struct{}{
 	"ORDER":  {},
 	"BY":     {},
 	"LIMIT":  {},
+	"ASC":    {},
+	"DESC":   {},
 	"AGGS":   {},
 	"WITH":   {},
 	"CURSOR": {},
