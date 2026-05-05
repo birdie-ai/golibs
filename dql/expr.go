@@ -96,6 +96,9 @@ func (e FncallExpr) Variables() (vars []VarExpr) {
 func (e QueryExpr) Variables() (vars []VarExpr) {
 	if e.Type == predicate {
 		switch e.OP {
+		case Exists, Missing:
+			// they set LHS which is a static path.
+			return nil
 		case Eq, In, Match:
 			return e.RHS.Variables()
 		case Range:
