@@ -437,7 +437,7 @@ func TestParser(t *testing.T) {
 					{"feedbacks.text": "value"},
 					{"$and": [
 						{"custom_fields.abc": "test"},
-						{"test": 1}
+						{"status": false}
 					]}
 				]
 			};`,
@@ -465,8 +465,8 @@ func TestParser(t *testing.T) {
 											OP:  dql.Eq,
 										},
 										{
-											LHS: dql.Path("test"),
-											RHS: dql.NewNumberExpr(1),
+											LHS: dql.Path("status"),
+											RHS: dql.NewBoolExpr(false),
 											OP:  dql.Eq,
 										},
 									},
