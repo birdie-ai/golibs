@@ -36,6 +36,7 @@ func TestParserAggs(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity: "feedbacks",
+						Limit:  ptr(0),
 						Aggs:   dql.Aggs{},
 					},
 				},

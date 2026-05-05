@@ -18,7 +18,7 @@ type (
 		Entity     string
 		Fields     []Expr
 		Where      *QueryExpr
-		Limit      int
+		Limit      *int
 		WithCursor bool
 		After      Expr
 		OrderBy    []OrderBy

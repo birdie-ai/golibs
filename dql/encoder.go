@@ -112,9 +112,11 @@ func (e *Encoder) stmt(s Stmt) error {
 			return err
 		}
 	}
-	err = e.limit(s.Limit)
-	if err != nil {
-		return err
+	if s.Limit != nil {
+		err = e.limit(*s.Limit)
+		if err != nil {
+			return err
+		}
 	}
 	return e.emit(";")
 }

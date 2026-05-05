@@ -137,10 +137,11 @@ func parseStmt(l *lexer) (Stmt, error) {
 			if tok.Type != numberToken {
 				return Stmt{}, errUnexpectedToken(tok, `NUMBER`)
 			}
-			stmt.Limit, err = strconv.Atoi(tok.Value)
+			limit, err := strconv.Atoi(tok.Value)
 			if err != nil {
 				return Stmt{}, err
 			}
+			stmt.Limit = &limit
 			tok, err = l.Peek()
 			if err != nil {
 				return Stmt{}, err
@@ -195,7 +196,7 @@ func parseStmt(l *lexer) (Stmt, error) {
 			if tok.Type != keywordToken || tok.Value != `CURSOR` {
 				return Stmt{}, errUnexpectedToken(tok, `CURSOR`)
 			}
-			if stmt.Limit == 0 {
+			if stmt.Limit == nil || *stmt.Limit == 0 {
 				// NOTE(i4k): not sure if this should be here or in a final validation step.
 				return Stmt{}, fmt.Errorf(`%w: "WITH CURSOR" requires a "LIMIT" clause`, ErrSyntax)
 			}
@@ -207,7 +208,7 @@ func parseStmt(l *lexer) (Stmt, error) {
 		}
 		if tok.Value == "AFTER" {
 			l.Eat(1)
-			if stmt.Limit == 0 {
+			if stmt.Limit == nil || *stmt.Limit == 0 {
 				// NOTE(i4k): not sure if this should be here or in a final validation step.
 				return Stmt{}, fmt.Errorf(`%w: "WITH CURSOR" requires a "LIMIT" clause`, ErrSyntax)
 			}
