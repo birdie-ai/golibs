@@ -198,6 +198,26 @@ func TestEncoder(t *testing.T) {
 				dql.NewStringExpr("test"),
 			},
 		},
+		{
+			name: "stmt with IN predicate",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "test",
+						Where: &dql.QueryExpr{
+							LHS: dql.Path("labels"),
+							OP:  dql.In,
+							RHS: dql.NewListExpr([]dql.Expr{dql.NewStringExpr("label-1"), dql.NewStringExpr("label-2")}),
+						},
+					},
+				},
+			},
+			out:   `SEARCH test WHERE {"labels":{"$in":["label-1","label-2"]}} LIMIT 0;`,
+			shape: `SEARCH test WHERE {"labels":{"$in":$1}} LIMIT 0;`,
+			values: []dql.Expr{
+				dql.NewListExpr([]dql.Expr{dql.NewStringExpr("label-1"), dql.NewStringExpr("label-2")}),
+			},
+		},
 	} {
 		// normal encoding
 		t.Run(tc.name, func(t *testing.T) {

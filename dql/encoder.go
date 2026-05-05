@@ -195,9 +195,9 @@ func (e *Encoder) predicateExpr(q *QueryExpr, retfield bool) error {
 		return err
 	}
 	switch q.OP {
-	case Eq:
-		fallthrough
-	case Match:
+	default:
+		panic(q.OP)
+	case Eq, In, Match:
 		err = e.json(q.OP.String())
 		if err != nil {
 			return err
@@ -372,6 +372,9 @@ func (e *Encoder) fncallExpr(v FncallExpr, retfield bool) error {
 	return e.emit("}")
 }
 func (e *Encoder) listExpr(list ListExpr, retfield bool) error {
+	if e.onlyShape && !retfield {
+		return e.slot(list)
+	}
 	err := e.emit("[")
 	if err != nil {
 		return err
