@@ -218,6 +218,38 @@ func TestEncoder(t *testing.T) {
 				dql.NewListExpr([]dql.Expr{dql.NewStringExpr("label-1"), dql.NewStringExpr("label-2")}),
 			},
 		},
+		{
+			name: "stmt with $exists predicate",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "test",
+						Where: &dql.QueryExpr{
+							LHS: dql.Path("some", "field"),
+							OP:  dql.Exists,
+						},
+					},
+				},
+			},
+			out:   `SEARCH test WHERE {"$exists":"some.field"} LIMIT 0;`,
+			shape: `SEARCH test WHERE {"$exists":"some.field"} LIMIT 0;`,
+		},
+		{
+			name: "stmt with $missing predicate",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "test",
+						Where: &dql.QueryExpr{
+							LHS: dql.Path("some", "field"),
+							OP:  dql.Missing,
+						},
+					},
+				},
+			},
+			out:   `SEARCH test WHERE {"$missing":"some.field"} LIMIT 0;`,
+			shape: `SEARCH test WHERE {"$missing":"some.field"} LIMIT 0;`,
+		},
 	} {
 		// normal encoding
 		t.Run(tc.name, func(t *testing.T) {

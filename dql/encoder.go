@@ -186,18 +186,31 @@ func (e *Encoder) predicateExpr(q *QueryExpr, retfield bool) error {
 	if err != nil {
 		return err
 	}
-	err = e.json(strings.Join(q.LHS, "."))
-	if err != nil {
-		return err
-	}
-	err = e.emit(":{")
-	if err != nil {
-		return err
-	}
 	switch q.OP {
 	default:
 		panic(q.OP)
+	case Exists, Missing:
+		err = e.json(q.OP.String())
+		if err != nil {
+			return err
+		}
+		err = e.emit(":")
+		if err != nil {
+			return err
+		}
+		err = e.json(strings.Join(q.LHS, "."))
+		if err != nil {
+			return err
+		}
 	case Eq, In, Match:
+		err = e.json(strings.Join(q.LHS, "."))
+		if err != nil {
+			return err
+		}
+		err = e.emit(":{")
+		if err != nil {
+			return err
+		}
 		err = e.json(q.OP.String())
 		if err != nil {
 			return err
@@ -210,7 +223,20 @@ func (e *Encoder) predicateExpr(q *QueryExpr, retfield bool) error {
 		if err != nil {
 			return err
 		}
+		err = e.emit("}")
+		if err != nil {
+			return err
+		}
 	case Range:
+		err = e.json(strings.Join(q.LHS, "."))
+		if err != nil {
+			return err
+		}
+		err = e.emit(":{")
+		if err != nil {
+			return err
+		}
+
 		bounds := make([]Bound, 0, 2)
 		if q.Lower.Set {
 			bounds = append(bounds, q.Lower)
@@ -238,8 +264,12 @@ func (e *Encoder) predicateExpr(q *QueryExpr, retfield bool) error {
 				return err
 			}
 		}
+		err = e.emit("}")
+		if err != nil {
+			return err
+		}
 	}
-	return e.emit("}}")
+	return e.emit("}")
 }
 
 func (e *Encoder) logicalExpr(q *QueryExpr, retfield bool) error {
