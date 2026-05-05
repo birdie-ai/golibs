@@ -366,7 +366,8 @@ func TestParser(t *testing.T) {
 			name: "lists in RHS become OP=In",
 			in: `SEARCH orders id WHERE {
 				"$and": [
-					{"id": [1, 2, 3]}
+					{"id": [1, 2, 3]},
+					{"b": true}
 				]
 			};`,
 			out: dql.Program{
@@ -387,6 +388,11 @@ func TestParser(t *testing.T) {
 										dql.NewNumberExpr(2),
 										dql.NewNumberExpr(3),
 									}),
+								},
+								{
+									LHS: dql.Path("b"),
+									OP:  dql.Eq,
+									RHS: dql.NewBoolExpr(true),
 								},
 							},
 						},
@@ -431,7 +437,7 @@ func TestParser(t *testing.T) {
 					{"feedbacks.text": "value"},
 					{"$and": [
 						{"custom_fields.abc": "test"},
-						{"test": 1}
+						{"status": false}
 					]}
 				]
 			};`,
@@ -459,8 +465,8 @@ func TestParser(t *testing.T) {
 											OP:  dql.Eq,
 										},
 										{
-											LHS: dql.Path("test"),
-											RHS: dql.NewNumberExpr(1),
+											LHS: dql.Path("status"),
+											RHS: dql.NewBoolExpr(false),
 											OP:  dql.Eq,
 										},
 									},

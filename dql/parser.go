@@ -315,9 +315,10 @@ func parseExpr(l *lexer) (expr Expr, err error) {
 	if err != nil {
 		return nil, err
 	}
+	errExpr := errUnexpectedToken(tok, "IDENT(expr)|NUMBER|STRING|IDENT(true)|IDENT(false)|{|[")
 	switch tok.Type {
 	default:
-		return nil, errUnexpectedToken(tok, "IDENT(expr)|NUMBER|STRING|{|[")
+		return nil, errExpr
 	case numberToken:
 		expr, err = parseNumberExpr(l)
 	case stringToken:
@@ -327,17 +328,22 @@ func parseExpr(l *lexer) (expr Expr, err error) {
 	case lbrackToken:
 		expr, err = parseListExpr(l)
 	case identToken:
-		var next tokval
-		next, err = l.PeekNext()
-		if err != nil {
-			return nil, err
-		}
-		if next.Type == lparenToken {
-			expr, err = parseFncallExpr(l)
-		} else {
-			l.Eat(1)
-			// TODO(i4k): handle path traversals, indexing, etc
-			expr = NewVarExpr(tok.Value)
+		switch tok.Value {
+		case "true", "false":
+			expr, err = parseBoolExpr(l)
+		default:
+			var next tokval
+			next, err = l.PeekNext()
+			if err != nil {
+				return nil, err
+			}
+			if next.Type == lparenToken {
+				expr, err = parseFncallExpr(l)
+			} else {
+				l.Eat(1)
+				// TODO(i4k): handle path traversals, indexing, etc
+				expr = NewVarExpr(tok.Value)
+			}
 		}
 	}
 	if err != nil {
@@ -439,6 +445,24 @@ func parseStringExpr(l *lexer) (StringExpr, error) {
 		return StringExpr{}, err
 	}
 	return NewStringExpr(tok.Value), nil
+}
+
+func parseBoolExpr(l *lexer) (BoolExpr, error) {
+	tok, err := l.Next()
+	if err != nil {
+		return BoolExpr{}, err
+	}
+	if tok.Type != identToken {
+		panic("sanity check")
+	}
+	switch tok.Value {
+	case "true":
+		return NewBoolExpr(true), nil
+	case "false":
+		return NewBoolExpr(false), nil
+	default:
+		return BoolExpr{}, errUnexpectedToken(tok, `IDENT(true)|IDENT(false)`)
+	}
 }
 
 func parseStaticPath(l *lexer) (StaticPath, error) {
