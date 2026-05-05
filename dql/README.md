@@ -33,8 +33,8 @@ RETURN {
 
 ### SEARCH statement
 
-A `SEARCH` statement allows for searching/aggregating data in a flexible way. A program can have an
-undefinite number of such statements.
+A `SEARCH` statement allows for searching/aggregating data in a flexible way. A program can 
+have an indefinite number of such statements.
 
 Example:
 ```

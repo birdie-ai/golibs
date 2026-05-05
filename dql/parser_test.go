@@ -35,7 +35,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity: "feedbacks",
-						Limit:  10,
+						Limit:  ptr(10),
 					},
 				},
 			},
@@ -125,7 +125,7 @@ func TestParser(t *testing.T) {
 								},
 							},
 						},
-						Limit: 10,
+						Limit: ptr(10),
 					},
 				},
 			},
@@ -148,7 +148,7 @@ func TestParser(t *testing.T) {
 							RHS: dql.NewStringExpr("abc"),
 							OP:  dql.Eq,
 						},
-						Limit: 10,
+						Limit: ptr(10),
 					},
 				},
 			},
@@ -576,7 +576,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity:     "feedbacks",
-						Limit:      10,
+						Limit:      ptr(10),
 						WithCursor: true,
 					},
 				},
@@ -589,7 +589,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity:     "feedbacks",
-						Limit:      10,
+						Limit:      ptr(10),
 						WithCursor: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("posted_at")},
@@ -605,7 +605,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity:     "feedbacks",
-						Limit:      10,
+						Limit:      ptr(10),
 						WithCursor: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("posted_at"), Sort: dql.DESC},
@@ -621,7 +621,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity:     "orders",
-						Limit:      10,
+						Limit:      ptr(10),
 						WithCursor: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
@@ -637,7 +637,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity:     "orders",
-						Limit:      10,
+						Limit:      ptr(10),
 						WithCursor: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
@@ -654,7 +654,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity:     "orders",
-						Limit:      10,
+						Limit:      ptr(10),
 						WithCursor: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
@@ -676,7 +676,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity: "feedbacks",
-						Limit:  10,
+						Limit:  ptr(10),
 						After:  dql.NewStringExpr("test"),
 					},
 				},
@@ -689,7 +689,7 @@ func TestParser(t *testing.T) {
 				Stmts: dql.Stmts{
 					{
 						Entity: "feedbacks",
-						Limit:  10,
+						Limit:  ptr(10),
 						After:  dql.NewPathExpr(dql.NewVarExpr("first_page"), dql.NewFieldStep("next_cursor")),
 					},
 				},
@@ -823,4 +823,8 @@ func TestReturn(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }
