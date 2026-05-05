@@ -96,7 +96,7 @@ func (e FncallExpr) Variables() (vars []VarExpr) {
 func (e QueryExpr) Variables() (vars []VarExpr) {
 	if e.Type == predicate {
 		switch e.OP {
-		case Eq, Match:
+		case Eq, In, Match:
 			return e.RHS.Variables()
 		case Range:
 			if e.Lower.Set {
