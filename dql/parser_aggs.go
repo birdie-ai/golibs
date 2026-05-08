@@ -112,13 +112,13 @@ func parseAggOptions(l *lexer, agg *Agg) error {
 		}
 		switch tok.Type {
 		default:
-			return errUnexpectedToken(tok, `}|LIMIT|ORDER BY`)
+			return errUnexpectedToken(tok, `}|LIMIT`)
 		case lbraceToken, rbraceToken, commaToken:
 			return nil
 		case keywordToken:
 			switch tok.Value {
 			default:
-				return errUnexpectedToken(tok, `}|LIMIT|ORDER`)
+				return errUnexpectedToken(tok, `}|LIMIT`)
 			case "LIMIT":
 				l.Eat(1)
 				n, err := parseInt(l)
