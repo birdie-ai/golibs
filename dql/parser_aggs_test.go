@@ -43,12 +43,32 @@ func TestParserAggs(t *testing.T) {
 			},
 		},
 		{
+			name: "agg with LIMIT",
+			in: `SEARCH feedbacks AGGS {
+				by_labels: terms(labels) LIMIT 1000
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Entity: "feedbacks",
+						Aggs: dql.Aggs{
+							"by_labels": dql.Agg{
+								Name:  "by_labels",
+								Func:  dql.NewFncallExpr("terms", dql.NewVarExpr("labels")),
+								Limit: ptr(1000),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "multiple aggs",
 			in: `SEARCH feedbacks AGGS {
-				labels: terms("labels"),
+				labels: terms("labels") LIMIT 1,
 				"string name": date_histogram("posted_at"),
-				sample_id: terms("sample_id") {
-					nested: terms("labels")
+				sample_id: terms("sample_id") LIMIT 2 {
+					nested: terms("labels") LIMIT 3
 				},
 				by_month: date_histogram(posted_at, {"interval": "month"})
 			};`,
@@ -58,20 +78,23 @@ func TestParserAggs(t *testing.T) {
 						Entity: "feedbacks",
 						Aggs: dql.Aggs{
 							"labels": {
-								Name: "labels",
-								Func: dql.NewFncallExpr("terms", dql.NewStringExpr("labels")),
+								Name:  "labels",
+								Func:  dql.NewFncallExpr("terms", dql.NewStringExpr("labels")),
+								Limit: ptr(1),
 							},
 							"string name": {
 								Name: "string name",
 								Func: dql.NewFncallExpr("date_histogram", dql.NewStringExpr("posted_at")),
 							},
 							"sample_id": {
-								Name: "sample_id",
-								Func: dql.NewFncallExpr("terms", dql.NewStringExpr("sample_id")),
+								Name:  "sample_id",
+								Func:  dql.NewFncallExpr("terms", dql.NewStringExpr("sample_id")),
+								Limit: ptr(2),
 								Children: dql.Aggs{
 									"nested": {
-										Name: "nested",
-										Func: dql.NewFncallExpr("terms", dql.NewStringExpr("labels")),
+										Name:  "nested",
+										Func:  dql.NewFncallExpr("terms", dql.NewStringExpr("labels")),
+										Limit: ptr(3),
 									},
 								},
 							},
