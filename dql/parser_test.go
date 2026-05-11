@@ -23,6 +23,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 					},
 				},
@@ -34,6 +35,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Limit:  ptr(10),
 					},
@@ -46,9 +48,11 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 					},
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 					},
 				},
@@ -60,6 +64,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -76,6 +81,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -106,6 +112,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -139,6 +146,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -159,6 +167,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -185,6 +194,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -225,6 +235,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -279,6 +290,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -329,6 +341,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -373,6 +386,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -412,6 +426,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -444,6 +459,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "orders",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -496,6 +512,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -542,6 +559,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -570,27 +588,28 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			name: "WITH CURSOR",
-			in:   `SEARCH feedbacks LIMIT 10 WITH CURSOR;`,
+			name: "PAGINATE",
+			in:   `SEARCH feedbacks PAGINATE;`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
-						Entity:     "feedbacks",
-						Limit:      ptr(10),
-						WithCursor: true,
+						Op:       dql.SEARCH,
+						Entity:   "feedbacks",
+						Paginate: true,
 					},
 				},
 			},
 		},
 		{
 			name: "ORDER BY field",
-			in:   `SEARCH feedbacks LIMIT 10 ORDER BY posted_at WITH CURSOR;`,
+			in:   `SEARCH feedbacks LIMIT 10 ORDER BY posted_at PAGINATE;`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
-						Entity:     "feedbacks",
-						Limit:      ptr(10),
-						WithCursor: true,
+						Op:       dql.SEARCH,
+						Entity:   "feedbacks",
+						Limit:    ptr(10),
+						Paginate: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("posted_at")},
 						},
@@ -600,13 +619,14 @@ func TestParser(t *testing.T) {
 		},
 		{
 			name: "ORDER BY field DESC",
-			in:   `SEARCH feedbacks LIMIT 10 ORDER BY posted_at DESC WITH CURSOR;`,
+			in:   `SEARCH feedbacks LIMIT 10 ORDER BY posted_at DESC PAGINATE;`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
-						Entity:     "feedbacks",
-						Limit:      ptr(10),
-						WithCursor: true,
+						Op:       dql.SEARCH,
+						Entity:   "feedbacks",
+						Limit:    ptr(10),
+						Paginate: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("posted_at"), Sort: dql.DESC},
 						},
@@ -616,13 +636,14 @@ func TestParser(t *testing.T) {
 		},
 		{
 			name: "ORDER BY field with path",
-			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC WITH CURSOR;`,
+			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC PAGINATE;`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
-						Entity:     "orders",
-						Limit:      ptr(10),
-						WithCursor: true,
+						Op:       dql.SEARCH,
+						Entity:   "orders",
+						Limit:    ptr(10),
+						Paginate: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
 						},
@@ -632,13 +653,14 @@ func TestParser(t *testing.T) {
 		},
 		{
 			name: "multiple ORDER BY clauses",
-			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC, id WITH CURSOR;`,
+			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC, id PAGINATE;`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
-						Entity:     "orders",
-						Limit:      ptr(10),
-						WithCursor: true,
+						Op:       dql.SEARCH,
+						Entity:   "orders",
+						Limit:    ptr(10),
+						Paginate: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
 							{Field: dql.Path("id")},
@@ -649,13 +671,14 @@ func TestParser(t *testing.T) {
 		},
 		{
 			name: "multiple ORDER BY clauses with direction",
-			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC, id DESC WITH CURSOR;`,
+			in:   `SEARCH orders LIMIT 10 ORDER BY feedbacks.posted_at DESC, id DESC PAGINATE;`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
-						Entity:     "orders",
-						Limit:      ptr(10),
-						WithCursor: true,
+						Op:       dql.SEARCH,
+						Entity:   "orders",
+						Limit:    ptr(10),
+						Paginate: true,
 						OrderBy: []dql.OrderBy{
 							{Field: dql.Path("feedbacks", "posted_at"), Sort: dql.DESC},
 							{Field: dql.Path("id"), Sort: dql.DESC},
@@ -665,40 +688,62 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
-			name: "WITH CURSOR WITHOUT LIMIT is an error",
-			in:   `SEARCH feedbacks WITH CURSOR;`,
-			err:  dql.ErrSyntax,
-		},
-		{
-			name: "AFTER stringExpr",
-			in:   `SEARCH feedbacks LIMIT 10 AFTER "test";`,
+			name: "simplest PAGINATE stmt",
+			in:   `PAGINATE feedbacks CONTEXT {};`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
-						Entity: "feedbacks",
-						Limit:  ptr(10),
-						After:  dql.NewStringExpr("test"),
+						Op:      dql.PAGINATE,
+						Entity:  "feedbacks",
+						Context: ptr(dql.NewObjectExpr(map[string]dql.Expr{})),
 					},
 				},
 			},
 		},
 		{
-			name: "AFTER variable",
-			in:   `SEARCH feedbacks LIMIT 10 AFTER first_page.next_cursor;`,
+			name: "advanced PAGINATE stmt",
+			in: `AS something PAGINATE feedbacks
+					id, text
+				WHERE {
+					"$and":[{"text": "test"}]
+				}
+				LIMIT 1000
+				ORDER BY created_at ASC, id ASC
+				CONTEXT {
+					"a": 1,
+					"b": 2
+				};`,
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Name:   "something",
+						Op:     dql.PAGINATE,
 						Entity: "feedbacks",
-						Limit:  ptr(10),
-						After:  dql.NewPathExpr(dql.NewVarExpr("first_page"), dql.NewFieldStep("next_cursor")),
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"), dql.NewVarExpr("text"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.AND,
+							Children: []*dql.QueryExpr{
+								{
+									OP:  dql.Eq,
+									LHS: dql.Path("text"),
+									RHS: dql.NewStringExpr("test"),
+								},
+							},
+						},
+						Limit: ptr(1000),
+						OrderBy: []dql.OrderBy{
+							{Field: dql.Path("created_at")},
+							{Field: dql.Path("id")},
+						},
+						Context: ptr(dql.NewObjectExpr(map[string]dql.Expr{
+							"a": dql.NewNumberExpr(1),
+							"b": dql.NewNumberExpr(2),
+						})),
 					},
 				},
 			},
-		},
-		{
-			name: "AFTER WITHOUT LIMIT is an error",
-			in:   `SEARCH feedbacks AFTER "test";`,
-			err:  dql.ErrSyntax,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
