@@ -14,18 +14,24 @@ type (
 
 	// Stmt is a dql statement node.
 	Stmt struct {
-		Name       string
-		Entity     string
-		Fields     []Expr
-		Where      *QueryExpr
-		Limit      *int
-		WithCursor bool
-		After      Expr
-		OrderBy    []OrderBy
-		Aggs       Aggs
+		Name    string
+		Op      OpKind
+		Entity  string
+		Fields  []Expr
+		Where   *QueryExpr
+		Limit   *int
+		After   Expr
+		OrderBy []OrderBy
+		Aggs    Aggs
+
+		Paginate bool
+		Context  *ObjectExpr
 
 		// TODO(i4k): add Span
 	}
+
+	// OpKind is the intended operation kind: SEARCH | PAGINATE
+	OpKind string
 
 	// Stmts is a list of stmt.
 	Stmts []Stmt
@@ -222,6 +228,11 @@ const (
 	invalidStep StepType = iota
 	FieldStep
 	IndexStep
+)
+
+var (
+	SEARCH   = OpKind("SEARCH")
+	PAGINATE = OpKind("PAGINATE")
 )
 
 // IsRange tells if the predicate is a range.

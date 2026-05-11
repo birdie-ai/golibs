@@ -56,7 +56,7 @@ func TestLexer(t *testing.T) {
 							value: count(labels)
 						}
 					}
-					WITH CURSOR;
+					PAGINATE;
 			`,
 			out: tokvals{
 				token(keywordToken, "AS", 5, 1, 4),
@@ -133,10 +133,9 @@ func TestLexer(t *testing.T) {
 				token(rparenToken, ")", 372, 14, 26),
 				token(rbraceToken, "}", 380, 15, 6),
 				token(rbraceToken, "}", 387, 16, 5),
-				token(keywordToken, "WITH", 394, 17, 5),
-				token(keywordToken, "CURSOR", 399, 17, 10),
-				token(semicolonToken, ";", 405, 17, 16),
-				token(eofToken, "", 410, 18, 3),
+				token(keywordToken, "PAGINATE", 394, 17, 5),
+				token(semicolonToken, ";", 402, 17, 13),
+				token(eofToken, "", 407, 18, 3),
 			},
 		},
 	} {
