@@ -230,6 +230,7 @@ const (
 	IndexStep
 )
 
+// statement operations.
 var (
 	SEARCH   = OpKind("SEARCH")
 	PAGINATE = OpKind("PAGINATE")
