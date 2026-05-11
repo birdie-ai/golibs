@@ -86,6 +86,10 @@ func parseAgg(l *lexer) (Agg, error) {
 		Name: name,
 		Func: fn,
 	}
+	err = parseAggOptions(l, &agg)
+	if err != nil {
+		return Agg{}, err
+	}
 	tok, err = l.Peek()
 	if err != nil {
 		return Agg{}, err
@@ -99,4 +103,31 @@ func parseAgg(l *lexer) (Agg, error) {
 		agg.Children = aggs
 	}
 	return agg, nil
+}
+
+func parseAggOptions(l *lexer, agg *Agg) error {
+	for {
+		tok, err := l.Peek()
+		if err != nil {
+			return err
+		}
+		switch tok.Type {
+		default:
+			return errUnexpectedToken(tok, `}|LIMIT`)
+		case lbraceToken, rbraceToken, commaToken:
+			return nil
+		case keywordToken:
+			switch tok.Value {
+			default:
+				return errUnexpectedToken(tok, `}|LIMIT`)
+			case "LIMIT":
+				l.Eat(1)
+				n, err := parseInt(l)
+				if err != nil {
+					return err
+				}
+				agg.Limit = &n
+			}
+		}
+	}
 }

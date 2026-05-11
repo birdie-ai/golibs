@@ -440,6 +440,18 @@ func parseNumberExpr(l *lexer) (NumberExpr, error) {
 	return NewNumberExpr(float64(val)), nil
 }
 
+func parseInt(l *lexer) (int, error) {
+	tok, err := l.Next()
+	if err != nil {
+		return 0, err
+	}
+	val, err := strconv.Atoi(tok.Value)
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
+}
+
 func parseStringExpr(l *lexer) (StringExpr, error) {
 	tok, err := l.Next()
 	if err != nil {
