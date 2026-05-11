@@ -702,7 +702,7 @@ func TestParser(t *testing.T) {
 		},
 		{
 			name: "advanced PAGINATE stmt",
-			in: `PAGINATE feedbacks
+			in: `AS something PAGINATE feedbacks
 					id, text
 				WHERE {
 					"$and":[{"text": "test"}]
@@ -716,6 +716,7 @@ func TestParser(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Name:   "something",
 						Op:     dql.PAGINATE,
 						Entity: "feedbacks",
 						Fields: []dql.Expr{
