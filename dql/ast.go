@@ -287,3 +287,5 @@ func (s Sort) String() string {
 		return "<INVALID>"
 	}
 }
+
+func (p StaticPath) String() string { return strings.Join(p, ".") }
