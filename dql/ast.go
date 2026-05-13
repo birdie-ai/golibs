@@ -274,7 +274,7 @@ func (op Predicate) String() string {
 }
 
 func (o OrderBy) String() string {
-	return strings.Join(o.Field, ".") + " " + o.Sort.String()
+	return o.Field.String() + " " + o.Sort.String()
 }
 
 func (s Sort) String() string {
