@@ -14,18 +14,24 @@ type (
 
 	// Stmt is a dql statement node.
 	Stmt struct {
-		Name       string
-		Entity     string
-		Fields     []Expr
-		Where      *QueryExpr
-		Limit      *int
-		WithCursor bool
-		After      Expr
-		OrderBy    []OrderBy
-		Aggs       Aggs
+		Name    string
+		Op      OpKind
+		Entity  string
+		Fields  []Expr
+		Where   *QueryExpr
+		Limit   *int
+		After   Expr
+		OrderBy []OrderBy
+		Aggs    Aggs
+
+		Paginate bool
+		Context  *ObjectExpr
 
 		// TODO(i4k): add Span
 	}
+
+	// OpKind is the intended operation kind: SEARCH | PAGINATE
+	OpKind string
 
 	// Stmts is a list of stmt.
 	Stmts []Stmt
@@ -224,6 +230,12 @@ const (
 	IndexStep
 )
 
+// statement operations.
+var (
+	SEARCH   = OpKind("SEARCH")
+	PAGINATE = OpKind("PAGINATE")
+)
+
 // IsRange tells if the predicate is a range.
 func (op Predicate) IsRange() bool {
 	switch op {
@@ -262,7 +274,7 @@ func (op Predicate) String() string {
 }
 
 func (o OrderBy) String() string {
-	return strings.Join(o.Field, ".") + " " + o.Sort.String()
+	return o.Field.String() + " " + o.Sort.String()
 }
 
 func (s Sort) String() string {
@@ -275,3 +287,5 @@ func (s Sort) String() string {
 		return "<INVALID>"
 	}
 }
+
+func (p StaticPath) String() string { return strings.Join(p, ".") }

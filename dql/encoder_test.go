@@ -30,6 +30,7 @@ func TestEncoder(t *testing.T) {
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "test",
 					},
 				},
@@ -38,10 +39,25 @@ func TestEncoder(t *testing.T) {
 			shape: `SEARCH test;`,
 		},
 		{
+			name: "named stmt",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Name:   "something",
+						Op:     dql.SEARCH,
+						Entity: "test",
+					},
+				},
+			},
+			out:   `AS something SEARCH test;`,
+			shape: `SEARCH test;`,
+		},
+		{
 			name: "stmt with only columns",
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "test",
 						Fields: []dql.Expr{
 							dql.NewVarExpr("id"),
@@ -61,6 +77,7 @@ func TestEncoder(t *testing.T) {
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "test",
 						Where: &dql.QueryExpr{
 							LHS: dql.Path("text"),
@@ -81,6 +98,7 @@ func TestEncoder(t *testing.T) {
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "operating_systems",
 						Where: &dql.QueryExpr{
 							Type: dql.AND,
@@ -182,6 +200,7 @@ func TestEncoder(t *testing.T) {
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "test",
 						Where: &dql.QueryExpr{
 							LHS: dql.Path("text"),
@@ -203,6 +222,7 @@ func TestEncoder(t *testing.T) {
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "test",
 						Where: &dql.QueryExpr{
 							LHS: dql.Path("labels"),
@@ -223,6 +243,7 @@ func TestEncoder(t *testing.T) {
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "test",
 						Where: &dql.QueryExpr{
 							LHS: dql.Path("some", "field"),
@@ -239,6 +260,7 @@ func TestEncoder(t *testing.T) {
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "test",
 						Where: &dql.QueryExpr{
 							LHS: dql.Path("some", "field"),
@@ -249,6 +271,127 @@ func TestEncoder(t *testing.T) {
 			},
 			out:   `SEARCH test WHERE {"$missing":"some.field"};`,
 			shape: `SEARCH test WHERE {"$missing":"some.field"};`,
+		},
+		{
+			name: "SEARCH request PAGINATE statement",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Name:   "some_data",
+						Op:     dql.SEARCH,
+						Entity: "test",
+						Fields: []dql.Expr{dql.NewVarExpr("id")},
+						Paginate: true,
+					},
+				},
+			},
+			out:   `AS some_data SEARCH test id PAGINATE;`,
+			shape: `SEARCH test id PAGINATE;`,
+		},
+		{
+			name: "PAGINATE statement",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Name:   "some_data",
+						Op:     dql.PAGINATE,
+						Entity: "test",
+						Fields: []dql.Expr{dql.NewVarExpr("id")},
+						Context: ptr(dql.NewObjectExpr(map[string]dql.Expr{
+							"something": dql.NewNumberExpr(1),
+						})),
+					},
+				},
+			},
+			out:   `AS some_data PAGINATE test id CONTEXT {"something":1};`,
+			shape: `PAGINATE test id;`,
+		},
+		{
+			name: "PAGINATE statement with WHERE",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Name:   "some_data",
+						Op:     dql.PAGINATE,
+						Entity: "test",
+						Fields: []dql.Expr{dql.NewVarExpr("id")},
+						Where: &dql.QueryExpr{
+							LHS: dql.Path("some", "field"),
+							OP:  dql.Missing,
+						},
+						Context: ptr(dql.NewObjectExpr(map[string]dql.Expr{
+							"something": dql.NewNumberExpr(1),
+						})),
+					},
+				},
+			},
+			out:   `AS some_data PAGINATE test id WHERE {"$missing":"some.field"} CONTEXT {"something":1};`,
+			shape: `PAGINATE test id WHERE {"$missing":"some.field"};`,
+		},
+		{
+			name: "PAGINATE statement with ORDER BY",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Name:   "some_data",
+						Op:     dql.PAGINATE,
+						Entity: "test",
+						Fields: []dql.Expr{dql.NewVarExpr("id")},
+						Where: &dql.QueryExpr{
+							LHS: dql.Path("some", "field"),
+							OP:  dql.Missing,
+						},
+						OrderBy: []dql.OrderBy{
+							{
+								Field: dql.Path("created_at"),
+								Sort:  dql.DESC,
+							},
+							{
+								Field: dql.Path("id"),
+								Sort:  dql.DESC,
+							},
+						},
+						Context: ptr(dql.NewObjectExpr(map[string]dql.Expr{
+							"something": dql.NewNumberExpr(1),
+						})),
+					},
+				},
+			},
+			out:   `AS some_data PAGINATE test id WHERE {"$missing":"some.field"} ORDER BY created_at DESC,id DESC CONTEXT {"something":1};`,
+			shape: `PAGINATE test id WHERE {"$missing":"some.field"} ORDER BY created_at DESC,id DESC;`,
+		},
+		{
+			name: "PAGINATE statement with ORDER BY AND LIMIT",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Name:   "some_data",
+						Op:     dql.PAGINATE,
+						Entity: "test",
+						Fields: []dql.Expr{dql.NewVarExpr("id")},
+						Where: &dql.QueryExpr{
+							LHS: dql.Path("some", "field"),
+							OP:  dql.Missing,
+						},
+						Limit: ptr(10000),
+						OrderBy: []dql.OrderBy{
+							{
+								Field: dql.Path("created_at"),
+								Sort:  dql.DESC,
+							},
+							{
+								Field: dql.Path("id"),
+								Sort:  dql.DESC,
+							},
+						},
+						Context: ptr(dql.NewObjectExpr(map[string]dql.Expr{
+							"something": dql.NewNumberExpr(1),
+						})),
+					},
+				},
+			},
+			out:   `AS some_data PAGINATE test id WHERE {"$missing":"some.field"} LIMIT 10000 ORDER BY created_at DESC,id DESC CONTEXT {"something":1};`,
+			shape: `PAGINATE test id WHERE {"$missing":"some.field"} LIMIT 10000 ORDER BY created_at DESC,id DESC;`,
 		},
 	} {
 		// normal encoding
