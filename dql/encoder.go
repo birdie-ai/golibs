@@ -119,7 +119,10 @@ func validateStmt(s Stmt) error {
 
 func (e *Encoder) stmt(s Stmt) error {
 	if s.Name != "" && !e.onlyShape {
-		e.emit("AS " + s.Name + " ")
+		err := e.emit("AS " + s.Name + " ")
+		if err != nil {
+			return err
+		}
 	}
 	err := e.preamble(s)
 	if err != nil {
@@ -150,7 +153,7 @@ func (e *Encoder) stmt(s Stmt) error {
 		}
 	}
 	if s.Paginate {
-		err := e.emit(` PAGINATE`);
+		err := e.emit(` PAGINATE`)
 		if err != nil {
 			return err
 		}
@@ -512,10 +515,16 @@ func (e *Encoder) limit(limit int) error {
 }
 
 func (e *Encoder) orderBy(orderBy []OrderBy) error {
-	e.emit(" ORDER BY ")
+	err := e.emit(" ORDER BY ")
+	if err != nil {
+		return err
+	}
 	for i, order := range orderBy {
 		if i > 0 {
-			e.emit(",")
+			err := e.emit(",")
+			if err != nil {
+				return err
+			}
 		}
 		err := e.emit(order.String())
 		if err != nil {
