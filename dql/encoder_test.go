@@ -273,6 +273,22 @@ func TestEncoder(t *testing.T) {
 			shape: `SEARCH test WHERE {"$missing":"some.field"};`,
 		},
 		{
+			name: "SEARCH request PAGINATE statement",
+			in: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Name:   "some_data",
+						Op:     dql.SEARCH,
+						Entity: "test",
+						Fields: []dql.Expr{dql.NewVarExpr("id")},
+						Paginate: true,
+					},
+				},
+			},
+			out:   `AS some_data SEARCH test id PAGINATE;`,
+			shape: `SEARCH test id PAGINATE;`,
+		},
+		{
 			name: "PAGINATE statement",
 			in: dql.Program{
 				Stmts: dql.Stmts{

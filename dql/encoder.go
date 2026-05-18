@@ -94,6 +94,9 @@ func validateStmt(s Stmt) error {
 	if s.Op != SEARCH && s.Op != PAGINATE {
 		errs = append(errs, ErrInvalidStmtOp)
 	}
+	if s.Op != SEARCH && s.Paginate {
+		errs = append(errs, fmt.Errorf(`%w: only SEARCH statement supports the PAGINATE prefix`, ErrMalformedStmt))
+	}
 	if s.Entity == "" {
 		errs = append(errs, ErrMissingEntity)
 	}
@@ -146,9 +149,21 @@ func (e *Encoder) stmt(s Stmt) error {
 			return err
 		}
 	}
+	if s.Paginate {
+		err := e.emit(` PAGINATE`);
+		if err != nil {
+			return err
+		}
+	}
 	if s.Context != nil && !e.onlyShape {
-		e.emit(` CONTEXT `)
-		e.expr(*s.Context, false)
+		err := e.emit(` CONTEXT `)
+		if err != nil {
+			return err
+		}
+		err = e.expr(*s.Context, false)
+		if err != nil {
+			return err
+		}
 	}
 	return e.emit(";")
 }
