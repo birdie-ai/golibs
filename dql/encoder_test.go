@@ -277,10 +277,10 @@ func TestEncoder(t *testing.T) {
 			in: dql.Program{
 				Stmts: dql.Stmts{
 					{
-						Name:   "some_data",
-						Op:     dql.SEARCH,
-						Entity: "test",
-						Fields: []dql.Expr{dql.NewVarExpr("id")},
+						Name:     "some_data",
+						Op:       dql.SEARCH,
+						Entity:   "test",
+						Fields:   []dql.Expr{dql.NewVarExpr("id")},
 						Paginate: true,
 					},
 				},
