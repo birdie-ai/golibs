@@ -23,6 +23,7 @@ func TestParserAggs(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Aggs:   dql.Aggs{},
 					},
@@ -35,6 +36,7 @@ func TestParserAggs(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Limit:  ptr(0),
 						Aggs:   dql.Aggs{},
@@ -50,6 +52,7 @@ func TestParserAggs(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Aggs: dql.Aggs{
 							"by_labels": dql.Agg{
@@ -75,6 +78,7 @@ func TestParserAggs(t *testing.T) {
 			out: dql.Program{
 				Stmts: dql.Stmts{
 					{
+						Op:     dql.SEARCH,
 						Entity: "feedbacks",
 						Aggs: dql.Aggs{
 							"labels": {

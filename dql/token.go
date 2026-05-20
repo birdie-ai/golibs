@@ -42,21 +42,20 @@ const (
 )
 
 var keywords = map[string]struct{}{
-	"AS":     {},
-	"SEARCH": {},
-	"RETURN": {},
-	"WHERE":  {},
-	"ORDER":  {},
-	"BY":     {},
-	"LIMIT":  {},
-	"ASC":    {},
-	"DESC":   {},
-	"AGGS":   {},
-	"WITH":   {},
-	"CURSOR": {},
-	"AFTER":  {},
-	"AND":    {},
-	"OR":     {},
+	"AS":       {},
+	"SEARCH":   {},
+	"PAGINATE": {},
+	"RETURN":   {},
+	"WHERE":    {},
+	"ORDER":    {},
+	"BY":       {},
+	"LIMIT":    {},
+	"ASC":      {},
+	"DESC":     {},
+	"AGGS":     {},
+	"CONTEXT":  {},
+	"AND":      {},
+	"OR":       {},
 }
 
 func (t tokval) String() string {
