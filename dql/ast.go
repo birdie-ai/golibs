@@ -20,7 +20,6 @@ type (
 		Fields  []Expr
 		Where   *QueryExpr
 		Limit   *int
-		After   Expr
 		OrderBy []OrderBy
 		Aggs    Aggs
 
