@@ -25,7 +25,7 @@ type (
 		client    *pubsub.Client
 		sub       *pubsub.Subscription
 
-		extraSettings subscriptionSettings
+		opts subscriptionOptions
 	}
 	// GoogleExperimentalBatchSubscription helps build batches of N events even for ordered subscriptions.
 	// N events will be received for the same ordering key, but in order.
@@ -43,15 +43,15 @@ type (
 		batchSize     int
 		numGoroutines int
 
-		extraSettings subscriptionSettings
+		opts subscriptionOptions
 	}
 
-	subscriptionSettings struct {
+	subscriptionOptions struct {
 		prefetch int
 	}
 
-	// SubscriptionSettingOption is an option for setting up the subscription settings.
-	SubscriptionSettingOption func(settings *subscriptionSettings)
+	// SubscriptionOption is a type for setting subscription options.
+	SubscriptionOption func(opts *subscriptionOptions)
 )
 
 // NewOrderedGooglePublisher creates a new ordered Google Cloud event publisher for the given project/topic/event name.
@@ -131,7 +131,7 @@ func (p *OrderedGooglePublisher[T]) Shutdown(context.Context) error {
 // similar to [NewSubscription]. Ordering affects how concurrency is handled. Concurrency is done by handling
 // different ordering keys/partitions, every ordered key will be handled sequentially only different ordering keys will be handled concurrently.
 // Call [OrderedGoogleSub.Shutdown] to stop all goroutines/clean up all resources.
-func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName string, maxConcurrentEvents int, settingOptions ...SubscriptionSettingOption) (*OrderedGoogleSub[T], error) {
+func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName string, maxConcurrentEvents int, opts ...SubscriptionOption) (*OrderedGoogleSub[T], error) {
 	if maxConcurrentEvents <= 0 {
 		return nil, fmt.Errorf("max concurrency must be > 0: %d", maxConcurrentEvents)
 	}
@@ -141,10 +141,10 @@ func NewOrderedGoogleSub[T any](ctx context.Context, project, subName, eventName
 	}
 	sub := client.Subscription(subName)
 	orderedSub := &OrderedGoogleSub[T]{eventName: eventName, client: client, sub: sub}
-	for _, settingOption := range settingOptions {
-		settingOption(&orderedSub.extraSettings)
+	for _, opt := range opts {
+		opt(&orderedSub.opts)
 	}
-	orderedSub.sub.ReceiveSettings.MaxOutstandingMessages = maxConcurrentEvents + orderedSub.extraSettings.prefetch
+	orderedSub.sub.ReceiveSettings.MaxOutstandingMessages = maxConcurrentEvents + orderedSub.opts.prefetch
 	return orderedSub, nil
 }
 
@@ -220,7 +220,7 @@ func (s *OrderedGoogleSub[T]) Shutdown(context.Context) error {
 
 // NewGoogleExperimentalBatchSubscription creates a new google batch subscriber that can read N events at once (building a batch).
 // numGoroutines controls [pubsub.ReceiveSettings.NumGoroutines].
-func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project, subName, eventName string, batchSize, numGoroutines int, settings ...SubscriptionSettingOption) (*GoogleExperimentalBatchSubscription[T], error) {
+func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project, subName, eventName string, batchSize, numGoroutines int, opts ...SubscriptionOption) (*GoogleExperimentalBatchSubscription[T], error) {
 	if batchSize <= 0 {
 		return nil, fmt.Errorf("batch size %q must be > 0", batchSize)
 	}
@@ -236,8 +236,8 @@ func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project,
 		batchSize:     batchSize,
 		numGoroutines: numGoroutines,
 	}
-	for _, setting := range settings {
-		setting(&s.extraSettings)
+	for _, opt := range opts {
+		opt(&s.opts)
 	}
 	s.runReceiver(ctx)
 	return s, nil
@@ -247,8 +247,8 @@ func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project,
 // additional events up to the provided size. This should not be used lightly as it
 // could increase the number of expirations whenever the extra pulled events are not
 // acked before its deadline extension is reached.
-func WithSubscriptionPrefetch(size int) SubscriptionSettingOption {
-	return func(settings *subscriptionSettings) {
+func WithSubscriptionPrefetch(size int) SubscriptionOption {
+	return func(settings *subscriptionOptions) {
 		settings.prefetch = size
 	}
 }
@@ -300,7 +300,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 		s.sub.ReceiveSettings.MaxExtension = maxExtension
 		s.sub.ReceiveSettings.MinExtensionPeriod = 10 * time.Minute
 		s.sub.ReceiveSettings.MaxExtensionPeriod = 10 * time.Minute
-		s.sub.ReceiveSettings.MaxOutstandingMessages = s.batchSize + s.extraSettings.prefetch
+		s.sub.ReceiveSettings.MaxOutstandingMessages = s.batchSize + s.opts.prefetch
 
 		err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 			ctx, event, err := createEnvelope[T](ctx, s.eventName, msg.Data)
