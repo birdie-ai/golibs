@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/pubsub"
@@ -223,6 +224,84 @@ func NewGoogleExperimentalBatchSubscription[T any](ctx context.Context, project,
 	}
 	s.runReceiver(ctx)
 	return s, nil
+}
+
+// ServeBatch will start serving all events from the subscription calling handler for each batch of events.
+// It will run until the given [context.Context] is cancelled.
+// If a received event is not a valid JSON it will be discarded as malformed and a Nack will be sent automatically.
+// If a received event has the wrong name it will be discarded as malformed and a Nack will be sent automatically.
+// ServeBatch may be called multiple times, each time will start a new serving service that will
+// run up to "maxConcurrency" go-routines (configured on [Subscription] creation).
+//
+// The batch handler is called with N events where 0 < N <= batchSize.
+// The batch time window controls for how long it will wait for a batch to fill.
+// The [context.Context] might not have any deadline enforced on it (it is the overall batch run one),
+// it is responsibility of handlers to create a new child context with an explicit/clean deadline for the event handling.
+//
+// If the handler panics it is assumed that the effect of the panic was isolated to the failed batch handling,
+// Since when dealing with batches partial results are possible nothing is done with the events, like nack'ing them.
+// It recovers the panic, logs a stack trace with ERROR log level and keeps running (unacked events will eventually
+// expire and be re-delivered, depending on the broker configuration).
+func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
+	ctx context.Context,
+	batchWindow time.Duration,
+	maxConcurrency int,
+	bh BatchHandler[T],
+) error {
+	semaphore := make(chan struct{}, maxConcurrency)
+	// When N goroutines fail we need to ensure they are not blocked waiting for a receive
+	// since the receive side will also wait for all goroutines to finish before returning/exiting with the error.
+	fatalErr := make(chan error, maxConcurrency)
+	var wg sync.WaitGroup
+
+	for ctx.Err() == nil {
+		select {
+		case semaphore <- struct{}{}:
+		case err := <-fatalErr:
+			wg.Wait()
+			return err
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		}
+		wg.Go(func() {
+			defer func() {
+				<-semaphore
+			}()
+
+			rcvCtx, cancel := context.WithTimeout(ctx, batchWindow)
+			events, err := s.ReceiveN(rcvCtx)
+			cancel()
+			if err != nil {
+				fatalErr <- err
+				return
+			}
+			if len(events) == 0 {
+				return
+			}
+			// We only handle panics from the handler, the core logic shouldn't panic and
+			// should abort if a panic happens.
+			defer func() {
+				if err := recover(); err != nil {
+					// 64KB, if it is good enough for Go's standard lib it is good enough for us :-)
+					const size = 64 << 10
+					buf := make([]byte, size)
+					buf = buf[:runtime.Stack(buf, false)]
+					// We might have partial results, we cant ack/nack any message, just log.
+					slog.Error("panic: message subscription: handling message",
+						"error", err,
+						"events_total", len(events),
+						"batch_size", s.batchSize,
+						"batch_window", batchWindow,
+						"stack_trace", string(buf))
+				}
+			}()
+
+			bh(ctx, events)
+		})
+	}
+	wg.Wait()
+	return ctx.Err()
 }
 
 // ReceiveN will receive at most N events where N is defined by the batch size informed when creating the subscription.
