@@ -2,7 +2,6 @@ package dql
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 	"strconv"
 )
@@ -31,7 +30,7 @@ func Parse(in string) (Program, error) {
 			return prog, nil
 		case keywordToken:
 			switch tok.Value {
-			case "AS", "SEARCH":
+			case "AS", "SEARCH", "PAGINATE":
 				stmt, err := parseStmt(l)
 				if err != nil {
 					return Program{}, err
@@ -70,10 +69,17 @@ func parseStmt(l *lexer) (Stmt, error) {
 		if err != nil {
 			return Stmt{}, err
 		}
-		if tok.Type != keywordToken || tok.Value != "SEARCH" {
-			return Stmt{}, errUnexpectedToken(tok, "IDENT(SEARCH)")
+		if tok.Type != keywordToken {
+			return Stmt{}, errUnexpectedToken(tok, `SEARCH | PAGINATE`)
 		}
-		// fall below
+	}
+	switch tok.Value {
+	default:
+		return Stmt{}, errUnexpectedToken(tok, "SEARCH | PAGINATE")
+	case "SEARCH":
+		stmt.Op = SEARCH
+	case "PAGINATE":
+		stmt.Op = PAGINATE
 	}
 	tok, err = l.Next()
 	if err != nil {
@@ -113,8 +119,8 @@ func parseStmt(l *lexer) (Stmt, error) {
 	if tok.Type == keywordToken {
 		switch tok.Value {
 		default:
-			return Stmt{}, errUnexpectedToken(tok, "WHERE | ORDER BY | LIMIT | AGGS | WITH CURSOR | AFTER | ;")
-		case "WHERE", "AGGS", "LIMIT", "ORDER", "WITH":
+			return Stmt{}, errUnexpectedToken(tok, "WHERE | ORDER BY | LIMIT | AGGS | PAGINATE | CONTEXT;")
+		case "WHERE", "AGGS", "LIMIT", "ORDER", "PAGINATE", "CONTEXT":
 		}
 
 		if tok.Value == "WHERE" {
@@ -187,40 +193,28 @@ func parseStmt(l *lexer) (Stmt, error) {
 			}
 			stmt.OrderBy = vals
 		}
-		if tok.Value == "WITH" {
+		if tok.Value == "PAGINATE" {
 			l.Eat(1)
-			tok, err := l.Next()
-			if err != nil {
-				return Stmt{}, err
-			}
-			if tok.Type != keywordToken || tok.Value != `CURSOR` {
-				return Stmt{}, errUnexpectedToken(tok, `CURSOR`)
-			}
-			if stmt.Limit == nil || *stmt.Limit == 0 {
-				// NOTE(i4k): not sure if this should be here or in a final validation step.
-				return Stmt{}, fmt.Errorf(`%w: "WITH CURSOR" requires a "LIMIT" clause`, ErrSyntax)
-			}
-			stmt.WithCursor = true
+			stmt.Paginate = true
 			tok, err = l.Peek()
 			if err != nil {
 				return Stmt{}, err
 			}
 		}
-		if tok.Value == "AFTER" {
+		if tok.Value == "CONTEXT" {
 			l.Eat(1)
-			if stmt.Limit == nil || *stmt.Limit == 0 {
-				// NOTE(i4k): not sure if this should be here or in a final validation step.
-				return Stmt{}, fmt.Errorf(`%w: "WITH CURSOR" requires a "LIMIT" clause`, ErrSyntax)
-			}
-			expr, err := parseExpr(l)
+			tok, err := l.Peek()
 			if err != nil {
 				return Stmt{}, err
 			}
-			stmt.After = expr
-			tok, err = l.Peek()
+			if tok.Type != lbraceToken {
+				return Stmt{}, errUnexpectedToken(tok, `{`)
+			}
+			obj, err := parseObjectExpr(l)
 			if err != nil {
 				return Stmt{}, err
 			}
+			stmt.Context = &obj
 		}
 		if tok.Value == "AGGS" {
 			l.Eat(1)
@@ -233,8 +227,6 @@ func parseStmt(l *lexer) (Stmt, error) {
 				return Stmt{}, err
 			}
 		}
-
-		// TODO(i4k): ORDER BY, WITH CURSOR, etc
 	}
 
 	// TODO(i4k): rest
@@ -438,6 +430,18 @@ func parseNumberExpr(l *lexer) (NumberExpr, error) {
 		return NumberExpr{}, err
 	}
 	return NewNumberExpr(float64(val)), nil
+}
+
+func parseInt(l *lexer) (int, error) {
+	tok, err := l.Next()
+	if err != nil {
+		return 0, err
+	}
+	val, err := strconv.Atoi(tok.Value)
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
 }
 
 func parseStringExpr(l *lexer) (StringExpr, error) {

@@ -238,7 +238,7 @@ Returns:
 
 Pagination is explicitly enabled by adding:
 ```
-LIMIT <n> WITH CURSOR
+PAGINATE
 ```
 to a `SEARCH` statement.
 
@@ -254,7 +254,7 @@ WHERE {
 	]
 }
 LIMIT 1000
-WITH CURSOR;
+PAGINATE;
 ```
 
 *Ordering rules*
@@ -263,47 +263,54 @@ Pagination requires a *stable and deterministic order*.
 
 If no order is applied, the system implicitly applies:
 ```
-ORDER BY id ASC
+ORDER BY created_at ASC, id ASC
 ```
-or whatever is the entity primary key.
 
-If an order is provided:
-- **it must be deterministic** (a *score* field must never be used).
-- **it must include the primary key** (eg.: `id`) **as the final tiebreaker**.
+If an ORDER is provided:
+- **it must** be a deterministic sortable and immutable field.
+- **the `id` is always used as tiebreaker.
 
 Example:
 ```
-ORDER BY posted_at DESC, id DESC
+ORDER BY some_immutable_field
 ```
 
-*Cursor usage*
+*Usage*
 
-The response for a paginated query includes a `next_cursor` value (format is opaque and implementation-defined).
-
-To fetch the next page, pass the cursor using the `AFTER` clause:
+Let's say your statement looks like below:
 
 ```
-SEARCH feedbacks
+AS feedback_results SEARCH feedback id, text WHERE {
+	"$and": [ ... ]
+} LIMIT 1000 PAGINATE;
+```
+
+Then the server response will include a `next` field in the form of a valid DQL like the
+one below:
+
+```
+AS feedbacks_results PAGINATE feedbacks
 	id, text, account
 WHERE {
-	"$and": [
-		{"text": "something"},
-		{"account.ingested_id": ["abc", "xyz"]}
-	]
+	"$and": [ ... ]
 }
 LIMIT 1000
-AFTER "eyJ2I...";
+ORDER BY created_at ASC, id ASC
+CONTEXT {
+	"pit": "aaAAbbBB...",
+	"after": {
+		"id": "abc",
+		"created_at": 28838282
+	}
+};
 ```
 
-*Consistency Requirements*
+The `CONTEXT ...` clause contain public details that should only be interpreted by the server,
+which means its fields can change in the future without any announcement.
 
-For pagination to be correct, the statement must remain **identical across all pages** except the
-`AFTER` clause. If changing any other information between requests is **undefined behavior** and
-the server implementation can detect such cases and give errors.
+It's in plaintext for two reasons:
+- debuggability
+- emphasize it's public data.
 
-*Behavior guarantees*
-
-- Consistent order
-
-For any other guarantees (like *no duplicates* or snapshot-based pagination under concurrent writes)
-check the server documentation.
+For retrieving the next page, you can send this statement anywhere in the payload, even
+together with other statements.

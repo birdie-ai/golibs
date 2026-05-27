@@ -27,6 +27,8 @@ type (
 
 // encoder errors
 var (
+	ErrMalformedStmt      = errors.New(`malformed statement node`)
+	ErrInvalidStmtOp      = errors.New(`invalid stmt operation`)
 	ErrMissingEntity      = errors.New(`missing entity`)
 	ErrUnexpectedExprType = errors.New(`expression type not expected here`)
 	ErrInvalidLogicalExpr = errors.New(`invalid logical expression`)
@@ -89,13 +91,39 @@ func (e *Encoder) Values() []Expr {
 
 func validateStmt(s Stmt) error {
 	var errs []error
+	if s.Op != SEARCH && s.Op != PAGINATE {
+		errs = append(errs, ErrInvalidStmtOp)
+	}
+	if s.Op != SEARCH && s.Paginate {
+		errs = append(errs, fmt.Errorf(`%w: only SEARCH statement supports the PAGINATE prefix`, ErrMalformedStmt))
+	}
 	if s.Entity == "" {
 		errs = append(errs, ErrMissingEntity)
+	}
+	if s.Op != PAGINATE && s.Context != nil {
+		errs = append(errs, fmt.Errorf(`%w: only PAGINATE stmts support CONTEXT clause`, ErrMalformedStmt))
+	}
+	if s.Name != "" {
+		l := newlexer(s.Name)
+		tok, err := l.Next()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%w: validating statement name: %s", err, s.Name))
+		} else {
+			if tok.Type != identToken {
+				errs = append(errs, fmt.Errorf("statement name must be an IDENT but found %v", tok.Type))
+			}
+		}
 	}
 	return errors.Join(errs...)
 }
 
 func (e *Encoder) stmt(s Stmt) error {
+	if s.Name != "" && !e.onlyShape {
+		err := e.emit("AS " + s.Name + " ")
+		if err != nil {
+			return err
+		}
+	}
 	err := e.preamble(s)
 	if err != nil {
 		return err
@@ -114,6 +142,28 @@ func (e *Encoder) stmt(s Stmt) error {
 	}
 	if s.Limit != nil {
 		err = e.limit(*s.Limit)
+		if err != nil {
+			return err
+		}
+	}
+	if len(s.OrderBy) > 0 {
+		err = e.orderBy(s.OrderBy)
+		if err != nil {
+			return err
+		}
+	}
+	if s.Paginate {
+		err := e.emit(` PAGINATE`)
+		if err != nil {
+			return err
+		}
+	}
+	if s.Context != nil && !e.onlyShape {
+		err := e.emit(` CONTEXT `)
+		if err != nil {
+			return err
+		}
+		err = e.expr(*s.Context, false)
 		if err != nil {
 			return err
 		}
@@ -464,6 +514,26 @@ func (e *Encoder) limit(limit int) error {
 	return e.json(limit)
 }
 
+func (e *Encoder) orderBy(orderBy []OrderBy) error {
+	err := e.emit(" ORDER BY ")
+	if err != nil {
+		return err
+	}
+	for i, order := range orderBy {
+		if i > 0 {
+			err := e.emit(",")
+			if err != nil {
+				return err
+			}
+		}
+		err := e.emit(order.String())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Encoder) json(v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -473,7 +543,7 @@ func (e *Encoder) json(v any) error {
 }
 
 func (e *Encoder) preamble(s Stmt) error {
-	err := e.emit("SEARCH ")
+	err := e.emit(string(s.Op) + " ")
 	if err != nil {
 		return err
 	}
