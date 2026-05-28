@@ -122,6 +122,11 @@ func parseStmtExpr(in []byte) (Stmt, []byte, error) {
 	if err != nil {
 		return Stmt{}, nil, err
 	}
+	in = skipblank(in)
+	stmt.Pruning, in, err = parsePruning(in)
+	if err != nil {
+		return Stmt{}, nil, err
+	}
 	return stmt, in, nil
 }
 
@@ -698,6 +703,64 @@ func parseWhereObject(in []byte) (Where, []byte, error) {
 		}
 	}
 	return where, in, nil
+}
+
+func parsePruning(in []byte) (Pruning, []byte, error) {
+	// PRUNING BY is optional
+	if len(in) < 7 || !bytes.EqualFold(in[:7], []byte("PRUNING")) {
+		return nil, in, nil
+	}
+	in = skipblank(in[7:])
+	if len(in) == 0 {
+		return nil, nil, errUnexpectedEOF()
+	}
+	ident, in, err := lexIdent(in)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrSyntax, err)
+	}
+	if !strings.EqualFold(ident, "BY") {
+		return nil, nil, fmt.Errorf("%w: expected BY token after PRUNING", ErrSyntax)
+	}
+	pruning := Pruning{}
+	for {
+		in = skipblank(in)
+		if len(in) == 0 {
+			return nil, nil, errUnexpectedEOF()
+		}
+		var key string
+		key, in, err = lexIdent(in)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+		}
+		in = skipblank(in)
+		if len(in) == 0 {
+			return nil, nil, errUnexpectedEOF()
+		}
+		if in[0] != '=' {
+			return nil, nil, fmt.Errorf("%w: expected '=' in PRUNING BY clause", ErrSyntax)
+		}
+		in = skipblank(in[1:])
+		if len(in) == 0 {
+			return nil, nil, errUnexpectedEOF()
+		}
+		var val any
+		in, err = parseJSON(in, &val)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: parsing PRUNING value as JSON: %v", ErrSyntax, err)
+		}
+		if _, ok := pruning[key]; ok {
+			return nil, nil, fmt.Errorf("%w: duplicate PRUNING field %q", ErrClauseDuplicated, key)
+		}
+		pruning[key] = val
+		in = skipblank(in)
+		if len(in) == 0 {
+			return nil, nil, errUnexpectedEOF()
+		}
+		if in[0] != ',' {
+			return pruning, in, nil
+		}
+		in = in[1:]
+	}
 }
 
 func mergeclauses(dst, src Where) error {
