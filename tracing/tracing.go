@@ -27,7 +27,7 @@ type RequestStats struct {
 type StatsHandler func(context.Context, RequestStats)
 
 // InstrumentHTTP will instrument the given [http.handler] by adding a slog.Logger on the request context.
-// The logger will have `trace_id`, `request_id` and `organization_id` added to it.
+// The logger will have `trace_id`, `request_id`, `organization_id`, `user_id` and `user_email` added to it.
 // Use slog.FromCtx(ctx) to retrieve the logger.
 // It will log each completed request on the INFO level (may be too much for some services, for more fine grained control see [InstrumentHTTPWithStats]).
 func InstrumentHTTP(h http.Handler) http.Handler {
@@ -38,7 +38,7 @@ func InstrumentHTTP(h http.Handler) http.Handler {
 }
 
 // InstrumentHTTPWithStats will instrument the given [http.handler] by adding a slog.Logger on the request context.
-// The logger will have `trace_id`, `request_id` and `organization_id` added to it.
+// The logger will have `trace_id`, `request_id`, `organization_id`, `user_id` and `user_email` added to it.
 // Use slog.FromCtx(ctx) to retrieve the logger.
 // For each completed request the provided [StatsHandler] will be called.
 func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Handler {
@@ -50,12 +50,20 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 			traceID = uuid.NewString()
 		}
 		orgID := req.Header.Get(orgIDHeader)
+		userID := req.Header.Get(userIDHeader)
+		userEmail := req.Header.Get(userEmailHeader)
 		userAgent := req.Header.Get("User-Agent")
 
 		ctx := req.Context()
 		ctx = CtxWithTraceID(ctx, traceID)
 		if orgID != "" {
 			ctx = CtxWithOrgID(ctx, orgID)
+		}
+		if userID != "" {
+			ctx = CtxWithUserID(ctx, userID)
+		}
+		if userEmail != "" {
+			ctx = CtxWithUserEmail(ctx, userEmail)
 		}
 		if userAgent != "" {
 			ctx = CtxWithInboundUserAgent(ctx, userAgent)
@@ -68,6 +76,12 @@ func InstrumentHTTPWithStats(h http.Handler, statsHandler StatsHandler) http.Han
 		log = log.With("request_id", requestID)
 		if orgID != "" {
 			log = log.With("organization_id", orgID)
+		}
+		if userID != "" {
+			log = log.With("user_id", userID)
+		}
+		if userEmail != "" {
+			log = log.With("user_email", userEmail)
 		}
 		if userAgent != "" {
 			log = log.With("user_agent", userAgent)
@@ -147,6 +161,28 @@ func CtxGetInboundUserAgent(ctx context.Context) string {
 	return ctxget(ctx, userAgentKey)
 }
 
+// CtxWithUserID creates a new [context.Context] with the given user ID associated with it.
+// Call [CtxGetUserID] to retrieve the user ID.
+func CtxWithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, userIDKey, userID)
+}
+
+// CtxGetUserID gets the user ID associated with this context.
+func CtxGetUserID(ctx context.Context) string {
+	return ctxget(ctx, userIDKey)
+}
+
+// CtxWithUserEmail creates a new [context.Context] with the given user email associated with it.
+// Call [CtxGetUserEmail] to retrieve the user email.
+func CtxWithUserEmail(ctx context.Context, userEmail string) context.Context {
+	return context.WithValue(ctx, userEmailKey, userEmail)
+}
+
+// CtxGetUserEmail gets the user email associated with this context.
+func CtxGetUserEmail(ctx context.Context) string {
+	return ctxget(ctx, userEmailKey)
+}
+
 // SetRequestHeaders adds headers to the given [Request] using information
 // extracted from the given [context.Context].
 //
@@ -158,6 +194,12 @@ func SetRequestHeaders(ctx context.Context, req *http.Request) {
 	}
 	if orgID := CtxGetOrgID(ctx); orgID != "" {
 		req.Header.Set(orgIDHeader, orgID)
+	}
+	if userID := CtxGetUserID(ctx); userID != "" {
+		req.Header.Set(userIDHeader, userID)
+	}
+	if userEmail := CtxGetUserEmail(ctx); userEmail != "" {
+		req.Header.Set(userEmailHeader, userEmail)
 	}
 }
 
@@ -182,8 +224,10 @@ type (
 )
 
 const (
-	traceIDHeader = "traceparent"
-	orgIDHeader   = "Birdie-Organization-ID"
+	traceIDHeader   = "traceparent"
+	orgIDHeader     = "Birdie-Organization-ID"
+	userIDHeader    = "Birdie-User-Id"
+	userEmailHeader = "Birdie-User-Email"
 )
 
 const (
@@ -191,6 +235,8 @@ const (
 	orgIDKey
 	requestIDKey
 	userAgentKey
+	userIDKey
+	userEmailKey
 )
 
 func newResponseWriter(r http.ResponseWriter) responseWriterObserver {
