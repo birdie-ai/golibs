@@ -25,3 +25,15 @@ func TestRequestUserAgent(t *testing.T) {
 		t.Fatalf("got user agent %q; want %q", v.UserAgent(), want)
 	}
 }
+
+func TestJSONRequestContentType(t *testing.T) {
+	v, err := xhttp.NewJSONRequest(context.Background(), http.MethodPost, "http://test", map[string]string{"key": "value"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "application/json"
+	got := v.Header.Get("Content-Type")
+	if want != got {
+		t.Fatalf("got content type %q; want %q", got, want)
+	}
+}

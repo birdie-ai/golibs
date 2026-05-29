@@ -70,5 +70,10 @@ func NewJSONRequest(ctx context.Context, method, url string, data any) (*http.Re
 	if err != nil {
 		return nil, err
 	}
-	return NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+	req, err := NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req, nil
 }
