@@ -21,22 +21,19 @@ func TestSetRequestHeaders(t *testing.T) {
 	defer cancel()
 
 	const (
-		wantTraceID   = "traceid"
-		wantOrgID     = "orgid"
-		wantUserID    = "userid"
-		wantUserEmail = "user@birdie.ai"
+		wantTraceID = "traceid"
+		wantOrgID   = "orgid"
+		wantUserID  = "userid"
 	)
 
 	ctx = tracing.CtxWithOrgID(ctx, wantOrgID)
 	ctx = tracing.CtxWithTraceID(ctx, wantTraceID)
 	ctx = tracing.CtxWithUserID(ctx, wantUserID)
-	ctx = tracing.CtxWithUserEmail(ctx, wantUserEmail)
 
 	tracing.SetRequestHeaders(ctx, req)
 	gotTraceID := req.Header.Get("traceparent")
 	gotOrgID := req.Header.Get("Birdie-Organization-ID")
 	gotUserID := req.Header.Get("Birdie-User-Id")
-	gotUserEmail := req.Header.Get("Birdie-User-Email")
 
 	if gotTraceID != wantTraceID {
 		t.Fatalf("got traceID %q; want %q", gotTraceID, wantTraceID)
@@ -46,9 +43,6 @@ func TestSetRequestHeaders(t *testing.T) {
 	}
 	if gotUserID != wantUserID {
 		t.Fatalf("got userID %q; want %q", gotUserID, wantUserID)
-	}
-	if gotUserEmail != wantUserEmail {
-		t.Fatalf("got userEmail %q; want %q", gotUserEmail, wantUserEmail)
 	}
 }
 
@@ -70,7 +64,6 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		wantTraceID   = "test-trace-id"
 		wantOrgID     = "test-org-id"
 		wantUserID    = "test-user-id"
-		wantUserEmail = "test@birdie.ai"
 		wantStatus    = 201 // should be a non-default status, to actually test things.
 		wantBody      = "Worked!"
 		wantUserAgent = "test-user-agent"
@@ -80,7 +73,6 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		gotTraceID        string
 		gotOrgID          string
 		gotUserID         string
-		gotUserEmail      string
 		gotUserAgent      string
 		gotResponseWriter http.ResponseWriter
 	)
@@ -89,7 +81,6 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 		gotTraceID = tracing.CtxGetTraceID(req.Context())
 		gotOrgID = tracing.CtxGetOrgID(req.Context())
 		gotUserID = tracing.CtxGetUserID(req.Context())
-		gotUserEmail = tracing.CtxGetUserEmail(req.Context())
 		gotUserAgent = tracing.CtxGetInboundUserAgent(req.Context())
 		w.WriteHeader(wantStatus)
 		_, _ = fmt.Fprint(w, wantBody)
@@ -100,7 +91,6 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 	req.Header.Set("traceparent", wantTraceID)
 	req.Header.Set("Birdie-Organization-ID", wantOrgID)
 	req.Header.Set("Birdie-User-Id", wantUserID)
-	req.Header.Set("Birdie-User-Email", wantUserEmail)
 	req.Header.Set("User-Agent", wantUserAgent)
 	w := httptest.NewRecorder()
 
@@ -117,9 +107,6 @@ func TestIntrumentedHTTPHandler(t *testing.T) {
 	}
 	if gotUserID != wantUserID {
 		t.Fatalf("got %q != want %q", gotUserID, wantUserID)
-	}
-	if gotUserEmail != wantUserEmail {
-		t.Fatalf("got %q != want %q", gotUserEmail, wantUserEmail)
 	}
 	if gotUserAgent != wantUserAgent {
 		t.Fatalf("got %q != want %q", gotOrgID, wantOrgID)
@@ -203,7 +190,6 @@ func TestCtxWithTraceOrgRequestIDUserAgent(t *testing.T) {
 		wantOrgID     = "org-id-value"
 		wantUserAgent = "useragent-value"
 		wantUserID    = "user-id-value"
-		wantUserEmail = "user@birdie.ai"
 	)
 	ctx := context.Background()
 
@@ -223,17 +209,12 @@ func TestCtxWithTraceOrgRequestIDUserAgent(t *testing.T) {
 	if got != "" {
 		t.Fatalf("unexpected user id: %q", got)
 	}
-	got = tracing.CtxGetUserEmail(ctx)
-	if got != "" {
-		t.Fatalf("unexpected user email: %q", got)
-	}
 
 	ctx = tracing.CtxWithRequestID(ctx, wantRequestID)
 	ctx = tracing.CtxWithTraceID(ctx, wantTraceID)
 	ctx = tracing.CtxWithOrgID(ctx, wantOrgID)
 	ctx = tracing.CtxWithInboundUserAgent(ctx, wantUserAgent)
 	ctx = tracing.CtxWithUserID(ctx, wantUserID)
-	ctx = tracing.CtxWithUserEmail(ctx, wantUserEmail)
 
 	got = tracing.CtxGetRequestID(ctx)
 	if got != wantRequestID {
@@ -256,9 +237,5 @@ func TestCtxWithTraceOrgRequestIDUserAgent(t *testing.T) {
 	got = tracing.CtxGetUserID(ctx)
 	if got != wantUserID {
 		t.Fatalf("got %q != want %q", got, wantUserID)
-	}
-	got = tracing.CtxGetUserEmail(ctx)
-	if got != wantUserEmail {
-		t.Fatalf("got %q != want %q", got, wantUserEmail)
 	}
 }
