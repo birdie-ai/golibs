@@ -123,27 +123,26 @@ func parseStmtExpr(in []byte) (Stmt, []byte, error) {
 		return Stmt{}, nil, err
 	}
 	in = skipblank(in)
-	ident, in, err = lexIdent(in)
-	isNotIdent := errors.Is(err, ErrNotIdent)
-	if err != nil && !isNotIdent {
-		return Stmt{}, nil, err
-	}
-	if isNotIdent {
-	    return stmt, in, nil
-	}
-	if !strings.EqualFold(ident, "PRUNING") {
-		return Stmt{}, nil, fmt.Errorf("%w: unexpected token %q", ErrSyntax, ident)
-	}
-	ident, in, err = lexIdent(in)
-	if err != nil {
-		return Stmt{}, nil, fmt.Errorf(`%w: expected BY keyword`, ErrSyntax, err)
-	}
-	if !strings.EqualFold(ident, "BY") {
-		return Stmt{}, nil, fmt.Errorf("%w: unexpected token %q", ErrSyntax, ident)
-	}
-	stmt.Pruning, in, err = parsePruning(in)
-	if err != nil {
-		return Stmt{}, nil, err
+	if len(in) >= 7 && bytes.EqualFold(in[:7], []byte("PRUNING")) {
+		in = skipblank(in[7:])
+		if len(in) == 0 {
+			return Stmt{}, nil, errUnexpectedEOF()
+		}
+		ident, in, err = lexIdent(in)
+		if err != nil {
+			return Stmt{}, nil, fmt.Errorf("%w: expected BY keyword: %w", ErrSyntax, err)
+		}
+		if !strings.EqualFold(ident, "BY") {
+			return Stmt{}, nil, fmt.Errorf("%w: expected BY keyword, got %q", ErrSyntax, ident)
+		}
+		in = skipblank(in)
+		if len(in) == 0 {
+			return Stmt{}, nil, errUnexpectedEOF()
+		}
+		stmt.Pruning, in, err = parsePruning(in)
+		if err != nil {
+			return Stmt{}, nil, err
+		}
 	}
 	return stmt, in, nil
 }
@@ -724,22 +723,8 @@ func parseWhereObject(in []byte) (Where, []byte, error) {
 }
 
 func parsePruning(in []byte) (Pruning, []byte, error) {
-	// PRUNING BY is optional
-	if len(in) < 7 || !bytes.EqualFold(in[:7], []byte("PRUNING")) {
-		return nil, in, nil
-	}
-	in = skipblank(in[7:])
-	if len(in) == 0 {
-		return nil, nil, errUnexpectedEOF()
-	}
-	ident, in, err := lexIdent(in)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %w", ErrSyntax, err)
-	}
-	if !strings.EqualFold(ident, "BY") {
-		return nil, nil, fmt.Errorf("%w: expected BY token after PRUNING", ErrSyntax)
-	}
 	pruning := Pruning{}
+	var err error
 	for {
 		in = skipblank(in)
 		if len(in) == 0 {
