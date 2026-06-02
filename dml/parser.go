@@ -123,26 +123,30 @@ func parseStmtExpr(in []byte) (Stmt, []byte, error) {
 		return Stmt{}, nil, err
 	}
 	in = skipblank(in)
-	if len(in) >= 7 && bytes.EqualFold(in[:7], []byte("PRUNING")) {
-		in = skipblank(in[7:])
-		if len(in) == 0 {
-			return Stmt{}, nil, errUnexpectedEOF()
-		}
-		ident, in, err = lexIdent(in)
-		if err != nil {
-			return Stmt{}, nil, fmt.Errorf("%w: expected BY keyword: %w", ErrSyntax, err)
-		}
-		if !strings.EqualFold(ident, "BY") {
-			return Stmt{}, nil, fmt.Errorf("%w: expected BY keyword, got %q", ErrSyntax, ident)
-		}
-		in = skipblank(in)
-		if len(in) == 0 {
-			return Stmt{}, nil, errUnexpectedEOF()
-		}
-		stmt.Pruning, in, err = parsePruning(in)
-		if err != nil {
-			return Stmt{}, nil, err
-		}
+	saved := in
+	ident, in, err = lexIdent(in)
+	isNotIdent := errors.Is(err, ErrNotIdent)
+	if err != nil && !isNotIdent {
+		return Stmt{}, nil, fmt.Errorf("%w: %w", ErrSyntax, err)
+	}
+	if isNotIdent {
+		return stmt, saved, nil
+	}
+	if !strings.EqualFold(ident, "PRUNING") {
+		return Stmt{}, nil, fmt.Errorf("%w: unexpected token %q", ErrSyntax, ident)
+	}
+	in = skipblank(in)
+	ident, in, err = lexIdent(in)
+	if err != nil {
+		return Stmt{}, nil, fmt.Errorf("%w: expected BY keyword: %w", ErrSyntax, err)
+	}
+	if !strings.EqualFold(ident, "BY") {
+		return Stmt{}, nil, fmt.Errorf("%w: unexpected token %q", ErrSyntax, ident)
+	}
+	in = skipblank(in)
+	stmt.Pruning, in, err = parsePruning(in)
+	if err != nil {
+		return Stmt{}, nil, err
 	}
 	return stmt, in, nil
 }
