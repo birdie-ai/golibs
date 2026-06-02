@@ -123,6 +123,24 @@ func parseStmtExpr(in []byte) (Stmt, []byte, error) {
 		return Stmt{}, nil, err
 	}
 	in = skipblank(in)
+	ident, in, err = lexIdent(in)
+	isNotIdent := errors.Is(err, ErrNotIdent)
+	if err != nil && !isNotIdent {
+		return Stmt{}, nil, err
+	}
+	if isNotIdent {
+	    return stmt, in, nil
+	}
+	if !strings.EqualFold(ident, "PRUNING") {
+		return Stmt{}, nil, fmt.Errorf("%w: unexpected token %q", ErrSyntax, ident)
+	}
+	ident, in, err = lexIdent(in)
+	if err != nil {
+		return Stmt{}, nil, fmt.Errorf(`%w: expected BY keyword`, ErrSyntax, err)
+	}
+	if !strings.EqualFold(ident, "BY") {
+		return Stmt{}, nil, fmt.Errorf("%w: unexpected token %q", ErrSyntax, ident)
+	}
 	stmt.Pruning, in, err = parsePruning(in)
 	if err != nil {
 		return Stmt{}, nil, err
