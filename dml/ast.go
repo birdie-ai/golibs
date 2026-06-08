@@ -12,11 +12,12 @@ type (
 	// The [Stmt.Inner] are data manipulations in the inner relationships of the outer entity.
 	// All stmts in the [Stmt.Inner] are restricted by the `WHERE` clause in the outer stmt.
 	Stmt struct {
-		Entity unique.Handle[string]
-		Op     OpKind
-		Assign Assign
-		Inner  Stmts
-		Where  Where
+		Entity  unique.Handle[string]
+		Op      OpKind
+		Assign  Assign
+		Inner   Stmts
+		Where   Where
+		Pruning Pruning
 	}
 
 	// Stmts is a list of statements.
@@ -50,6 +51,9 @@ type (
 
 	// Where clause of the update.
 	Where map[string]any
+
+	// Pruning by fields.
+	Pruning map[string]any
 
 	// Primtype is a constraint for the primitive types supported in dml.
 	Primtype interface {

@@ -788,6 +788,58 @@ func TestEncode(t *testing.T) {
 			},
 			want: `DELETE feedbacks a.b[k] : k="test",a.b.c[k] => v : k="country" AND v="us" WHERE {"id":"abc","org_id":"xyz"};`,
 		},
+		{
+			name: "stmt with pruning by single field",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"id": "abc",
+					},
+					Pruning: dml.Pruning{
+						"organization_id": "org-1",
+					},
+				},
+			},
+			want: `SET feedbacks a=1 WHERE id="abc" PRUNING BY organization_id="org-1";`,
+		},
+		{
+			name: "stmt with pruning by multiple fields",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"id": "abc",
+					},
+					Pruning: dml.Pruning{
+						"organization_id": "org-1",
+						"posted_at":       "2026-05-27 15:04:28+00:00",
+					},
+				},
+			},
+			want: `SET feedbacks a=1 WHERE id="abc" PRUNING BY organization_id="org-1",posted_at="2026-05-27 15:04:28+00:00";`,
+		},
+		{
+			name: "invalid ident in pruning",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"id": "abc",
+					},
+					Pruning: dml.Pruning{
+						"$bad": "x",
+					},
+				},
+			},
+			err: dml.ErrNotIdent,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer

@@ -122,6 +122,32 @@ func parseStmtExpr(in []byte) (Stmt, []byte, error) {
 	if err != nil {
 		return Stmt{}, nil, err
 	}
+	in = skipblank(in)
+	ident, newInput, err := lexIdent(in)
+	isNotIdent := errors.Is(err, ErrNotIdent)
+	if err != nil && !isNotIdent {
+		return Stmt{}, nil, fmt.Errorf("%w: %w", ErrSyntax, err)
+	}
+	if isNotIdent {
+		return stmt, in, nil
+	}
+	in = newInput
+	if !strings.EqualFold(ident, "PRUNING") {
+		return Stmt{}, nil, fmt.Errorf("%w: unexpected token %q", ErrSyntax, ident)
+	}
+	in = skipblank(in)
+	ident, in, err = lexIdent(in)
+	if err != nil {
+		return Stmt{}, nil, fmt.Errorf("%w: expected BY keyword: %w", ErrSyntax, err)
+	}
+	if !strings.EqualFold(ident, "BY") {
+		return Stmt{}, nil, fmt.Errorf("%w: unexpected token %q", ErrSyntax, ident)
+	}
+	in = skipblank(in)
+	stmt.Pruning, in, err = parsePruning(in)
+	if err != nil {
+		return Stmt{}, nil, err
+	}
 	return stmt, in, nil
 }
 
@@ -698,6 +724,50 @@ func parseWhereObject(in []byte) (Where, []byte, error) {
 		}
 	}
 	return where, in, nil
+}
+
+func parsePruning(in []byte) (Pruning, []byte, error) {
+	pruning := Pruning{}
+	var err error
+	for {
+		in = skipblank(in)
+		if len(in) == 0 {
+			return nil, nil, errUnexpectedEOF()
+		}
+		var key string
+		key, in, err = lexIdent(in)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+		}
+		in = skipblank(in)
+		if len(in) == 0 {
+			return nil, nil, errUnexpectedEOF()
+		}
+		if in[0] != '=' {
+			return nil, nil, fmt.Errorf("%w: expected '=' in PRUNING BY clause", ErrSyntax)
+		}
+		in = skipblank(in[1:])
+		if len(in) == 0 {
+			return nil, nil, errUnexpectedEOF()
+		}
+		var val any
+		in, err = parseJSON(in, &val)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: parsing PRUNING value as JSON: %v", ErrSyntax, err)
+		}
+		if _, ok := pruning[key]; ok {
+			return nil, nil, fmt.Errorf("%w: duplicate PRUNING field %q", ErrClauseDuplicated, key)
+		}
+		pruning[key] = val
+		in = skipblank(in)
+		if len(in) == 0 {
+			return nil, nil, errUnexpectedEOF()
+		}
+		if in[0] != ',' {
+			return pruning, in, nil
+		}
+		in = in[1:]
+	}
 }
 
 func mergeclauses(dst, src Where) error {

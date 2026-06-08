@@ -822,6 +822,67 @@ func TestParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY organization_id="org-1";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where:  dml.Where{"id": "abc"},
+					Pruning: dml.Pruning{
+						"organization_id": "org-1",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY organization_id="org-1",posted_at="ts";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where:  dml.Where{"id": "abc"},
+					Pruning: dml.Pruning{
+						"organization_id": "org-1",
+						"posted_at":       "ts",
+					},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE id="abc" PRUNING BY organization_id = "org-1" , posted_at = "ts";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where:  dml.Where{"id": "abc"},
+					Pruning: dml.Pruning{
+						"organization_id": "org-1",
+						"posted_at":       "ts",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING;`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY;`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING WRONG organization_id="org-1";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY a="x",a="y";`,
+			err:  dml.ErrClauseDuplicated,
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {

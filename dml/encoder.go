@@ -92,6 +92,11 @@ func validate(stmt Stmt) error {
 			errs = append(errs, fmt.Errorf("clause with invalid field %s: %w", k, ErrNotIdent))
 		}
 	}
+	for k := range stmt.Pruning {
+		if !isIdent(k) {
+			errs = append(errs, fmt.Errorf("clause with invalid field %s: %w", k, ErrNotIdent))
+		}
+	}
 	for _, innerStmt := range stmt.Inner {
 		errs = append(errs, validate(innerStmt))
 	}
@@ -143,6 +148,37 @@ func encodeStmtExpr(w io.Writer, stmt Stmt) error {
 	err = encodeClauses(w, stmt.Where)
 	if err != nil {
 		return err
+	}
+	if len(stmt.Pruning) > 0 {
+		err = write(w, " PRUNING BY ")
+		if err != nil {
+			return err
+		}
+		err = encodePruning(w, stmt.Pruning)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func encodePruning(w io.Writer, pruning Pruning) error {
+	keys := slices.Sorted(maps.Keys(pruning))
+	for i, k := range keys {
+		d, err := json.Marshal(pruning[k])
+		if err != nil {
+			return err
+		}
+		err = write(w, k+"="+string(d))
+		if err != nil {
+			return err
+		}
+		if i+1 < len(keys) {
+			err = write(w, ",")
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
