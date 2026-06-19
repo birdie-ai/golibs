@@ -219,6 +219,31 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			name: "stmt with single $and using object",
+			in:   `SEARCH feedbacks id WHERE {"$and": {"id": 1}};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Op:     dql.SEARCH,
+						Entity: "feedbacks",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.AND,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("id"),
+									RHS: dql.NewNumberExpr(1),
+									OP:  dql.Eq,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "exists query",
 			in: `SEARCH orders id WHERE {
 				"$and": [
@@ -438,6 +463,35 @@ func TestParser(t *testing.T) {
 									LHS: dql.Path("id"),
 									OP:  dql.In,
 									RHS: dql.NewPathExpr(dql.NewVarExpr("myvar"), dql.NewFieldStep("docs")),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "stmt with single NOT",
+			in: `SEARCH orders id WHERE {
+				"$not": {
+					"feedbacks.text": "value"
+				}
+			};`,
+			out: dql.Program{
+				Stmts: dql.Stmts{
+					{
+						Op:     dql.SEARCH,
+						Entity: "orders",
+						Fields: []dql.Expr{
+							dql.NewVarExpr("id"),
+						},
+						Where: &dql.QueryExpr{
+							Type: dql.NOT,
+							Children: []*dql.QueryExpr{
+								{
+									LHS: dql.Path("feedbacks", "text"),
+									RHS: dql.NewStringExpr("value"),
+									OP:  dql.Eq,
 								},
 							},
 						},

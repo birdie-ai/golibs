@@ -60,12 +60,21 @@ func parseLegacyQuery(l *lexer) (query *QueryExpr, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if next.Type != lbrackToken {
+		var qlist []*QueryExpr
+		switch next.Type {
+		case lbrackToken:
+			qlist, err = parseLegacyPredicateList(l)
+			if err != nil {
+				return nil, err
+			}
+		case lbraceToken:
+			q, err := parseLegacyPredicate(l)
+			if err != nil {
+				return nil, err
+			}
+			qlist = []*QueryExpr{q}
+		default:
 			return nil, errUnexpectedToken(next, `"["`)
-		}
-		qlist, err := parseLegacyPredicateList(l)
-		if err != nil {
-			return nil, err
 		}
 		query.Children = qlist
 		// TODO(i4k): check if legacy supports more than one logical operator in the same level.
