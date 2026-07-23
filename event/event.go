@@ -308,6 +308,7 @@ func (s *Subscription[T]) ServeBatch(
 			return
 		}
 		sampleBatchSize(s.name, len(batch))
+		ctx = slog.NewContext(ctx, slog.FromCtx(ctx).With("event_name", s.name))
 		bh(ctx, batch)
 	})
 }
@@ -584,7 +585,7 @@ func serializeEvent[T any](ctx context.Context, eventName string, event T) ([]by
 func createEnvelope[T any](ctx context.Context, eventName string, data []byte) (context.Context, Envelope[T], error) {
 	var event Envelope[T]
 
-	log := slog.Default()
+	log := slog.FromCtx(ctx)
 
 	if err := json.Unmarshal(data, &event); err != nil {
 		return nil, event, fmt.Errorf("parsing event %q as JSON, event: %q, error: %v", eventName, string(data), err)
@@ -600,6 +601,7 @@ func createEnvelope[T any](ctx context.Context, eventName string, data []byte) (
 
 	log = log.With("request_id", uuid.NewString())
 	log = log.With("trace_id", event.TraceID)
+	log = log.With("event_name", eventName)
 	ctx = tracing.CtxWithTraceID(ctx, event.TraceID)
 
 	if event.OrgID != "" {
