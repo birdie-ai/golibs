@@ -308,6 +308,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 					// We might have partial results, we cant ack/nack any message, just log.
 					slog.Error("panic: message subscription: handling message",
 						"error", err,
+						"event_name", s.eventName,
 						"events_total", len(events),
 						"batch_size", s.batchSize,
 						"batch_window", batchWindow,
@@ -315,6 +316,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 				}
 			}()
 
+			ctx = slog.NewContext(ctx, slog.FromCtx(ctx).With("event_name", s.eventName))
 			bh(ctx, events)
 		})
 	}
