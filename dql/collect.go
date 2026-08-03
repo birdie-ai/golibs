@@ -57,6 +57,10 @@ func collectFields(e Expr) []string {
 			}
 		}
 		fields = append(fields, path)
+	case FncallExpr:
+		for _, arg := range v.Args {
+			fields = append(fields, collectFields(arg)...)
+		}
 	}
 
 	return fields

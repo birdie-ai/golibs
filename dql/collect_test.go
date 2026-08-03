@@ -38,6 +38,16 @@ func TestCollect(t *testing.T) {
 			in:   "SEARCH feedbacks id ORDER BY posted_at DESC;",
 			want: []string{"id", "posted_at"},
 		},
+		{
+			name: "function call",
+			in:   "SEARCH feedbacks a, fn(b, c, d);",
+			want: []string{"a", "b", "c", "d"},
+		},
+		{
+			name: "nested function call",
+			in:   "SEARCH feedbacks a, fn2(fn1(b), c);",
+			want: []string{"a", "b", "c"},
+		},
 	}
 
 	for _, tt := range tests {
