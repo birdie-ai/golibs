@@ -1,7 +1,6 @@
 package dql
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 )
@@ -9,14 +8,14 @@ import (
 // CollectFields returns all of the field names present within a statement.
 //
 // The output of this function is unordered, and may change with each call.
-func CollectFields(stmt Stmt) []string {
+func CollectFields(stmt Stmt) []StaticPath {
 	// Use a map to collect fields to avoid needing to dedup the end result
-	fields := map[string]struct{}{}
+	fields := map[string]StaticPath{}
 
 	if len(stmt.Fields) > 0 {
 		for _, f := range stmt.Fields {
 			for _, collectedField := range collectFields(f) {
-				fields[collectedField] = struct{}{}
+				fields[collectedField.String()] = collectedField
 			}
 		}
 	}
@@ -27,7 +26,7 @@ func CollectFields(stmt Stmt) []string {
 
 	if len(stmt.OrderBy) > 0 {
 		for _, o := range stmt.OrderBy {
-			fields[o.Field.String()] = struct{}{}
+			fields[o.Field.String()] = o.Field
 		}
 	}
 
@@ -36,18 +35,18 @@ func CollectFields(stmt Stmt) []string {
 	// }
 
 	if len(fields) > 0 {
-		return slices.Collect(maps.Keys(fields))
+		return slices.Collect(maps.Values(fields))
 	}
 
-	return []string{}
+	return []StaticPath{}
 }
 
 // collectFields returns the field names for any [Expr].
-func collectFields(e Expr) []string {
-	fields := []string{}
+func collectFields(e Expr) []StaticPath {
+	fields := []StaticPath{}
 	switch v := e.(type) {
 	case VarExpr:
-		fields = append(fields, v.Value)
+		fields = append(fields, []string{v.Value})
 	case PathExpr:
 		base := collectFields(v.Base)
 		// PathExpr has no base, returning the collected fields.
@@ -58,10 +57,10 @@ func collectFields(e Expr) []string {
 		if !isNamedField(v.Base) {
 			return base
 		}
-		path := base[0]
+		path := []string{base[0][0]}
 		for _, s := range v.Steps {
 			if s.Type == FieldStep {
-				path = fmt.Sprintf("%s.%s", path, s.Field)
+				path = append(path, s.Field)
 			}
 		}
 		fields = append(fields, path)

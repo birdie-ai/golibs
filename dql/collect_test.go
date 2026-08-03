@@ -12,56 +12,81 @@ func TestCollect(t *testing.T) {
 	tests := []struct {
 		name string
 		in   string
-		want []string
+		want []dql.StaticPath
 	}{
 		{
 
 			name: "no fields",
 			in:   "SEARCH feedbacks;",
-			want: []string{},
+			want: []dql.StaticPath{},
 		},
 		{
 
 			name: "selected fields",
 			in:   "SEARCH feedbacks id,text;",
-			want: []string{"id", "text"},
+			want: []dql.StaticPath{
+				{"id"},
+				{"text"},
+			},
 		},
 		{
 
 			name: "selected custom_fields",
 			in:   "SEARCH feedbacks custom_fields.a.b;",
-			want: []string{"custom_fields.a.b"},
+			want: []dql.StaticPath{
+				{"custom_fields", "a", "b"},
+			},
 		},
 		{
 
 			name: "order by fields",
 			in:   "SEARCH feedbacks id ORDER BY posted_at DESC;",
-			want: []string{"id", "posted_at"},
+			want: []dql.StaticPath{
+				{"id"},
+				{"posted_at"},
+			},
 		},
 		{
 			name: "function call",
 			in:   "SEARCH feedbacks a, fn(b, c, d);",
-			want: []string{"a", "b", "c", "d"},
+			want: []dql.StaticPath{
+				{"a"},
+				{"b"},
+				{"c"},
+				{"d"},
+			},
 		},
 		{
 			name: "nested function call",
 			in:   "SEARCH feedbacks a, fn2(fn1(b), c);",
-			want: []string{"a", "b", "c"},
+			want: []dql.StaticPath{
+				{"a"},
+				{"b"},
+				{"c"},
+			},
 		},
 		{
 			name: "function call with select",
 			in:   "SEARCH feedbacks fn(custom_fields).key;",
-			want: []string{"custom_fields"},
+			want: []dql.StaticPath{
+				{"custom_fields"},
+			},
 		},
 		{
 			name: "function call with key select",
 			in:   "SEARCH feedbacks fn(custom_fields).[\"key\"];",
-			want: []string{"custom_fields"},
+			want: []dql.StaticPath{
+				{"custom_fields"},
+			},
 		},
 		{
 			name: "nested function call with select",
 			in:   "SEARCH feedbacks fn(fn2(a).c, b).d, e;",
-			want: []string{"a", "b", "e"},
+			want: []dql.StaticPath{
+				{"a"},
+				{"b"},
+				{"e"},
+			},
 		},
 	}
 
