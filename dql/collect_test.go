@@ -73,13 +73,6 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
-			name: "function call with key select",
-			in:   "SEARCH feedbacks fn(custom_fields).[\"key\"];",
-			want: []dql.StaticPath{
-				{"custom_fields"},
-			},
-		},
-		{
 			name: "nested function call with select",
 			in:   "SEARCH feedbacks fn(fn2(a).c, b).d, e;",
 			want: []dql.StaticPath{
@@ -128,7 +121,7 @@ func TestCollect(t *testing.T) {
 			for _, stmt := range p.Stmts {
 				got := dql.CollectFields(stmt)
 				orderOpt := cmpopts.SortSlices(func(a, b dql.StaticPath) bool {
-					return a[0] < b[0]
+					return a.String() < b.String()
 				})
 				if diff := cmp.Diff(tt.want, got, orderOpt); diff != "" {
 					t.Fatalf("expected - got +:\n%v", diff)

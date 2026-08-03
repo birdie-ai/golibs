@@ -60,7 +60,7 @@ func collectFields(e Expr) []StaticPath {
 		if !isNamedField(v.Base) {
 			return base
 		}
-		path := []string{base[0][0]}
+		path := base[0]
 		for _, s := range v.Steps {
 			if s.Type == FieldStep {
 				path = append(path, s.Field)
