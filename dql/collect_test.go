@@ -48,6 +48,16 @@ func TestCollect(t *testing.T) {
 			in:   "SEARCH feedbacks a, fn2(fn1(b), c);",
 			want: []string{"a", "b", "c"},
 		},
+		{
+			name: "function call with select",
+			in:   "SEARCH feedbacks fn(a).b;",
+			want: []string{"a"},
+		},
+		{
+			name: "nested function call with select",
+			in:   "SEARCH feedbacks fn(fn2(a).c, b).d, e;",
+			want: []string{"a", "b", "e"},
+		},
 	}
 
 	for _, tt := range tests {
