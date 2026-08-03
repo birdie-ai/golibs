@@ -194,7 +194,7 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 		}()
 		ctx, event, err := createEnvelope[T](ctx, s.eventName, msg.Data)
 		if err != nil {
-			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
+			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "error", err)
 			msg.Nack()
 			return
 		}
@@ -205,7 +205,7 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 		sampleProcess(s.eventName, elapsed, float64(len(msg.Data)), err)
 
 		if err != nil {
-			slog.FromCtx(ctx).Error("event handling failed", "event_name", s.eventName, "error", err)
+			slog.FromCtx(ctx).Error("event handling failed", "error", err)
 			msg.Nack()
 			return
 		}
@@ -316,8 +316,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 				}
 			}()
 
-			ctx = slog.NewContext(ctx, slog.FromCtx(ctx).With("event_name", s.eventName))
-			bh(ctx, events)
+			handlerCtx := slog.NewContext(ctx, slog.FromCtx(ctx).With("event_name", s.eventName))
+			bh(handlerCtx, events)
 		})
 	}
 	wg.Wait()
@@ -386,7 +386,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 		err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 			ctx, event, err := createEnvelope[T](ctx, s.eventName, msg.Data)
 			if err != nil {
-				slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
+				slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "error", err)
 				msg.Nack()
 				return
 			}
