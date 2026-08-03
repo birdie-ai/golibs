@@ -21,9 +21,9 @@ func Collect(stmt Stmt) []string {
 		}
 	}
 
-	if stmt.Where != nil {
-		// TODO(Gu): Not yet implemented.
-	}
+	// TODO(Gu): Not yet implemented.
+	// if stmt.Where != nil {
+	// }
 
 	if len(stmt.OrderBy) > 0 {
 		for _, o := range stmt.OrderBy {
@@ -31,9 +31,9 @@ func Collect(stmt Stmt) []string {
 		}
 	}
 
-	if len(stmt.Aggs) > 0 {
-		// TODO(Gu): Not yet implemented.
-	}
+	// TODO(Gu): Not yet implemented.
+	// if len(stmt.Aggs) > 0 {
+	// }
 
 	if len(fields) > 0 {
 		return slices.Collect(maps.Keys(fields))
