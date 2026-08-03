@@ -272,6 +272,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 	fatalErr := make(chan error, maxConcurrency)
 	var wg sync.WaitGroup
 
+	log := slog.FromCtx(ctx).With("event_name", s.eventName)
+
 	for ctx.Err() == nil {
 		select {
 		case semaphore <- struct{}{}:
@@ -306,9 +308,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 					buf := make([]byte, size)
 					buf = buf[:runtime.Stack(buf, false)]
 					// We might have partial results, we cant ack/nack any message, just log.
-					slog.Error("panic: message subscription: handling message",
+					log.Error("panic: message subscription: handling message",
 						"error", err,
-						"event_name", s.eventName,
 						"events_total", len(events),
 						"batch_size", s.batchSize,
 						"batch_window", batchWindow,
@@ -316,7 +317,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 				}
 			}()
 
-			handlerCtx := slog.NewContext(ctx, slog.FromCtx(ctx).With("event_name", s.eventName))
+			handlerCtx := slog.NewContext(ctx, log)
 			bh(handlerCtx, events)
 		})
 	}
