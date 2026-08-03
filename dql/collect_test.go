@@ -50,8 +50,13 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			name: "function call with select",
-			in:   "SEARCH feedbacks fn(a).b;",
-			want: []string{"a"},
+			in:   "SEARCH feedbacks fn(custom_fields).key;",
+			want: []string{"custom_fields"},
+		},
+		{
+			name: "function call with key select",
+			in:   "SEARCH feedbacks fn(custom_fields).[\"key\"];",
+			want: []string{"custom_fields"},
 		},
 		{
 			name: "nested function call with select",
