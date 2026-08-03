@@ -72,7 +72,7 @@ func TestCollect(t *testing.T) {
 				orderOpt := cmpopts.SortSlices(func(a, b string) bool {
 					return a < b
 				})
-				if diff := cmp.Diff(got, tt.want, orderOpt); diff != "" {
+				if diff := cmp.Diff(tt.want, got, orderOpt); diff != "" {
 					t.Fatalf("expected - got +:\n%v", diff)
 				}
 			}

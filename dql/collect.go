@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-// Collect can be used to fetch all of the fields name present within a statement.
+// Collect returns all of the field names present within a statement.
 //
 // The output of this function is unordered, and may change with each call.
 func Collect(stmt Stmt) []string {
@@ -42,7 +42,7 @@ func Collect(stmt Stmt) []string {
 	return []string{}
 }
 
-// collectFields can be used to collect the field names for any [Expr].
+// collectFields returns the field names for any [Expr].
 func collectFields(e Expr) []string {
 	fields := []string{}
 	switch v := e.(type) {
