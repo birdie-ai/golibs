@@ -88,6 +88,34 @@ func TestCollect(t *testing.T) {
 				{"e"},
 			},
 		},
+		{
+			name: "where fields",
+			in: `
+			SEARCH feedbacks
+			WHERE id="1" AND
+				custom_fields.text="x";`,
+			want: []dql.StaticPath{
+				{"id"},
+				{"custom_fields", "text"},
+			},
+		},
+		{
+			name: "nested where fields",
+			in: `SEARCH feedbacks id WHERE {
+		    "$and": [
+				{
+					"posted_at": {
+						"$gte": "2026-01-01T00:00:00Z",
+						"$lt": "2027-01-01T00:00:00Z"
+					}
+				}
+			]
+			};`,
+			want: []dql.StaticPath{
+				{"id"},
+				{"posted_at"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -99,8 +127,8 @@ func TestCollect(t *testing.T) {
 
 			for _, stmt := range p.Stmts {
 				got := dql.CollectFields(stmt)
-				orderOpt := cmpopts.SortSlices(func(a, b string) bool {
-					return a < b
+				orderOpt := cmpopts.SortSlices(func(a, b dql.StaticPath) bool {
+					return a[0] < b[0]
 				})
 				if diff := cmp.Diff(tt.want, got, orderOpt); diff != "" {
 					t.Fatalf("expected - got +:\n%v", diff)

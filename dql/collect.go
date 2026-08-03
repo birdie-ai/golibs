@@ -20,9 +20,11 @@ func CollectFields(stmt Stmt) []StaticPath {
 		}
 	}
 
-	// TODO(Gu): Not yet implemented.
-	// if stmt.Where != nil {
-	// }
+	if stmt.Where != nil {
+		for _, f := range collectWhereFields(stmt.Where) {
+			fields[f.String()] = f
+		}
+	}
 
 	if len(stmt.OrderBy) > 0 {
 		for _, o := range stmt.OrderBy {
@@ -53,7 +55,8 @@ func collectFields(e Expr) []StaticPath {
 		if len(base) < 1 {
 			return base
 		}
-		// When evaluating the base path, only include named fields in the path
+		// When evaluating the base path, stop going "down" if the current
+		// base is something that isn't a named field.
 		if !isNamedField(v.Base) {
 			return base
 		}
@@ -83,4 +86,20 @@ func isNamedField(e Expr) bool {
 	}
 
 	return false
+}
+
+func collectWhereFields(q *QueryExpr) []StaticPath {
+	if q == nil {
+		return nil
+	}
+	switch q.Type {
+	case predicate:
+		return []StaticPath{q.LHS}
+	default:
+		fields := []StaticPath{}
+		for _, c := range q.Children {
+			fields = append(fields, collectWhereFields(c)...)
+		}
+		return fields
+	}
 }
