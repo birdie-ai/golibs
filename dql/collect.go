@@ -24,7 +24,9 @@ func Collect(stmt Stmt) []string {
 	}
 
 	if len(stmt.OrderBy) > 0 {
-		// TODO(Gu): Not yet implemented.
+		for _, o := range stmt.OrderBy {
+			fields[o.Field.String()] = struct{}{}
+		}
 	}
 
 	if len(stmt.Aggs) > 0 {

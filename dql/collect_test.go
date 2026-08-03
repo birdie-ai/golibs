@@ -5,6 +5,7 @@ import (
 
 	"github.com/birdie-ai/golibs/dql"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestCollect(t *testing.T) {
@@ -31,6 +32,12 @@ func TestCollect(t *testing.T) {
 			in:   "SEARCH feedbacks custom_fields.a.b;",
 			want: []string{"custom_fields.a.b"},
 		},
+		{
+
+			name: "order by fields",
+			in:   "SEARCH feedbacks id ORDER BY posted_at DESC;",
+			want: []string{"id", "posted_at"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -42,7 +49,10 @@ func TestCollect(t *testing.T) {
 
 			for _, stmt := range p.Stmts {
 				got := dql.Collect(stmt)
-				if diff := cmp.Diff(got, tt.want); diff != "" {
+				orderOpt := cmpopts.SortSlices(func(a, b string) bool {
+					return a < b
+				})
+				if diff := cmp.Diff(got, tt.want, orderOpt); diff != "" {
 					t.Fatalf("expected - got +:\n%v", diff)
 				}
 			}
