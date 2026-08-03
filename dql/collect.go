@@ -6,10 +6,10 @@ import (
 	"slices"
 )
 
-// Collect returns all of the field names present within a statement.
+// CollectFields returns all of the field names present within a statement.
 //
 // The output of this function is unordered, and may change with each call.
-func Collect(stmt Stmt) []string {
+func CollectFields(stmt Stmt) []string {
 	// Use a map to collect fields to avoid needing to dedup the end result
 	fields := map[string]struct{}{}
 

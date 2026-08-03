@@ -73,7 +73,7 @@ func TestCollect(t *testing.T) {
 			}
 
 			for _, stmt := range p.Stmts {
-				got := dql.Collect(stmt)
+				got := dql.CollectFields(stmt)
 				orderOpt := cmpopts.SortSlices(func(a, b string) bool {
 					return a < b
 				})
