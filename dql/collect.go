@@ -32,9 +32,14 @@ func CollectFields(stmt Stmt) []StaticPath {
 		}
 	}
 
-	// TODO(Gu): Not yet implemented.
-	// if len(stmt.Aggs) > 0 {
-	// }
+	if len(stmt.Aggs) > 0 {
+		for _, v := range stmt.Aggs {
+			fs := collectAggFields(v)
+			for _, f := range fs {
+				fields[f.String()] = f
+			}
+		}
+	}
 
 	if len(fields) > 0 {
 		return slices.Collect(maps.Values(fields))
@@ -113,4 +118,14 @@ func collectWhereFields(q *QueryExpr) []StaticPath {
 		}
 		return fields
 	}
+}
+
+func collectAggFields(a Agg) []StaticPath {
+	fields := []StaticPath{}
+
+	fields = append(fields, collectFields(a.Func)...)
+	for _, agg := range a.Children {
+		fields = append(fields, collectAggFields(agg)...)
+	}
+	return fields
 }

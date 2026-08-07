@@ -154,6 +154,24 @@ func TestCollect(t *testing.T) {
 				{"custom_fields", "category"},
 			},
 		},
+		{
+			name: "aggs",
+			in: `
+			SEARCH feedbacks AGGS {
+				by_category: terms(category) LIMIT 10,
+				by_month: date_histogram(custom_fields.some_date) {
+					by_labels: terms("labels") LIMIT 3
+				},
+			};
+			`,
+			want: []dql.StaticPath{
+				{"category"},
+				{"custom_fields", "some_date"},
+				// TODO(Gu): do we want to support this? How to disambiguate?
+				// If the agg accepts constant inputs, we can't parse this.
+				// {"labels"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
