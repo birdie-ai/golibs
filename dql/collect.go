@@ -94,7 +94,9 @@ func collectWhereFields(q *QueryExpr) []StaticPath {
 	}
 	switch q.Type {
 	case predicate:
-		return []StaticPath{q.LHS}
+		fields := []StaticPath{q.LHS}
+		fields = append(fields, collectFields(q.RHS)...)
+		return fields
 	default:
 		fields := []StaticPath{}
 		for _, c := range q.Children {

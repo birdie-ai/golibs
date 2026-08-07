@@ -109,6 +109,19 @@ func TestCollect(t *testing.T) {
 				{"posted_at"},
 			},
 		},
+		{
+			name: "where fields rhs",
+			in: `
+			SEARCH feedbacks
+			WHERE custom_fields.a=custom_fields.b AND 
+				c=fn(custom_fields.d).e;`,
+			want: []dql.StaticPath{
+				{"custom_fields", "a"},
+				{"custom_fields", "b"},
+				{"c"},
+				{"custom_fields", "d"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
