@@ -48,12 +48,13 @@ func TestCollectFields(t *testing.T) {
 		},
 		{
 			name: "function call",
-			in:   "SEARCH feedbacks a, fn(b, c, d);",
+			in:   `SEARCH feedbacks a, fn(b, c, d), f({"e": e});`,
 			want: []dql.StaticPath{
 				{"a"},
 				{"b"},
 				{"c"},
 				{"d"},
+				{"e"},
 			},
 		},
 		{
@@ -90,6 +91,16 @@ func TestCollectFields(t *testing.T) {
 			want: []dql.StaticPath{
 				{"id"},
 				{"custom_fields", "text"},
+			},
+		},
+		{
+			name: "where object",
+			in: `
+			SEARCH feedbacks
+			WHERE enriched_fields={"sentiment": custom_fields.expected_sentiment};`,
+			want: []dql.StaticPath{
+				{"enriched_fields"},
+				{"custom_fields", "expected_sentiment"},
 			},
 		},
 		{

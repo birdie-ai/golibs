@@ -58,6 +58,10 @@ func collectFields(e Expr) []StaticPath {
 		for _, i := range v.Items {
 			fields = append(fields, collectFields(i)...)
 		}
+	case ObjectExpr:
+		for _, v := range v.Keyvals {
+			fields = append(fields, collectFields(v)...)
+		}
 	case PathExpr:
 		base := collectFields(v.Base)
 		// PathExpr has no base, returning the collected fields.
