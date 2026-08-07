@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func TestCollect(t *testing.T) {
+func TestCollectFields(t *testing.T) {
 	tests := []struct {
 		name string
 		in   string
