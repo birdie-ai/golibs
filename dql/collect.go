@@ -6,7 +6,6 @@ import (
 )
 
 // CollectFields returns all of the field names present within a statement.
-//
 // The output of this function is unordered, and may change with each call.
 func CollectFields(stmt Stmt) []StaticPath {
 	// Use a map to collect fields to avoid needing to dedup the end result
@@ -26,18 +25,14 @@ func CollectFields(stmt Stmt) []StaticPath {
 		}
 	}
 
-	if len(stmt.OrderBy) > 0 {
-		for _, o := range stmt.OrderBy {
-			fields[o.Field.String()] = o.Field
-		}
+	for _, o := range stmt.OrderBy {
+		fields[o.Field.String()] = o.Field
 	}
 
-	if len(stmt.Aggs) > 0 {
-		for _, v := range stmt.Aggs {
-			fs := collectAggFields(v)
-			for _, f := range fs {
-				fields[f.String()] = f
-			}
+	for _, v := range stmt.Aggs {
+		fs := collectAggFields(v)
+		for _, f := range fs {
+			fields[f.String()] = f
 		}
 	}
 
@@ -74,14 +69,11 @@ func collectFields(e Expr) []StaticPath {
 			return base
 		}
 		path := base[0]
-	StepLoop:
 		for _, s := range v.Steps {
-			switch s.Type {
-			case FieldStep:
-				path = append(path, s.Field)
-			case IndexStep:
-				break StepLoop
+			if s.Type != FieldStep {
+				break
 			}
+			path = append(path, s.Field)
 		}
 		fields = append(fields, path)
 	case FncallExpr:
