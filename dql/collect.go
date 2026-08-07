@@ -74,9 +74,13 @@ func collectFields(e Expr) []StaticPath {
 			return base
 		}
 		path := base[0]
+	StepLoop:
 		for _, s := range v.Steps {
-			if s.Type == FieldStep {
+			switch s.Type {
+			case FieldStep:
 				path = append(path, s.Field)
+			case IndexStep:
+				break StepLoop
 			}
 		}
 		fields = append(fields, path)

@@ -39,6 +39,15 @@ func TestCollectFields(t *testing.T) {
 		},
 		{
 
+			name: "select path with idx",
+			in:   "SEARCH feedbacks custom_fields.a.[0].b, custom_fields.b.[custom_fields.index].c;",
+			want: []dql.StaticPath{
+				{"custom_fields", "a"},
+				{"custom_fields", "b"},
+			},
+		},
+		{
+
 			name: "order by fields",
 			in:   "SEARCH feedbacks id ORDER BY posted_at DESC;",
 			want: []dql.StaticPath{
