@@ -49,6 +49,10 @@ func collectFields(e Expr) []StaticPath {
 	switch v := e.(type) {
 	case VarExpr:
 		fields = append(fields, []string{v.Value})
+	case ListExpr:
+		for _, i := range v.Items {
+			fields = append(fields, collectFields(i)...)
+		}
 	case PathExpr:
 		base := collectFields(v.Base)
 		// PathExpr has no base, returning the collected fields.
@@ -94,10 +98,15 @@ func collectWhereFields(q *QueryExpr) []StaticPath {
 	}
 	switch q.Type {
 	case predicate:
+		// Predicate type query - where we can actually analyse the individual
+		// values.
 		fields := []StaticPath{q.LHS}
 		fields = append(fields, collectFields(q.RHS)...)
+		fields = append(fields, collectFields(q.Lower.Val)...)
+		fields = append(fields, collectFields(q.Upper.Val)...)
 		return fields
 	default:
+		// Nested queries, collect recuversively
 		fields := []StaticPath{}
 		for _, c := range q.Children {
 			fields = append(fields, collectWhereFields(c)...)

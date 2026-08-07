@@ -122,6 +122,38 @@ func TestCollect(t *testing.T) {
 				{"custom_fields", "d"},
 			},
 		},
+		{
+			name: "nested where fields rhs",
+			in: `
+			SEARCH feedbacks WHERE {
+		    "$and": [
+				{
+					"posted_at": {
+						"$gte": custom_fields.dt_start,
+						"$lt": custom_fields.dt_end
+					}
+				},
+				{
+					"text": {
+						"$in": [custom_fields.text_allow_list]
+					}
+				},
+				{
+					"custom_fields.category": {
+						"$in": ["category a"]
+					}
+				}
+			]
+			};`,
+			want: []dql.StaticPath{
+				{"posted_at"},
+				{"custom_fields", "dt_start"},
+				{"custom_fields", "dt_end"},
+				{"text"},
+				{"custom_fields", "text_allow_list"},
+				{"custom_fields", "category"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
