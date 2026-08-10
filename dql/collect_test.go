@@ -180,16 +180,14 @@ func TestCollectFields(t *testing.T) {
 			SEARCH feedbacks AGGS {
 				by_category: terms(category) LIMIT 10,
 				by_month: date_histogram(custom_fields.some_date) {
-					by_labels: terms("labels") LIMIT 3
+					by_labels: terms(labels) LIMIT 3
 				},
 			};
 			`,
 			want: []dql.StaticPath{
 				{"category"},
 				{"custom_fields", "some_date"},
-				// TODO(Gu): do we want to support this? How to disambiguate?
-				// If the agg accepts constant inputs, we can't parse this.
-				// {"labels"},
+				{"labels"},
 			},
 		},
 	}
