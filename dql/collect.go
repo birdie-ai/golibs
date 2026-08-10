@@ -98,9 +98,6 @@ func isNamedField(e Expr) bool {
 }
 
 func collectWhereFields(q *QueryExpr) []StaticPath {
-	if q == nil {
-		return nil
-	}
 	switch q.Type {
 	case predicate:
 		// Predicate type query - where we can actually analyse the individual
