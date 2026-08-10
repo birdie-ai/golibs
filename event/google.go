@@ -194,7 +194,7 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 		}()
 		ctx, event, err := createEnvelope[T](ctx, s.eventName, msg.Data)
 		if err != nil {
-			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
+			slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "error", err)
 			msg.Nack()
 			return
 		}
@@ -205,7 +205,7 @@ func (s *OrderedGoogleSub[T]) ServeWithMetadata(ctx context.Context, handler Han
 		sampleProcess(s.eventName, elapsed, float64(len(msg.Data)), err)
 
 		if err != nil {
-			slog.FromCtx(ctx).Error("event handling failed", "event_name", s.eventName, "error", err)
+			slog.FromCtx(ctx).Error("event handling failed", "error", err)
 			msg.Nack()
 			return
 		}
@@ -272,6 +272,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 	fatalErr := make(chan error, maxConcurrency)
 	var wg sync.WaitGroup
 
+	log := slog.FromCtx(ctx).With("event_name", s.eventName)
+
 	for ctx.Err() == nil {
 		select {
 		case semaphore <- struct{}{}:
@@ -306,9 +308,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 					buf := make([]byte, size)
 					buf = buf[:runtime.Stack(buf, false)]
 					// We might have partial results, we cant ack/nack any message, just log.
-					slog.Error("panic: message subscription: handling message",
+					log.Error("panic: message subscription: handling message",
 						"error", err,
-						"event_name", s.eventName,
 						"events_total", len(events),
 						"batch_size", s.batchSize,
 						"batch_window", batchWindow,
@@ -316,8 +317,8 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 				}
 			}()
 
-			ctx = slog.NewContext(ctx, slog.FromCtx(ctx).With("event_name", s.eventName))
-			bh(ctx, events)
+			handlerCtx := slog.NewContext(ctx, log)
+			bh(handlerCtx, events)
 		})
 	}
 	wg.Wait()
@@ -386,7 +387,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 		err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 			ctx, event, err := createEnvelope[T](ctx, s.eventName, msg.Data)
 			if err != nil {
-				slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "event_name", s.eventName, "error", err)
+				slog.FromCtx(ctx).Error("unacking invalid event (handler not called)", "error", err)
 				msg.Nack()
 				return
 			}
