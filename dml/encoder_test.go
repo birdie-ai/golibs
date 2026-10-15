@@ -840,6 +840,154 @@ func TestEncode(t *testing.T) {
 			},
 			err: dml.ErrNotIdent,
 		},
+		{
+			name: "where with dotted key",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"feedback.id": "abc",
+					},
+				},
+			},
+			want: `SET feedbacks a=1 WHERE feedback.id="abc";`,
+		},
+		{
+			name: "where with multiple dotted keys",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"feedback.id":        "abc",
+						"feedback.posted_at": "ts",
+					},
+				},
+			},
+			want: `SET feedbacks a=1 WHERE {"feedback.id":"abc","feedback.posted_at":"ts"};`,
+		},
+		{
+			name: "where with quoted path component",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						`feedback."some key".id`: "abc",
+					},
+				},
+			},
+			want: `SET feedbacks a=1 WHERE feedback."some key".id="abc";`,
+		},
+		{
+			name: "quoted path components containing dots",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{`a."b.c".d`: 1.0},
+					Where: dml.Where{
+						`x."y.z"`: "abc",
+					},
+				},
+			},
+			want: `SET feedbacks a."b.c".d=1 WHERE x."y.z"="abc";`,
+		},
+		{
+			name: "invalid where key - unterminated quote",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						`a."b`: "abc",
+					},
+				},
+			},
+			err: dml.ErrNotIdent,
+		},
+		{
+			name: "invalid where key - text after closing quote",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						`a."b"c`: "abc",
+					},
+				},
+			},
+			err: dml.ErrNotIdent,
+		},
+		{
+			name: "invalid dotted key in where - empty component",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"feedback..id": "abc",
+					},
+				},
+			},
+			err: dml.ErrNotIdent,
+		},
+		{
+			name: "invalid dotted key in where - quoted base",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						`"feedback".id`: "abc",
+					},
+				},
+			},
+			err: dml.ErrNotIdent,
+		},
+		{
+			name: "pruning with dotted keys",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"id": "abc",
+					},
+					Pruning: dml.Pruning{
+						"feedback.organization_id": "org-1",
+						"feedback.posted_at":       "2026-05-27 15:04:28+00:00",
+					},
+				},
+			},
+			want: `SET feedbacks a=1 WHERE id="abc" PRUNING BY feedback.organization_id="org-1",feedback.posted_at="2026-05-27 15:04:28+00:00";`,
+		},
+		{
+			name: "invalid dotted key in pruning",
+			ast: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"id": "abc",
+					},
+					Pruning: dml.Pruning{
+						"feedback.$id": "x",
+					},
+				},
+			},
+			err: dml.ErrNotIdent,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
