@@ -8,7 +8,6 @@ import (
 	"maps"
 	"slices"
 	"strconv"
-	"strings"
 	"unique"
 )
 
@@ -88,12 +87,12 @@ func validate(stmt Stmt) error {
 		errs = append(errs, ErrMissingWhereClause)
 	}
 	for k := range stmt.Where {
-		if !isIdent(k) {
+		if !isPath(k) {
 			errs = append(errs, fmt.Errorf("clause with invalid field %s: %w", k, ErrNotIdent))
 		}
 	}
 	for k := range stmt.Pruning {
-		if !isIdent(k) {
+		if !isPath(k) {
 			errs = append(errs, fmt.Errorf("clause with invalid field %s: %w", k, ErrNotIdent))
 		}
 	}
@@ -196,15 +195,8 @@ func encodeAssign(w io.Writer, op OpKind, assign Assign) error {
 
 func encodeSetAssign(w io.Writer, assign Assign) error {
 	for i, key := range slices.Sorted(maps.Keys(assign)) {
-		if key != "." {
-			for i, s := range strings.Split(key, ".") {
-				if _, err := strconv.Unquote(s); i > 0 && len(s) > 2 && s[0] == '"' && err == nil {
-					continue
-				}
-				if !isIdent(s) {
-					return fmt.Errorf("%w: expected an ident or a quoted string but found %s", ErrInvalidAssignKey, s)
-				}
-			}
+		if key != "." && !isPath(key) {
+			return fmt.Errorf("%w: expected a path of idents or quoted strings but found %s", ErrInvalidAssignKey, key)
 		}
 		err := write(w, key+"=")
 		if err != nil {

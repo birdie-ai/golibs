@@ -639,9 +639,9 @@ func parseWhere(in []byte) (Where, []byte, error) {
 	}
 	var err error
 	var ident string
-	ident, in, err = lexIdent(in)
+	ident, in, err = parsePathTraversal(in)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+		return nil, nil, err
 	}
 	in = skipblank(in)
 	if len(in) == 0 {
@@ -719,8 +719,8 @@ func parseWhereObject(in []byte) (Where, []byte, error) {
 		return nil, nil, fmt.Errorf("%w: WHERE object require key-value entries", ErrSyntax)
 	}
 	for _, k := range slices.Sorted(maps.Keys(where)) {
-		if !isIdent(k) {
-			return nil, nil, fmt.Errorf("%w: WHERE object keys need to be valid identifier but found %q", ErrSyntax, k)
+		if !isPath(k) {
+			return nil, nil, fmt.Errorf("%w: WHERE object keys need to be valid identifiers or path traversals but found %q", ErrSyntax, k)
 		}
 	}
 	return where, in, nil
@@ -735,9 +735,9 @@ func parsePruning(in []byte) (Pruning, []byte, error) {
 			return nil, nil, errUnexpectedEOF()
 		}
 		var key string
-		key, in, err = lexIdent(in)
+		key, in, err = parsePathTraversal(in)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%w: %v", ErrSyntax, err)
+			return nil, nil, err
 		}
 		in = skipblank(in)
 		if len(in) == 0 {

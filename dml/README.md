@@ -568,7 +568,7 @@ dml {
   	caseInsensitive<"OR">
 
   Clause = 
-  	ident "=" Scalar
+  	(Traversal | ident) "=" Scalar
 
   Traversal  = 
   	ident "." (ident | String)+

@@ -883,6 +883,137 @@ func TestParser(t *testing.T) {
 			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY a="x",a="y";`,
 			err:  dml.ErrClauseDuplicated,
 		},
+		{
+			text: `SET feedbacks a=1 WHERE feedback.id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where:  dml.Where{"feedback.id": "abc"},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE feedback."some key".id="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where:  dml.Where{`feedback."some key".id`: "abc"},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE feedback.id="abc" AND feedback.posted_at="ts";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"feedback.id":        "abc",
+						"feedback.posted_at": "ts",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE {"feedback.id":"abc","feedback.posted_at":"ts"};`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where: dml.Where{
+						"feedback.id":        "abc",
+						"feedback.posted_at": "ts",
+					},
+				},
+			},
+		},
+		{
+			noEncoderTest: true,
+			text:          `SET feedbacks a=1 WHERE feedback.id IN ["abc","def"];`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where:  dml.Where{"feedback.id": []any{"abc", "def"}},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a."b.c".d=1 WHERE x."y.z"="abc";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{`a."b.c".d`: 1.0},
+					Where:  dml.Where{`x."y.z"`: "abc"},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE feedback..id="abc";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE feedback.id-="abc";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE {"feedback..id":"abc"};`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE {"feedback.$id":"abc"};`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE {".id":"abc"};`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY feedback.organization_id="org-1",feedback.posted_at="ts";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where:  dml.Where{"id": "abc"},
+					Pruning: dml.Pruning{
+						"feedback.organization_id": "org-1",
+						"feedback.posted_at":       "ts",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY feedback."posted at"="ts";`,
+			want: dml.Stmts{
+				{
+					Op:     dml.SET,
+					Entity: u("feedbacks"),
+					Assign: dml.Assign{"a": 1.0},
+					Where:  dml.Where{"id": "abc"},
+					Pruning: dml.Pruning{
+						`feedback."posted at"`: "ts",
+					},
+				},
+			},
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY feedback..posted_at="ts";`,
+			err:  dml.ErrSyntax,
+		},
+		{
+			text: `SET feedbacks a=1 WHERE id="abc" PRUNING BY .posted_at="ts";`,
+			err:  dml.ErrSyntax,
+		},
 	} {
 		got, err := dml.Parse([]byte(tc.text))
 		if !errors.Is(err, tc.err) {
