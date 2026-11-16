@@ -405,7 +405,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) runReceiver(ctx context.Context
 			}
 		})
 		if err != nil {
-			slog.FromCtx(ctx).Error("google batch subscription receiver stopped (future calls to ReceiveN will fail)", "error", err)
+			slog.FromCtx(ctx).Info("google batch subscription receiver stopped (future calls to ReceiveN will fail)", "error", err)
 		}
 	}()
 }
