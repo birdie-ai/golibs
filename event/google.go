@@ -317,6 +317,7 @@ func (s *GoogleExperimentalBatchSubscription[T]) ServeBatch(
 				}
 			}()
 
+			sampleBatchSize(s.eventName, len(events))
 			handlerCtx := slog.NewContext(ctx, log)
 			bh(handlerCtx, events)
 		})
